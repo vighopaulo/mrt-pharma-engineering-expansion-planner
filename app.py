@@ -265,7 +265,7 @@ brand_header_html = (
     '<div class="product-name">Digital Twin</div>'
     '</div>'
     '<div>'
-    '<div class="tagline">Engineering Precision Oncology Today.</div>'
+    '<div class="tagline">Engineering Distributed Precision Oncology Today.</div>'
     '<div class="subtagline">'
     'Physics-based decision platform for distributed oncology infrastructure, '
     'radiopharmaceutical logistics, capacity planning, and lifecycle economics.'
