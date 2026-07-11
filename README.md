@@ -1,22 +1,11 @@
-# MRT Pharma™ Digital Twin — Final Distributed Oncology Model
+# MRT Pharma Digital Twin V2
 
-This final revision:
+Clean, key-consistent rebuild of the results layer and distributed oncology model.
 
-- preserves the continuous-string MRT Pharma™ brand header;
-- prevents raw HTML code from appearing at the top of the app;
-- adds ordinary centralized injection capacity to MRT-enabled inpatient-room capacity;
-- adds ordinary centralized uptake capacity to MRT-enabled inpatient-room capacity;
-- prevents physical room double-counting with a shared-room intersection input;
-- limits MRT-enabled rooms by the total oncology room inventory;
-- keeps hybrid dedicated-room additions at zero;
-- separates centralized clinical intake points from MRT-connected delivery points;
-- caps revenue-producing service at the selected demand target;
-- reports installed capacity, patients served, and reserve capacity separately;
-- selects the highest positive NPV while displaying ROI as a secondary measure.
-
-
-## Compact results redesign
-- Three compact summary cards
-- Light-green winner highlight and checkmark
-- One synchronized side-by-side expandable comparison
-- Decision strip below the option cards
+- compact three-card results dashboard
+- green winner state
+- expandable side-by-side comparison
+- safe continuous-string branding header
+- existing injection and uptake rooms plus MRT-enabled inpatient rooms
+- physical room inventory protection
+- demand-capped economics

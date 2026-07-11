@@ -9,7 +9,7 @@ import streamlit as st
 
 
 st.set_page_config(
-    page_title="MRT Pharma™ Digital Twin",
+    page_title="MRT Pharma™ Digital Twin V2",
     page_icon="⚙️",
     layout="wide",
 )
@@ -318,7 +318,7 @@ brand_header_html = (
     '<span class="brand-pharma">Pharma</span>'
     '<span class="trademark">™</span>'
     '</div>'
-    '<div class="product-name">Digital Twin</div>'
+    '<div class="product-name">Digital Twin V2</div>'
     '</div>'
     '<div>'
     '<div class="tagline">Engineering Distributed Precision Oncology Today.</div>'
@@ -1109,6 +1109,7 @@ if submitted:
         add_injection: int,
         add_uptake: int,
         clinical_nodes: int,
+        enabled_inpatient_rooms: int,
         survival_pct: float,
     ) -> None:
         served_patients = min(throughput, float(target_patients))
@@ -1146,6 +1147,7 @@ if submitted:
                 "add_injection": add_injection,
                 "add_uptake": add_uptake,
                 "clinical_nodes": clinical_nodes,
+                "enabled_inpatient_rooms": enabled_inpatient_rooms,
                 "fdg_survival_pct": survival_pct,
             }
         )
@@ -1472,6 +1474,7 @@ if submitted:
                         0,
                         0,
                         delivery_points,
+                        enabled_rooms,
                         mrt_survival * 100.0,
                     )
 
@@ -1632,7 +1635,7 @@ if submitted:
                 f'{winner_badge}'
                 f'<div class="summary-metric">'
                 f'<b>Installed capacity:</b> '
-                f'{candidate["installed_capacity"]:.0f}/day</div>'
+                f'{candidate["throughput"]:.0f}/day</div>'
                 f'<div class="summary-metric">'
                 f'<b>NPV:</b> ${candidate["npv"]:,.0f}</div>'
                 f'<div class="summary-metric">'
@@ -1674,12 +1677,12 @@ if submitted:
                     continue
 
                 rows = [
-                    ("Installed capacity", f"{candidate['installed_capacity']:.0f}/day"),
-                    ("Patients served", f"{candidate['patients_served']:.0f}/day"),
-                    ("Reserve capacity", f"{candidate['reserve_capacity']:.0f}/day"),
+                    ("Installed capacity", f"{candidate['throughput']:.0f}/day"),
+                    ("Patients served", f"{candidate['served_patients_day']:.0f}/day"),
+                    ("Reserve capacity", f"{candidate['reserve_capacity_day']:.0f}/day"),
                     (
                         "Incremental patients",
-                        f"{candidate['incremental_patients_served_day']:.0f}/day",
+                        f"{candidate['incremental_patients_day']:.0f}/day",
                     ),
                     ("CapEx", f"${candidate['capex']:,.0f}"),
                     ("Annual OpEx", f"${candidate['annual_opex']:,.0f}"),
@@ -1748,7 +1751,7 @@ if submitted:
                 f'Highest modeled positive NPV: '
                 f'${decision["npv"]:,.0f}. '
                 f'Installed capacity: '
-                f'{decision["installed_capacity"]:.0f}/day.'
+                f'{decision["throughput"]:.0f}/day.'
                 f'</div></div>'
             ),
             unsafe_allow_html=True,
