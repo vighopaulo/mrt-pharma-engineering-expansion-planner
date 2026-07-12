@@ -1,0 +1,9 @@
+{
+  "current_physical_capacity_day": 52.46,
+  "conventional_capacity_day": 200.0,
+  "hybrid_capacity_day": 200,
+  "conventional_npv": 161096654.08,
+  "hybrid_npv": 155626654.08,
+  "winner": "Conventional Expansion",
+  "configurations_evaluated": 71610
+}
