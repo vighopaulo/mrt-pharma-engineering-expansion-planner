@@ -1,6 +1,6 @@
 from dataclasses import asdict
 import io,math,pandas as pd,plotly.graph_objects as go,streamlit as st
-from domain.models import Inputs,ProjectMode,PRIORITIES
+from domain.models import ModelInputs, ProjectMode, PRIORITY_METRICS
 from engines.optimization import conventional,mrt
 from engines.decision import weights,decide
 from engines.diagnostics import validate
@@ -39,9 +39,9 @@ end()
 with st.form("f"):
  section("2. Hospital Decision Profile","Choose three different priorities.")
  a,b,c=st.columns(3)
- with a:p1=st.selectbox("Priority 1",PRIORITIES,index=0)
- with b:p2=st.selectbox("Priority 2",PRIORITIES,index=1)
- with c:p3=st.selectbox("Priority 3",PRIORITIES,index=2)
+ with a:p1=st.selectbox("Priority 1",PRIORITY_METRICS,index=0)
+ with b:p2=st.selectbox("Priority 2",PRIORITY_METRICS,index=1)
+ with c:p3=st.selectbox("Priority 3",PRIORITY_METRICS,index=2)
  end()
  section("3. Operations and Production","Batch counts are optimized independently.")
  a,b,c,d=st.columns(4)
@@ -82,7 +82,7 @@ with st.form("f"):
  run=st.form_submit_button("RUN MRT PHARMA DIGITAL TWIN",use_container_width=True)
 
 if run:
- inp=Inputs(project_mode=ProjectMode.GREENFIELD if green else ProjectMode.EXPANSION,current_patients=cp,target_patients=target,current_scanners=cs,current_injection_rooms=ci,current_uptake_rooms=cu,current_batches=cb,doses_per_batch=doses,operating_hours=h,production_window_hours=pw,scan_cycle_min=sc,scanner_availability_pct=av,injection_min=it,uptake_min=ut,batch_cycle_min=bc,conventional_transport_min=ct,mrt_transport_min=mt,half_life_min=hl,max_conventional_batches=maxcb,max_mrt_batches=maxmb,max_conventional_upgrade_pct=maxcu,max_mrt_upgrade_pct=maxmu,upgrade_step_pct=step,max_existing_mrt_rooms=mer,max_new_mrt_rooms=mnr,patients_per_mrt_room=ppr,max_additional_mrt_injection_rooms=mai,max_additional_mrt_uptake_rooms=mau,include_uptake_endpoints=iue,include_return_endpoint=ret,other_mrt_endpoints=oe,scanner_capex=sca,injection_capex=ica,uptake_capex=uca,conventional_upgrade_capex_per_10pct=cuc,mrt_upgrade_capex_per_10pct=muc,mrt_core_capex=mcore,endpoint_capex=eca,existing_mrt_room_retrofit_capex=rca,new_mrt_room_capex=nrc,capex_budget=budget,conventional_fixed_opex=cfo,mrt_fixed_opex=mfo,scanner_opex=so,injection_opex=io,uptake_opex=uo,mrt_maintenance=maint,endpoint_opex=eo,new_mrt_room_opex=nro,conventional_extra_batch_opex=cbc,mrt_extra_batch_opex=mbc,conventional_manual_min=cm,mrt_manual_min=mm,contribution_per_patient=contrib,operating_days=days,analysis_years=years,discount_rate_pct=disc,priority_1=p1,priority_2=p2,priority_3=p3).normalized()
+ inp=ModelInputs(project_mode=ProjectMode.GREENFIELD if green else ProjectMode.EXPANSION,current_patients=cp,target_patients=target,current_scanners=cs,current_injection_rooms=ci,current_uptake_rooms=cu,current_batches=cb,doses_per_batch=doses,operating_hours=h,production_window_hours=pw,scan_cycle_min=sc,scanner_availability_pct=av,injection_min=it,uptake_min=ut,batch_cycle_min=bc,conventional_transport_min=ct,mrt_transport_min=mt,half_life_min=hl,max_conventional_batches=maxcb,max_mrt_batches=maxmb,max_conventional_upgrade_pct=maxcu,max_mrt_upgrade_pct=maxmu,upgrade_step_pct=step,max_existing_mrt_rooms=mer,max_new_mrt_rooms=mnr,patients_per_mrt_room=ppr,max_additional_mrt_injection_rooms=mai,max_additional_mrt_uptake_rooms=mau,include_uptake_endpoints=iue,include_return_endpoint=ret,other_mrt_endpoints=oe,scanner_capex=sca,injection_capex=ica,uptake_capex=uca,conventional_upgrade_capex_per_10pct=cuc,mrt_upgrade_capex_per_10pct=muc,mrt_core_capex=mcore,endpoint_capex=eca,existing_mrt_room_retrofit_capex=rca,new_mrt_room_capex=nrc,capex_budget=budget,conventional_fixed_opex=cfo,mrt_fixed_opex=mfo,scanner_opex=so,injection_opex=io,uptake_opex=uo,mrt_maintenance=maint,endpoint_opex=eo,new_mrt_room_opex=nro,conventional_extra_batch_opex=cbc,mrt_extra_batch_opex=mbc,conventional_manual_min=cm,mrt_manual_min=mm,contribution_per_patient=contrib,operating_days=days,analysis_years=years,discount_rate_pct=disc,priority_1=p1,priority_2=p2,priority_3=p3).normalized()
  issues=validate(inp)
  if issues:
   for x in issues:st.error(x)
