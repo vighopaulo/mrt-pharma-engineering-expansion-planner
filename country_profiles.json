@@ -1,0 +1,5 @@
+{
+  "United States": {"currency": "USD", "discount_rate_pct_default": 10.0, "operating_days_year_default": 300, "construction_cost_multiplier": 1.0},
+  "Nigeria": {"currency": "USD", "discount_rate_pct_default": 15.0, "operating_days_year_default": 300, "construction_cost_multiplier": 0.75},
+  "United Kingdom": {"currency": "GBP", "discount_rate_pct_default": 8.0, "operating_days_year_default": 300, "construction_cost_multiplier": 1.05}
+}

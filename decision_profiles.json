@@ -1,0 +1,6 @@
+{
+  "Financial Only": {"Net Present Value": 1.0},
+  "Capital Constrained": {"Lowest Capital Expenditure": 0.4, "Lowest Annual OpEx": 0.25, "Fastest Payback": 0.2, "Net Present Value": 0.15},
+  "Balanced": {"description": "Equal normalized emphasis across supported criteria."},
+  "Custom Top Three": {"priority_1_weight": 0.3, "priority_2_weight": 0.2, "priority_3_weight": 0.15, "remaining_weight": 0.35}
+}

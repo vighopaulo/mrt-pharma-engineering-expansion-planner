@@ -1,0 +1,8 @@
+{
+  "F-18": {"half_life_min": 109.8},
+  "Ga-68": {"half_life_min": 67.7},
+  "C-11": {"half_life_min": 20.3},
+  "N-13": {"half_life_min": 9.97},
+  "O-15": {"half_life_min": 2.04},
+  "Tc-99m": {"half_life_min": 360.0}
+}
