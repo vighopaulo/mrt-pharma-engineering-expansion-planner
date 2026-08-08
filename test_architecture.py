@@ -1,20 +1,31 @@
 from pathlib import Path
-ROOT = Path(__file__).resolve().parents[1]
 
-def test_complete_repository_structure():
+
+ROOT = Path(__file__).resolve().parent
+
+
+def test_required_planner_files_exist():
     required = [
-        'app.py','requirements.txt','ENGINEERING_NOTES.md','constitution/CONSTITUTION.md','domain/models.py',
-        'entities/hospital.py','entities/cyclotron.py','entities/scanner.py','entities/rooms.py','entities/radionuclide.py',
-        'entities/endpoint.py','entities/decision_profile.py','entities/results.py','engines/validation_engine.py',
-        'engines/decay_engine.py','engines/capacity_engine.py','engines/production_engine.py','engines/infrastructure_engine.py',
-        'engines/resource_optimization_engine.py','engines/financial_engine.py','engines/decision_engine.py',
-        'engines/diagnostics_engine.py','engines/reporting_engine.py','data/radionuclides.json',
-        'data/country_profiles.json','data/decision_profiles.json','deployment/DEPLOYMENT_CHECKLIST.md'
+        "app.py",
+        "models.py",
+        "optimization.py",
+        "engineering.py",
+        "finance.py",
+        "diagnostics.py",
+        "reporting_engine.py",
+        "requirements.txt",
+        "radionuclides.json",
     ]
-    missing = [item for item in required if not (ROOT/item).exists()]
-    assert not missing, missing
+    missing = [name for name in required if not (ROOT / name).exists()]
+    assert not missing, f"Missing required files: {missing}"
 
-def test_root_app_is_not_wrapper():
-    text = (ROOT/'app.py').read_text(encoding='utf-8')
-    assert 'from ui.streamlit_app import *' not in text
-    assert 'st.set_page_config' in text
+
+def test_optimization_module_retained_and_includes_mrt_function():
+    text = (ROOT / "optimization.py").read_text(encoding="utf-8")
+    assert "def mrt(" in text
+    assert "def conventional(" in text
+
+
+def test_primary_streamlit_entry_is_root_app():
+    readme = (ROOT / "README.md").read_text(encoding="utf-8")
+    assert "streamlit run app.py" in readme

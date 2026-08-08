@@ -1,145 +1,246 @@
 from __future__ import annotations
-from dataclasses import dataclass, field, asdict
-from enum import Enum
-from typing import Optional
 
-class ProjectMode(str, Enum):
-    EXPANSION="Expansion"
-    GREENFIELD="Greenfield"
+from dataclasses import dataclass, field
+from enum import Enum
+from typing import Any
+
 
 class Architecture(str, Enum):
-    CONVENTIONAL="Conventional Expansion"
-    MRT="MRT Pharma Hybrid"
+    CONVENTIONAL = "Conventional Expansion"
+    MRT = "MRT-enabled Expansion"
 
-PRIORITIES=[
-"Net Present Value","Lowest Capital Expenditure","Highest ROI","Fastest Payback",
-"Lowest Annual OpEx","Highest Activity Retention","Highest Reserve Capacity",
-"Greatest Batch Flexibility","Lowest Production Increase",
-"Fewest Additional Dedicated Rooms","Lowest Logistics Labor Burden","Highest Resilience"]
 
 @dataclass(frozen=True)
-class Inputs:
-    project_mode: ProjectMode
-    current_patients: float
-    target_patients: float
+class PlannerAssumptions:
+    mrt_infrastructure_capex: float = 6_000_000.0
+    cyclotron_purchase_capex: float = 3_000_000.0
+    cyclotron_installation_capex: float = 2_000_000.0
+    additional_room_capex: float = 25_000.0
+    production_expansion_capex_per_10pct: float = 500_000.0
+    discount_rate_pct: float = 10.0
+    analysis_years: int = 10
+    operating_days_per_year: int = 300
+    scanner_availability_pct: float = 85.0
+    scanner_cycle_min: float = 35.0
+    injection_cycle_min: float = 15.0
+    uptake_cycle_min: float = 60.0
+    operating_hours_per_day: float = 18.0
+    mrt_transport_default_min: float = 0.5
+    scanner_capex: float = 2_500_000.0
+    endpoint_capex: float = 10_000.0
+    guideway_segment_capex: float = 1_000_000.0
+    scanner_incremental_opex: float = 300_000.0
+    room_incremental_opex: float = 80_000.0
+    endpoint_incremental_opex: float = 5_000.0
+    guideway_incremental_opex: float = 150_000.0
+    conventional_extra_batch_opex_per_day: float = 2_500.0
+    mrt_extra_batch_opex_per_day: float = 2_000.0
+    revenue_per_scan: float = 300.0
+    prescribed_activity_mbq_per_patient: float = 370.0
+    synthesis_processing_time_min: float = 0.0
+    synthesis_yield_fraction: float = 1.0
+    cyclotron_eob_capacity_mbq_per_day: float | None = None
+    default_clinical_administration_cohorts_per_day: int = 6
+
+
+@dataclass(frozen=True)
+class PlannerInputs:
+    project_name: str
+    current_patients_per_day: float
+    target_patients_per_day: float
+    maximum_expected_demand_per_day: float
     current_scanners: int
     current_injection_rooms: int
     current_uptake_rooms: int
-    current_batches: int
-    doses_per_batch: float
-    operating_hours: float
-    production_window_hours: float
-    scan_cycle_min: float
-    scanner_availability_pct: float
-    injection_min: float
-    uptake_min: float
-    batch_cycle_min: float
-    conventional_transport_min: float
-    mrt_transport_min: float
-    half_life_min: float
-    max_conventional_batches: int
-    max_mrt_batches: int
-    max_conventional_upgrade_pct: int
-    max_mrt_upgrade_pct: int
-    upgrade_step_pct: int
-    max_existing_mrt_rooms: int
-    max_new_mrt_rooms: int
-    patients_per_mrt_room: float
-    max_additional_mrt_injection_rooms: int
-    max_additional_mrt_uptake_rooms: int
-    include_uptake_endpoints: bool
-    include_return_endpoint: bool
-    other_mrt_endpoints: int
-    scanner_capex: float
-    injection_capex: float
-    uptake_capex: float
-    conventional_upgrade_capex_per_10pct: float
-    mrt_upgrade_capex_per_10pct: float
-    mrt_core_capex: float
-    endpoint_capex: float
-    existing_mrt_room_retrofit_capex: float
-    new_mrt_room_capex: float
-    capex_budget: float
-    conventional_fixed_opex: float
-    mrt_fixed_opex: float
-    scanner_opex: float
-    injection_opex: float
-    uptake_opex: float
-    mrt_maintenance: float
-    endpoint_opex: float
-    new_mrt_room_opex: float
-    conventional_extra_batch_opex: float
-    mrt_extra_batch_opex: float
-    conventional_manual_min: float
-    mrt_manual_min: float
-    contribution_per_patient: float
-    operating_days: int
-    analysis_years: int
-    discount_rate_pct: float
-    priority_1: str
-    priority_2: str
-    priority_3: str
+    has_existing_cyclotron: bool
+    current_usable_doses_per_day: float
+    current_average_transport_min: float
+    mrt_transport_min: float | None
+    existing_mrt_connectable_rooms: int
+    representative_radionuclide: str | None
+    representative_half_life_min: float | None
+    conventional_transport_min: float | None = None
+    current_cyclotron_eob_capacity_mbq_per_day: float | None = None
 
-    def normalized(self):
-        if self.project_mode is ProjectMode.GREENFIELD:
-            d=asdict(self)
-            d.update(project_mode=ProjectMode.GREENFIELD,current_patients=0.0,current_scanners=0,
-                     current_injection_rooms=0,current_uptake_rooms=0,current_batches=0)
-            return Inputs(**d)
-        return self
+    def incremental_patients_per_day(self) -> float:
+        return max(0.0, self.target_patients_per_day - self.current_patients_per_day)
+
 
 @dataclass
-class Result:
-    architecture: Architecture
-    feasible: bool
-    reason: str
-    binding_constraint: str
-    installed_capacity: float
-    served_patients: float
-    reserve_capacity: float
-    dose_capacity: float
-    scanner_capacity: float
-    injection_capacity: float
-    uptake_capacity: float
-    production_increase_pct: float
-    batches: int
-    total_scanners: int
-    additional_scanners: int
-    total_injection_rooms: int
-    additional_injection_rooms: int
-    total_uptake_rooms: int
-    additional_uptake_rooms: int
-    existing_mrt_rooms: int
-    new_mrt_rooms: int
-    mrt_endpoints: int
-    retained_activity_pct: float
-    annual_logistics_hours: float
-    resilience_ratio: float
-    feasible_batch_count: int
-    capex: float
-    annual_opex: float
+class PlanFinancials:
     annual_revenue: float
-    annual_ncf: float
+    annual_incremental_opex: float
+    annual_net_cash_flow: float
     npv: float
     roi_pct: float
     payback_years: float
-    evaluated: int=0
+
 
 @dataclass
-class Stats:
-    generated:int=0
-    physical:int=0
-    budget:int=0
-    positive_cash_flow:int=0
-    positive_npv:int=0
-    feasible_batch_counts:int=0
+class ConventionalPlan:
+    capacity_increase_pct: float
+    required_production_increase_pct: float
+    additional_scanners: int
+    additional_injection_rooms: int
+    additional_uptake_rooms: int
+    cyclotron_required: bool
+    retained_activity_pct: float
+    achieved_capacity_per_day: float
+    reserve_capacity_per_day: float
+    revenue_generating_throughput_per_day: float
+    capex: float
+    financials: PlanFinancials
+    capex_ledger: list[dict[str, Any]] = field(default_factory=list)
+    ledger: dict[str, Any] = field(default_factory=dict)
+
 
 @dataclass
-class Decision:
-    financial_winner: Optional[Architecture]
-    recommendation: Optional[Architecture]
-    conventional_score: float
-    mrt_score: float
-    strength: str
-    breakdown:list[dict]=field(default_factory=list)
-    sensitivity:list[dict]=field(default_factory=list)
+class MRTPlan:
+    production_increase_pct: float
+    additional_scanners: int
+    new_mrt_rooms: int
+    additional_injection_rooms: int
+    additional_uptake_rooms: int
+    guideway_segments: int
+    endpoints: int
+    infrastructure_units: int
+    retained_activity_pct: float
+    achieved_capacity_per_day: float
+    reserve_capacity_per_day: float
+    revenue_generating_throughput_per_day: float
+    capex: float
+    financials: PlanFinancials
+    capex_ledger: list[dict[str, Any]] = field(default_factory=list)
+    ledger: dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass
+class PlannerReport:
+    project_name: str
+    inputs: PlannerInputs
+    assumptions: PlannerAssumptions
+    conventional: ConventionalPlan
+    mrt: MRTPlan
+
+
+@dataclass(frozen=True)
+class NetworkProfile:
+    study_name: str
+    facility_name: str
+    baseline_current_patients_per_day: float
+    baseline_max_expected_demand_per_day: float
+    baseline_scanners: int
+    baseline_injection_rooms: int
+    baseline_uptake_rooms: int
+    baseline_usable_doses_per_day: float
+    has_existing_cyclotron: bool
+    existing_backbone_installed: bool = False
+    initial_guideway_segments: int = 0
+    initial_endpoints: int = 0
+    initial_connected_rooms: int = 0
+    initial_vertical_transitions: int = 0
+    initial_building_connections: int = 0
+
+
+@dataclass(frozen=True)
+class DevelopmentPhase:
+    phase_name: str
+    year: int
+    service_group: str
+    representative_radionuclide: str
+    incremental_target_patients_per_day: float
+    maximum_expected_demand_per_day: float
+    existing_rooms_to_connect: int
+    new_rooms_to_construct: int
+    cumulative_guideway_segments_required: int
+    cumulative_endpoints_required: int
+    cumulative_vertical_transitions_required: int = 0
+    cumulative_building_connections_required: int = 0
+    existing_rooms_to_renovate: int = 0
+    additional_scanners_manual: int = 0
+    production_demand_multiplier: float = 1.0
+    conventional_new_cyclotron_required: bool = False
+    mrt_new_cyclotron_required: bool = False
+    can_use_existing_backbone_capacity: bool = True
+    new_rooms_require_connection_modification: bool = True
+    conventional_existing_rooms_to_renovate: int = 0
+    mrt_new_rooms_requiring_connection_modification: int = 0
+
+
+@dataclass(frozen=True)
+class SharedNetworkAssumptions:
+    shared_backbone_cost: float = 6_000_000.0
+    guideway_segment_capex: float = 1_000_000.0
+    endpoint_capex: float = 10_000.0
+    vertical_transition_capex: float = 350_000.0
+    building_connection_capex: float = 500_000.0
+    new_room_construction_capex: float = 25_000.0
+    room_renovation_modification_capex: float = 18_000.0
+    room_connection_modification_capex: float = 12_500.0
+    production_expansion_capex_per_10pct: float = 500_000.0
+    cyclotron_purchase_capex: float = 3_000_000.0
+    cyclotron_installation_capex: float = 2_000_000.0
+    scanner_capex: float = 2_500_000.0
+    revenue_per_scan: float = 300.0
+    discount_rate_pct: float = 10.0
+    analysis_years: int = 10
+    operating_days_per_year: int = 300
+    operating_hours_per_day: float = 18.0
+    scanner_availability_pct: float = 85.0
+    scanner_cycle_min: float = 35.0
+    injection_cycle_min: float = 15.0
+    uptake_cycle_min: float = 60.0
+    conventional_transport_min: float = 20.0
+    mrt_transport_min: float = 0.5
+
+
+@dataclass
+class SharedNetworkPhaseResult:
+    phase_name: str
+    year: int
+    service_group: str
+    conventional_incremental_capex: float
+    mrt_incremental_capex: float
+    phase_capex_difference: float
+    conventional_cumulative_capex: float
+    mrt_cumulative_capex: float
+    cumulative_capex_difference: float
+    conventional_phase_revenue: float
+    mrt_phase_revenue: float
+    conventional_cumulative_revenue: float
+    mrt_cumulative_revenue: float
+    conventional_achieved_capacity_per_day: float
+    mrt_achieved_capacity_per_day: float
+    conventional_retained_activity_pct: float
+    mrt_retained_activity_pct: float
+    conventional_production_expansion_pct: float
+    mrt_production_expansion_pct: float
+    capex_difference: float
+    cumulative_economic_difference: float
+    backbone_charged_this_phase: bool
+    cumulative_departments_connected: int
+    cumulative_endpoints: int
+    cumulative_guideway_segments: int
+    cumulative_connected_rooms: int
+    cumulative_supported_patients_per_day: float
+    network_utilization_pct: float
+
+
+@dataclass
+class SharedNetworkReport:
+    network_profile: NetworkProfile
+    development_phases: list[DevelopmentPhase]
+    assumptions: SharedNetworkAssumptions
+    phase_results: list[SharedNetworkPhaseResult]
+    phase_ledger: list[dict[str, Any]] = field(default_factory=list)
+    network_state: list[dict[str, Any]] = field(default_factory=list)
+    cumulative_conventional_capex: float = 0.0
+    cumulative_mrt_capex: float = 0.0
+    cumulative_conventional_revenue: float = 0.0
+    cumulative_mrt_revenue: float = 0.0
+    capex_crossover_phase: str | None = None
+    capex_crossover_year: int | None = None
+    capex_crossover_summary: str = ""
+    economic_crossover_phase: str | None = None
+    economic_crossover_year: int | None = None
+    allocated_backbone_cost_per_service_group: float = 0.0

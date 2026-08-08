@@ -1,7 +1,16 @@
 from pathlib import Path
 import sys
-ROOT = Path(__file__).resolve().parents[1]
-required = ['app.py','requirements.txt','domain/models.py','engines/optimization.py','engines/decision.py','ui/state.py','entities/hospital.py','data/radionuclides.json']
+ROOT = Path(__file__).resolve().parent
+required = [
+    'app.py',
+    'requirements.txt',
+    'models.py',
+    'optimization.py',
+    'engineering.py',
+    'finance.py',
+    'reporting_engine.py',
+    'radionuclides.json',
+]
 missing = [item for item in required if not (ROOT/item).exists()]
 if missing:
     print('Missing deployment files:')
