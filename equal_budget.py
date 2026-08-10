@@ -2367,8 +2367,30 @@ def _conventional_reference_summary(
     total_scanners = reference.additional_scanners if mode == "greenfield_requirement_derived" else inputs.current_scanners + reference.additional_scanners
     total_injection_rooms = reference.additional_injection_rooms if mode == "greenfield_requirement_derived" else inputs.current_injection_rooms + reference.additional_injection_rooms
     total_uptake_rooms = reference.additional_uptake_rooms if mode == "greenfield_requirement_derived" else inputs.current_uptake_rooms + reference.additional_uptake_rooms
-    retained_fraction = float(reference.ledger.get("retained_activity_fraction", 0.0)) if isinstance(reference.ledger, dict) else 0.0
-    gross_required_doses = 0.0 if retained_fraction <= 0.0 else reference.achieved_capacity_per_day / retained_fraction
+    timing_diagnostics = _conventional_administration_timing_diagnostics(
+        inputs,
+        assumptions,
+        half_life_min,
+        reference,
+        mode,
+    )
+
+    # Radioactive-decay comparison endpoint:
+    # both pathways share the same clinical administration wait;
+    # only transport time differs.
+    comparison_decay_minutes = (
+        _conventional_transport_min(inputs)
+        + assumptions.common_administration_wait_min
+    )
+    retained_fraction = retention(
+        comparison_decay_minutes,
+        half_life_min,
+    )
+    gross_required_doses = (
+        0.0
+        if retained_fraction <= 0.0
+        else inputs.target_patients_per_day / retained_fraction
+    )
 
     total_capex = float(reference.capex)
     existing_sunk = 0.0
@@ -2407,7 +2429,7 @@ def _conventional_reference_summary(
     summary["timed_completed_patients_per_day"] = float(timing["timed_completed_patients_per_day"])
     summary["timed_usable_doses_per_day"] = float(timing["timed_usable_doses_per_day"])
     summary["transport_only_retention_fraction"] = float(timing["transport_only_retention_fraction"])
-    summary["administration_retention_fraction"] = float(timing["administration_retention_fraction"])
+    summary["administration_retention_fraction"] = float(retained_fraction)
     summary["timed_binding_constraint"] = str(timing["binding_constraint"])
 
     prescribed_activity_mbq = _prescribed_activity_mbq_per_patient(assumptions)

@@ -202,6 +202,15 @@ def conventional(inputs: PlannerInputs, assumptions: PlannerAssumptions, half_li
         "half_life_unit": "minutes",
         "retained_activity_fraction": retained,
         "retention_formula": "2^(-transport_min / half_life_min)",
+        "transport_only_retention_fraction": retained,
+        "common_administration_wait_min": assumptions.common_administration_wait_min,
+        "administration_decay_endpoint_min": (
+            transport_min + assumptions.common_administration_wait_min
+        ),
+        "administration_retention_fraction": retention(
+            transport_min + assumptions.common_administration_wait_min,
+            half_life_min,
+        ),
         "scanner_capacity_patients_per_day": scanner_cap,
         "injection_capacity_patients_per_day": injection_cap,
         "uptake_capacity_patients_per_day": uptake_cap,

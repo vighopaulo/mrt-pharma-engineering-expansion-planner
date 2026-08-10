@@ -402,7 +402,14 @@ if compare:
                         {"Item": "Reserve capacity", "Value": format_patients_per_day(conventional_plan.reserve_capacity_per_day)},
                         {"Item": "Revenue-generating throughput", "Value": format_patients_per_day(conventional_plan.revenue_generating_throughput_per_day)},
                         {"Item": "Annual revenue", "Value": format_currency(conventional_plan.financials.annual_revenue)},
-                        {"Item": "Retained activity", "Value": format_percent(conventional_plan.retained_activity_pct)},
+                        {"Item": "Retained activity at administration", "Value": format_percent(
+                    100.0 * float(
+                        conventional_plan.ledger.get(
+                            "administration_retention_fraction",
+                            conventional_plan.retained_activity_pct / 100.0,
+                        )
+                    )
+                )},
                     ]
                 ),
                 hide_index=True,

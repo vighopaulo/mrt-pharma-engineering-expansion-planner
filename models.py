@@ -41,6 +41,7 @@ class PlannerAssumptions:
     synthesis_yield_fraction: float = 1.0
     cyclotron_eob_capacity_mbq_per_day: float | None = None
     default_clinical_administration_cohorts_per_day: int = 6
+    common_administration_wait_min: float = 71.0
 
 
 @dataclass(frozen=True)
