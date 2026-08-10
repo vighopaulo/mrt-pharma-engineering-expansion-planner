@@ -1495,7 +1495,7 @@ def test_part2b3c5_activity_loss_alone_does_not_force_production_block_charge():
 def test_part2b3c5_cyclotron_upgrade_triggered_only_on_eob_shortfall():
     assumptions = PlannerAssumptions(
         prescribed_activity_mbq_per_patient=370.0,
-        cyclotron_eob_capacity_mbq_per_day=45_000.0,
+        cyclotron_eob_capacity_mbq_per_day=40_000.0,
     )
     inputs = _reference_inputs()
     upgraded = _build_mrt_economic_candidate(
@@ -1510,7 +1510,7 @@ def test_part2b3c5_cyclotron_upgrade_triggered_only_on_eob_shortfall():
         connected_rooms=0,
         guideway_segments=6,
         endpoints=15,
-        production_blocks=5,
+        production_blocks=6,
         infra_units=2,
     )
     assert upgraded is not None

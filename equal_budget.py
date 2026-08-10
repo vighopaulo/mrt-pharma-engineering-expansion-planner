@@ -560,12 +560,22 @@ def _cyclotron_eob_capacity_mbq_per_day(
     synthesis_yield_fraction: float,
     production_block_multiplier: float,
 ) -> tuple[float, str]:
+    multiplier = max(1.0, production_block_multiplier)
+
     if inputs.current_cyclotron_eob_capacity_mbq_per_day is not None:
         base = float(inputs.current_cyclotron_eob_capacity_mbq_per_day)
-        return base, "input_current_cyclotron_eob_capacity_mbq_per_day"
+        return (
+            base * multiplier,
+            "input_current_cyclotron_eob_capacity_mbq_per_day",
+        )
+
     if assumptions.cyclotron_eob_capacity_mbq_per_day is not None:
         base = float(assumptions.cyclotron_eob_capacity_mbq_per_day)
-        return base, "assumption_cyclotron_eob_capacity_mbq_per_day"
+        return (
+            base * multiplier,
+            "assumption_cyclotron_eob_capacity_mbq_per_day",
+        )
+
     return 0.0, "not_calibrated"
 
 
@@ -1367,8 +1377,41 @@ def _build_mrt_economic_candidate(
         production_block_multiplier=1.0,
     )
     capacity_is_calibrated = cyclotron_capacity_status != "not_calibrated"
-    production_upgrade_required = capacity_is_calibrated and (activity_required_at_eob > baseline_eob_capacity + 1e-9)
-    if capacity_is_calibrated and activity_required_at_eob > available_eob_capacity + 1e-9:
+    production_upgrade_required = (
+        capacity_is_calibrated
+        and activity_required_at_eob > baseline_eob_capacity + 1e-9
+    )
+
+    effective_production_blocks = production_blocks
+    if production_upgrade_required and baseline_eob_capacity > 0.0:
+        required_growth_fraction = (
+            activity_required_at_eob / baseline_eob_capacity - 1.0
+        )
+        required_production_blocks = max(
+            1,
+            math.ceil(required_growth_fraction / 0.1),
+        )
+        effective_production_blocks = max(
+            production_blocks,
+            required_production_blocks,
+        )
+
+        available_eob_capacity, cyclotron_capacity_status = (
+            _cyclotron_eob_capacity_mbq_per_day(
+                inputs=inputs,
+                assumptions=assumptions,
+                gross_release_doses_per_day_capacity=gross_production_per_day,
+                synthesis_retention_fraction=synthesis_retention,
+                synthesis_yield_fraction=synthesis_yield,
+                production_block_multiplier=1.0
+                + effective_production_blocks * 0.1,
+            )
+        )
+
+    if (
+        capacity_is_calibrated
+        and activity_required_at_eob > available_eob_capacity + 1e-9
+    ):
         return None
 
     activity_decay_loss_post_release = max(0.0, activity_required_at_release - activity_required_at_admin)
