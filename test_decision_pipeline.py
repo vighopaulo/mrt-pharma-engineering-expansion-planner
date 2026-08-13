@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import replace
 import math
 
 import pytest
@@ -291,12 +292,60 @@ def test_actual_scheduler_completion_feeds_lifecycle_and_reconciles_ledger_value
         operational = pathway_result.operational_result
         lifecycle = pathway_result.lifecycle_result
 
+        assert operational.schedule_completed_patients >= operational.decay_feasible_completed_patients
+        assert operational.patients_completed == operational.decay_feasible_completed_patients
         assert math.isclose(pathway_result.actual_lifecycle_throughput_per_day, float(operational.patients_completed), rel_tol=0.0, abs_tol=1e-9)
         assert math.isclose(lifecycle.annual_rows[0].installed_capacity_per_day, float(operational.patients_completed), rel_tol=0.0, abs_tol=1e-9)
         assert math.isclose(pathway_result.annual_completed_scans, float(operational.patients_completed) * result.request.planner_assumptions.operating_days_per_year, rel_tol=0.0, abs_tol=1e-9)
         assert math.isclose(pathway_result.annual_revenue, pathway_result.annual_completed_scans * result.request.planner_assumptions.revenue_per_scan, rel_tol=0.0, abs_tol=1e-9)
         assert math.isclose(pathway_result.capex_result.total_capex, lifecycle.initial_capex, rel_tol=0.0, abs_tol=1e-9)
         assert math.isclose(pathway_result.opex_result.total_annual_opex, lifecycle.annual_rows[0].annual_opex, rel_tol=0.0, abs_tol=1e-9)
+
+
+def test_decay_infeasible_patients_are_excluded_from_effective_revenue_throughput():
+    request = _request(seed=20260813)
+    guarded_request = replace(
+        request,
+        planner_assumptions=replace(request.planner_assumptions, decay_feasibility_min_retained_fraction=0.95),
+    )
+    result = run_native_decision_pipeline(guarded_request)
+
+    any_infeasible = False
+    for pathway_result in (result.conventional, result.mrt):
+        operational = pathway_result.operational_result
+        lifecycle = pathway_result.lifecycle_result
+
+        any_infeasible = any_infeasible or operational.decay_infeasible_patients > 0
+        assert operational.patients_completed == operational.decay_feasible_completed_patients
+        assert operational.patients_incomplete == operational.scheduled_patients - operational.decay_feasible_completed_patients
+        assert operational.decay_infeasible_patients == operational.scheduled_patients - operational.decay_feasible_scheduled_patients
+        assert math.isclose(lifecycle.annual_rows[0].installed_capacity_per_day, float(operational.decay_feasible_completed_patients), rel_tol=0.0, abs_tol=1e-9)
+        assert math.isclose(
+            lifecycle.annual_rows[0].annual_revenue,
+            float(operational.decay_feasible_completed_patients)
+            * guarded_request.planner_assumptions.operating_days_per_year
+            * guarded_request.planner_assumptions.revenue_per_scan,
+            rel_tol=0.0,
+            abs_tol=1e-9,
+        )
+
+    assert any_infeasible
+
+
+def test_decay_outputs_do_not_apply_unsupported_blanket_opex_multipliers():
+    result = run_native_decision_pipeline(_request())
+
+    for pathway_result, pathway_config in (
+        (result.conventional, result.request.conventional),
+        (result.mrt, result.request.mrt),
+    ):
+        production_variable = next(item for item in pathway_result.opex_result.ledger if item.component == "Production variable cost")
+        consumables = next(item for item in pathway_result.opex_result.ledger if item.component == "Consumables")
+        cyclotron_energy = next(item for item in pathway_result.opex_result.ledger if item.component == "Cyclotron energy")
+
+        assert production_variable.unit_cost == pytest.approx(pathway_config.annual_production_variable_cost)
+        assert consumables.quantity == pytest.approx(pathway_config.annual_consumable_units)
+        assert cyclotron_energy.quantity == pytest.approx(pathway_config.annual_cyclotron_energy_kwh)
 
 
 def test_pathway_isolation_and_incremental_values_reconcile():
@@ -328,7 +377,7 @@ def test_known_missing_capabilities_and_audit_are_reported():
     assert audit.demand_to_patients == "DIRECT NATIVE CONNECTION"
     assert audit.patients_to_isotope_batching == "DIRECT NATIVE CONNECTION"
     assert audit.batches_to_production == "DIRECT NATIVE CONNECTION"
-    assert audit.production_to_clinical_schedule == "DIRECT NATIVE CONNECTION"
+    assert audit.production_to_clinical_schedule == "DIRECT NATIVE CONNECTION (WITH PER-PATIENT DECAY TRACE)"
     assert audit.resource_quantities_to_capex == "DIRECT NATIVE CONNECTION"
     assert audit.resource_quantities_to_opex == "DIRECT NATIVE CONNECTION"
     assert audit.actual_clinical_completion_to_lifecycle_throughput == "DIRECT NATIVE CONNECTION"
@@ -338,7 +387,7 @@ def test_known_missing_capabilities_and_audit_are_reported():
 
     assert "No spatially derived guideway length." in audit.missing_capabilities
     assert "No floor-area/floor-count resource placement." in audit.missing_capabilities
-    assert "No multi-isotope decay-adjusted economics." in audit.missing_capabilities
+    assert "Decay physics is natively integrated, but direct monetization of activity loss requires an authoritative isotope-production cost model." in audit.missing_capabilities
     assert "No detailed MRT energy physics." in audit.missing_capabilities
     assert "No demand-driven staffing inference." in audit.missing_capabilities
     assert any("explicit batch_target_patients_per_batch" in warning for warning in result.warnings)
@@ -358,3 +407,11 @@ def test_end_to_end_200_patient_scenario_matches_native_comparison_expectations(
     assert result.lifecycle_comparison_result is not None
     assert math.isclose(result.lifecycle_comparison_result.incremental_final_npv_mrt_minus_conventional, result.incremental_npv, rel_tol=0.0, abs_tol=1e-9)
     assert result.mrt_lifecycle_result.final_npv > result.conventional_lifecycle_result.final_npv
+
+    conventional_decay = result.conventional.decay_summary
+    mrt_decay = result.mrt.decay_summary
+    for isotope, prescribed in conventional_decay.total_prescribed_activity_mbq_by_isotope.items():
+        assert conventional_decay.total_activity_at_injection_mbq_by_isotope[isotope] <= prescribed
+        assert mrt_decay.total_activity_at_injection_mbq_by_isotope[isotope] <= mrt_decay.total_prescribed_activity_mbq_by_isotope[isotope]
+    assert conventional_decay.decay_infeasible_patient_count >= 0
+    assert mrt_decay.decay_infeasible_patient_count >= 0

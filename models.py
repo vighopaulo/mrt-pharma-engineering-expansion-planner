@@ -40,6 +40,8 @@ class PlannerAssumptions:
     synthesis_processing_time_min: float = 0.0
     synthesis_yield_fraction: float = 1.0
     cyclotron_eob_capacity_mbq_per_day: float | None = None
+    decay_feasibility_min_retained_fraction: float = 0.0
+    decay_feasibility_max_compensation_factor: float | None = None
     default_clinical_administration_cohorts_per_day: int = 6
     common_administration_wait_min: float = 71.0
 

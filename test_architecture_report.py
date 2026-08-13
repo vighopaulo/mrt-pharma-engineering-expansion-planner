@@ -213,6 +213,17 @@ def test_report_contract_reconciles_native_economics_and_patient_traces():
             assert [record.patient_id for record in run_report.patient_records] == [patient.patient_id for patient in expected_patients]
             assert [record.radionuclide for record in run_report.patient_records] == [patient.radionuclide for patient in expected_patients]
             assert [record.completed_within_operating_day for record in run_report.patient_records] == [trace.completed_within_operating_day for trace in expected_traces]
+            assert all(hasattr(record, "required_activity_at_eob_mbq") for record in run_report.patient_records)
+            assert all(hasattr(record, "required_activity_at_release_mbq") for record in run_report.patient_records)
+            assert all(hasattr(record, "decay_feasible") for record in run_report.patient_records)
+            assert all(hasattr(record, "physical_decay_loss_before_administration_mbq") for record in run_report.patient_records)
+            assert all(hasattr(record, "unmet_prescribed_activity_mbq") for record in run_report.patient_records)
+            assert run_report.schedule_completed_patients >= run_report.effective_completed_patients
+            assert run_report.completed_patients == run_report.effective_completed_patients
+            assert run_report.incomplete_patients == run_report.scheduled_patients - run_report.effective_completed_patients
+
+        assert all(row.feasible_patient_count + row.infeasible_patient_count == row.patient_count for row in pathway_report.isotope_decay_summary_rows)
+        assert all(row.feasible_patient_count + row.infeasible_patient_count == row.patient_count for row in pathway_report.batch_decay_summary_rows)
 
 
 def test_report_chart_series_are_derived_from_reported_data():

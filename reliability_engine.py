@@ -3,7 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 import math
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 from statistics import mean
 from typing import Any, Iterable, Literal, Mapping, Sequence
 
@@ -42,9 +42,12 @@ class NativeReliabilityRunReference:
     comparison_trace_id: str
     demand_trace_id: str
     pathway_trace_ids: Mapping[Pathway, str]
-    completed_patients_per_day_by_pathway: Mapping[Pathway, int]
-    completion_percentage_by_pathway: Mapping[Pathway, float]
-    bottleneck_by_pathway: Mapping[Pathway, NativeBottleneckSummary]
+    completed_patients_per_day_by_pathway: Mapping[Pathway, int] = field(default_factory=dict)
+    completion_percentage_by_pathway: Mapping[Pathway, float] = field(default_factory=dict)
+    bottleneck_by_pathway: Mapping[Pathway, NativeBottleneckSummary] = field(default_factory=dict)
+    raw_schedule_completed_patients_per_day_by_pathway: Mapping[Pathway, int] = field(default_factory=dict)
+    effective_completed_patients_per_day_by_pathway: Mapping[Pathway, int] = field(default_factory=dict)
+    decay_infeasible_patients_by_pathway: Mapping[Pathway, int] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -58,6 +61,7 @@ class NativeReliabilityRunResult:
 class NativeReliabilityPathwaySummary:
     pathway: Pathway
     throughput_distribution: NativeReliabilityDistributionSummary
+    raw_schedule_completed_distribution: NativeReliabilityDistributionSummary
     completion_percentage_distribution: NativeReliabilityDistributionSummary
     probability_meeting_target_demand: float
     probability_below_thresholds: Mapping[float, float]
@@ -67,6 +71,9 @@ class NativeReliabilityPathwaySummary:
     throughput_supportable_at_90pct_reliability: float
     throughput_supportable_at_95pct_reliability: float
     throughput_supportable_at_99pct_reliability: float
+    decay_loss_distribution_mbq: NativeReliabilityDistributionSummary
+    retained_fraction_distribution: NativeReliabilityDistributionSummary
+    potential_shortfall_distribution_mbq: NativeReliabilityDistributionSummary
     capex_result: InfrastructureCapexResult
     opex_result: InfrastructureOpexResult
     source_run_reference: NativeReliabilityRunReference
@@ -177,8 +184,30 @@ def _run_reference(run_result: NativeReliabilityRunResult) -> NativeReliabilityR
     return run_result.reference
 
 
+def _decay_metrics_from_native(run_result: NativeReliabilityRunResult, pathway: Pathway) -> tuple[float, float, float]:
+    pathway_result = run_result.native_result.conventional if pathway == "Conventional" else run_result.native_result.mrt
+    decay_summary = getattr(pathway_result, "decay_summary", None)
+    if decay_summary is None:
+        return 0.0, 1.0, 0.0
+    return (
+        float(getattr(decay_summary, "overall_physical_decay_loss_mbq", getattr(decay_summary, "overall_decay_loss_mbq", 0.0))),
+        float(getattr(decay_summary, "mean_retained_fraction", 1.0)),
+        float(getattr(decay_summary, "total_potential_shortfall_mbq_if_no_upstream_adjustment", 0.0)),
+    )
+
+
 def _build_run_result(request: NativeDecisionPipelineScenario, seed: int) -> NativeReliabilityRunResult:
     native_result = run_native_decision_pipeline(replace(request, seed=seed))
+    conventional_operational = native_result.conventional.operational_result
+    mrt_operational = native_result.mrt.operational_result
+
+    conventional_raw_completed = int(getattr(conventional_operational, "schedule_completed_patients", conventional_operational.patients_completed))
+    mrt_raw_completed = int(getattr(mrt_operational, "schedule_completed_patients", mrt_operational.patients_completed))
+    conventional_effective_completed = int(getattr(conventional_operational, "decay_feasible_completed_patients", conventional_operational.patients_completed))
+    mrt_effective_completed = int(getattr(mrt_operational, "decay_feasible_completed_patients", mrt_operational.patients_completed))
+    conventional_infeasible = int(getattr(conventional_operational, "decay_infeasible_patients", 0))
+    mrt_infeasible = int(getattr(mrt_operational, "decay_infeasible_patients", 0))
+
     reference = NativeReliabilityRunReference(
         seed=seed,
         comparison_trace_id=native_result.provenance.comparison_trace_id,
@@ -188,12 +217,24 @@ def _build_run_result(request: NativeDecisionPipelineScenario, seed: int) -> Nat
             "MRT": native_result.mrt.trace_id,
         },
         completed_patients_per_day_by_pathway={
-            "Conventional": native_result.conventional.operational_result.patients_completed,
-            "MRT": native_result.mrt.operational_result.patients_completed,
+            "Conventional": conventional_effective_completed,
+            "MRT": mrt_effective_completed,
+        },
+        raw_schedule_completed_patients_per_day_by_pathway={
+            "Conventional": conventional_raw_completed,
+            "MRT": mrt_raw_completed,
+        },
+        effective_completed_patients_per_day_by_pathway={
+            "Conventional": conventional_effective_completed,
+            "MRT": mrt_effective_completed,
+        },
+        decay_infeasible_patients_by_pathway={
+            "Conventional": conventional_infeasible,
+            "MRT": mrt_infeasible,
         },
         completion_percentage_by_pathway={
-            "Conventional": native_result.conventional.operational_result.completion_percentage,
-            "MRT": native_result.mrt.operational_result.completion_percentage,
+            "Conventional": conventional_operational.completion_percentage,
+            "MRT": mrt_operational.completion_percentage,
         },
         bottleneck_by_pathway={
             "Conventional": native_result.bottleneck_information["Conventional"],
@@ -212,8 +253,13 @@ def _build_pathway_summary(
     worst_run_count: int,
 ) -> NativeReliabilityPathwaySummary:
     completed_values = [float(run.reference.completed_patients_per_day_by_pathway[pathway]) for run in run_results]
+    raw_schedule_completed_values = [float(run.reference.raw_schedule_completed_patients_per_day_by_pathway[pathway]) for run in run_results]
     completion_percentages = [float(run.reference.completion_percentage_by_pathway[pathway]) for run in run_results]
     bottlenecks = [run.reference.bottleneck_by_pathway[pathway].resource for run in run_results]
+    decay_triplets = [_decay_metrics_from_native(run, pathway) for run in run_results]
+    decay_loss_values = [triple[0] for triple in decay_triplets]
+    retained_fraction_values = [triple[1] for triple in decay_triplets]
+    shortfall_values = [triple[2] for triple in decay_triplets]
 
     threshold_probabilities = {
         threshold: (sum(1 for throughput in completed_values if throughput < threshold) / len(completed_values))
@@ -247,11 +293,16 @@ def _build_pathway_summary(
         opex_result = source_native_result.mrt.opex_result
 
     throughput_distribution = _distribution_summary(completed_values)
+    raw_schedule_completed_distribution = _distribution_summary(raw_schedule_completed_values)
     completion_distribution = _distribution_summary(completion_percentages)
+    decay_loss_distribution = _distribution_summary(decay_loss_values)
+    retained_fraction_distribution = _distribution_summary(retained_fraction_values)
+    shortfall_distribution = _distribution_summary(shortfall_values)
 
     return NativeReliabilityPathwaySummary(
         pathway=pathway,
         throughput_distribution=throughput_distribution,
+        raw_schedule_completed_distribution=raw_schedule_completed_distribution,
         completion_percentage_distribution=completion_distribution,
         probability_meeting_target_demand=sum(1 for throughput in completed_values if throughput >= request.target_patients_per_day) / len(completed_values),
         probability_below_thresholds=threshold_probabilities,
@@ -261,6 +312,9 @@ def _build_pathway_summary(
         throughput_supportable_at_90pct_reliability=_actual_throughput_supportable_at_reliability(completed_values, 90.0),
         throughput_supportable_at_95pct_reliability=_actual_throughput_supportable_at_reliability(completed_values, 95.0),
         throughput_supportable_at_99pct_reliability=_actual_throughput_supportable_at_reliability(completed_values, 99.0),
+        decay_loss_distribution_mbq=decay_loss_distribution,
+        retained_fraction_distribution=retained_fraction_distribution,
+        potential_shortfall_distribution_mbq=shortfall_distribution,
         capex_result=capex_result,
         opex_result=opex_result,
         source_run_reference=source_run_reference,
@@ -325,7 +379,7 @@ def _build_lifecycle_case(
 def _limitations() -> tuple[str, ...]:
     return (
         "Empirical reliability statistics depend on the supplied seed set and are not a parametric confidence interval.",
-        "No multi-isotope decay economics.",
+        "Decay physics is integrated; required upstream activity and decay burden are technical outputs, while monetization requires an authoritative isotope-production cost model.",
         "No spatially derived guideway geometry.",
         "No detailed MRT energy physics.",
         "No demand-driven staffing inference.",

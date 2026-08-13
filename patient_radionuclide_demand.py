@@ -65,7 +65,6 @@ class FacilityDayPatientDemand:
     def __post_init__(self) -> None:
         patients = tuple(self.patients)
         seen_patient_ids: set[str] = set()
-        distinct_radionuclides: set[str] = set()
 
         for patient in patients:
             if not isinstance(patient, PatientRadionuclideDemand):
@@ -73,10 +72,6 @@ class FacilityDayPatientDemand:
             if patient.patient_id in seen_patient_ids:
                 raise ValueError(f"Duplicate patient_id in facility day: {patient.patient_id}")
             seen_patient_ids.add(patient.patient_id)
-            distinct_radionuclides.add(patient.radionuclide)
-
-        if len(distinct_radionuclides) > 3:
-            raise ValueError("Facility day cannot contain more than three distinct radionuclides")
 
         object.__setattr__(self, "patients", patients)
 

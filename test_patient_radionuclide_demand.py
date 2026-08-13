@@ -95,14 +95,14 @@ def test_three_radionuclide_day_is_accepted():
     assert len({patient.radionuclide for patient in day.patients}) == 3
 
 
-def test_four_radionuclide_day_is_rejected():
-    with pytest.raises(ValueError, match="more than three distinct radionuclides"):
-        _day(
-            _patient("P1", "F-18", 100.0),
-            _patient("P2", "Ga-68", 100.0),
-            _patient("P3", "Tc-99m", 100.0),
-            _patient("P4", "C-11", 100.0),
-        )
+def test_four_radionuclide_day_is_accepted():
+    day = _day(
+        _patient("P1", "F-18", 100.0),
+        _patient("P2", "Ga-68", 100.0),
+        _patient("P3", "Tc-99m", 100.0),
+        _patient("P4", "C-11", 100.0),
+    )
+    assert len({patient.radionuclide for patient in day.patients}) == 4
 
 
 def test_half_life_is_resolved_from_canonical_library_not_stored_on_patient():

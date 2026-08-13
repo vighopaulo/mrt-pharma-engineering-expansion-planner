@@ -11,6 +11,7 @@ from decision_pipeline import NativeBottleneckSummary, NativePathwayScenario, Pa
 from infrastructure_capex import CapexLedgerItem
 from infrastructure_opex import OpexLedgerItem
 from lifecycle_economics import LifecycleComparisonResult, LifecycleEconomicResult
+from multi_isotope_decay import PathwayDecaySummary
 from production_clinical_schedule import ProductionClinicalPatientTrace
 from stochastic_design_day import PatientRadionuclideDemand
 
@@ -67,6 +68,21 @@ class NativePatientReportRecord:
     uptake_end_minutes: float
     scan_start_minutes: float
     scan_end_minutes: float
+    elapsed_decay_time_minutes: float
+    retained_fraction_at_administration: float
+    required_activity_at_eob_mbq: float
+    required_activity_at_release_mbq: float
+    activity_at_injection_mbq: float
+    physical_decay_loss_before_administration_mbq: float
+    unmet_prescribed_activity_mbq: float
+    required_upstream_activity_for_prescribed_mbq: float
+    theoretical_required_activity_at_eob_mbq: float
+    theoretical_required_activity_at_release_mbq: float
+    theoretical_compensation_factor: float
+    decay_feasible: bool
+    decay_infeasibility_reason: str | None
+    potential_shortfall_mbq_if_no_upstream_adjustment: float
+    dose_sufficient_if_no_upstream_adjustment: bool
     completed_within_operating_day: bool
 
 
@@ -79,6 +95,10 @@ class NativeRunReport:
     demand_trace_id: str
     pathway_trace_id: str
     bottleneck: NativeBottleneckSummary
+    scheduled_patients: int
+    schedule_completed_patients: int
+    effective_completed_patients: int
+    decay_infeasible_patients: int
     completed_patients: int
     incomplete_patients: int
     completion_percentage: float
@@ -156,12 +176,69 @@ class NativePathwayChartData:
     opex_composition: tuple[NativeCategoricalChartItem, ...]
     annual_financials: tuple[NativeAnnualCashFlowPoint, ...]
     cumulative_discounted_cash_flow: tuple[NativeChartPoint, ...]
+    retained_activity_by_patient: tuple[NativeChartPoint, ...]
+    decay_loss_by_isotope: tuple[NativeCategoricalChartItem, ...]
+    decay_loss_by_batch: tuple[NativeCategoricalChartItem, ...]
+    elapsed_time_vs_retained_fraction: tuple[NativeChartPoint, ...]
 
 
 @dataclass(frozen=True)
 class NativeRecommendationChartData:
     npv_vs_reliability: tuple[NativeChartPoint, ...]
     capex_vs_reliable_throughput: tuple[NativeChartPoint, ...]
+    conventional_vs_mrt_retained_activity: tuple[NativeChartPoint, ...]
+
+
+@dataclass(frozen=True)
+class NativeDecayIsotopeSummaryRow:
+    isotope: str
+    half_life_minutes: float
+    patient_count: int
+    total_prescribed_activity_mbq: float
+    total_prescribed_activity_mbq_successfully_served: float
+    total_required_activity_at_eob_mbq: float
+    total_required_activity_at_release_mbq: float
+    total_activity_at_injection_mbq: float
+    total_physical_decay_loss_mbq: float
+    total_unmet_prescribed_activity_mbq: float
+    total_decay_related_loss_mbq: float
+    feasible_patient_count: int
+    infeasible_patient_count: int
+    retained_percentage: float
+
+
+@dataclass(frozen=True)
+class NativeDecayBatchSummaryRow:
+    batch_id: int
+    isotope: str
+    patient_count: int
+    production_window_id: int
+    production_window_start_time_minutes: float
+    production_window_end_time_minutes: float
+    release_time_minutes: float
+    total_prescribed_activity_mbq: float
+    total_prescribed_activity_mbq_successfully_served: float
+    total_required_activity_at_eob_mbq: float
+    total_required_activity_at_release_mbq: float
+    total_activity_at_injection_mbq: float
+    total_physical_decay_loss_mbq: float
+    total_unmet_prescribed_activity_mbq: float
+    total_decay_related_loss_mbq: float
+    feasible_patient_count: int
+    infeasible_patient_count: int
+    average_retained_fraction: float
+
+
+@dataclass(frozen=True)
+class NativePathwayDecayComparison:
+    conventional_physical_decay_loss_mbq: float
+    mrt_physical_decay_loss_mbq: float
+    conventional_unmet_prescribed_activity_mbq: float
+    mrt_unmet_prescribed_activity_mbq: float
+    conventional_total_decay_related_loss_mbq: float
+    mrt_total_decay_related_loss_mbq: float
+    incremental_activity_retained_mrt_minus_conventional_mbq: float
+    retained_activity_percentage_difference_mrt_minus_conventional: float
 
 
 @dataclass(frozen=True)
@@ -180,6 +257,9 @@ class NativePathwayReport:
     opex_ledger: tuple[OpexLedgerItem, ...]
     lifecycle_result: LifecycleEconomicResult
     lifecycle_comparison_result: LifecycleComparisonResult | None
+    decay_summary: PathwayDecaySummary
+    isotope_decay_summary_rows: tuple[NativeDecayIsotopeSummaryRow, ...]
+    batch_decay_summary_rows: tuple[NativeDecayBatchSummaryRow, ...]
     annual_cash_flow_rows: tuple[NativeAnnualCashFlowPoint, ...]
     run_reports: tuple[NativeRunReport, ...]
     patient_records: tuple[NativePatientReportRecord, ...]
@@ -205,6 +285,7 @@ class NativeArchitectureReportData:
     best_qualifying_conventional_report: NativePathwayReport | None
     best_qualifying_mrt_report: NativePathwayReport | None
     reportable_pathway_reports: tuple[NativePathwayReport, ...]
+    pathway_decay_comparison: NativePathwayDecayComparison | None
     recommendation_chart_data: NativeRecommendationChartData
     provenance: NativeArchitectureReportProvenance
     limitations: tuple[str, ...]
@@ -312,11 +393,14 @@ def _patient_records_for_run(
     candidate_id: str,
     generated_patients: Sequence[PatientRadionuclideDemand],
     patient_traces: Sequence[ProductionClinicalPatientTrace],
+    patient_decay_traces,
 ) -> tuple[NativePatientReportRecord, ...]:
     trace_by_patient_id = {trace.patient_id: trace for trace in patient_traces}
+    decay_by_patient_id = {trace.patient_id: trace for trace in patient_decay_traces}
     records: list[NativePatientReportRecord] = []
     for patient in generated_patients:
         trace = trace_by_patient_id[patient.patient_id]
+        decay_trace = decay_by_patient_id[patient.patient_id]
         records.append(
             NativePatientReportRecord(
                 seed=seed,
@@ -338,6 +422,21 @@ def _patient_records_for_run(
                 uptake_end_minutes=trace.uptake_end,
                 scan_start_minutes=trace.scan_start,
                 scan_end_minutes=trace.scan_end,
+                elapsed_decay_time_minutes=decay_trace.elapsed_eob_to_injection_minutes,
+                retained_fraction_at_administration=decay_trace.retained_fraction_at_administration,
+                required_activity_at_eob_mbq=decay_trace.activity_at_eob_mbq,
+                required_activity_at_release_mbq=decay_trace.activity_at_release_mbq,
+                activity_at_injection_mbq=decay_trace.activity_at_injection_mbq,
+                physical_decay_loss_before_administration_mbq=decay_trace.physical_decay_loss_before_administration_mbq,
+                unmet_prescribed_activity_mbq=decay_trace.unmet_prescribed_activity_mbq,
+                required_upstream_activity_for_prescribed_mbq=decay_trace.required_upstream_activity_for_prescribed_mbq,
+                theoretical_required_activity_at_eob_mbq=decay_trace.theoretical_required_activity_at_eob_mbq,
+                theoretical_required_activity_at_release_mbq=decay_trace.theoretical_required_activity_at_release_mbq,
+                theoretical_compensation_factor=decay_trace.theoretical_compensation_factor,
+                decay_feasible=decay_trace.decay_feasible,
+                decay_infeasibility_reason=decay_trace.decay_infeasibility_reason,
+                potential_shortfall_mbq_if_no_upstream_adjustment=decay_trace.potential_shortfall_mbq_if_no_upstream_adjustment,
+                dose_sufficient_if_no_upstream_adjustment=decay_trace.dose_sufficient_if_no_upstream_adjustment,
                 completed_within_operating_day=trace.completed_within_operating_day,
             )
         )
@@ -401,6 +500,107 @@ def _isotope_counts_from_runs(run_reports: Sequence[NativeRunReport]) -> Mapping
     return dict(counts)
 
 
+def _retained_activity_by_patient(run_reports: Sequence[NativeRunReport]) -> tuple[NativeChartPoint, ...]:
+    points: list[NativeChartPoint] = []
+    for run_report in run_reports:
+        for patient in run_report.patient_records:
+            points.append(
+                NativeChartPoint(
+                    x=float(len(points) + 1),
+                    y=float(patient.activity_at_injection_mbq),
+                    label=patient.patient_id,
+                )
+            )
+    return tuple(points)
+
+
+def _elapsed_vs_retained(run_reports: Sequence[NativeRunReport]) -> tuple[NativeChartPoint, ...]:
+    points: list[NativeChartPoint] = []
+    for run_report in run_reports:
+        for patient in run_report.patient_records:
+            points.append(
+                NativeChartPoint(
+                    x=float(patient.elapsed_decay_time_minutes),
+                    y=float(patient.retained_fraction_at_administration),
+                    label=patient.patient_id,
+                )
+            )
+    return tuple(points)
+
+
+def _decay_loss_by_batch(run_reports: Sequence[NativeRunReport]) -> tuple[NativeCategoricalChartItem, ...]:
+    by_batch: dict[str, float] = {}
+    for run_report in run_reports:
+        for patient in run_report.patient_records:
+            key = f"{patient.batch_id}:{patient.radionuclide}"
+            by_batch[key] = by_batch.get(key, 0.0) + float(patient.physical_decay_loss_before_administration_mbq)
+    return _categorical_items(by_batch)
+
+
+def _decay_loss_by_isotope(run_reports: Sequence[NativeRunReport]) -> tuple[NativeCategoricalChartItem, ...]:
+    by_isotope: dict[str, float] = {}
+    for run_report in run_reports:
+        for patient in run_report.patient_records:
+            key = patient.radionuclide
+            by_isotope[key] = by_isotope.get(key, 0.0) + float(patient.physical_decay_loss_before_administration_mbq)
+    return _categorical_items(by_isotope)
+
+
+def _isotope_decay_rows(pathway_decay_summary: PathwayDecaySummary) -> tuple[NativeDecayIsotopeSummaryRow, ...]:
+    rows: list[NativeDecayIsotopeSummaryRow] = []
+    for summary in pathway_decay_summary.isotope_summaries:
+        required_eob = float(summary.total_activity_at_eob_mbq)
+        delivered = float(summary.total_activity_at_injection_mbq)
+        retained_pct = 100.0 * delivered / required_eob if required_eob > 0.0 else 0.0
+        rows.append(
+            NativeDecayIsotopeSummaryRow(
+                isotope=summary.radionuclide,
+                half_life_minutes=summary.half_life_minutes,
+                patient_count=summary.patient_count,
+                total_prescribed_activity_mbq=float(summary.total_prescribed_activity_mbq),
+                total_prescribed_activity_mbq_successfully_served=float(summary.total_prescribed_activity_mbq_successfully_served),
+                total_required_activity_at_eob_mbq=required_eob,
+                total_required_activity_at_release_mbq=float(summary.total_activity_at_release_mbq),
+                total_activity_at_injection_mbq=delivered,
+                total_physical_decay_loss_mbq=float(summary.total_physical_decay_loss_before_administration_mbq),
+                total_unmet_prescribed_activity_mbq=float(summary.total_unmet_prescribed_activity_mbq),
+                total_decay_related_loss_mbq=float(summary.total_physical_decay_loss_before_administration_mbq + summary.total_unmet_prescribed_activity_mbq),
+                feasible_patient_count=summary.feasible_patient_count,
+                infeasible_patient_count=summary.infeasible_patient_count,
+                retained_percentage=retained_pct,
+            )
+        )
+    return tuple(rows)
+
+
+def _batch_decay_rows(pathway_decay_summary: PathwayDecaySummary) -> tuple[NativeDecayBatchSummaryRow, ...]:
+    rows: list[NativeDecayBatchSummaryRow] = []
+    for summary in pathway_decay_summary.batch_summaries:
+        rows.append(
+            NativeDecayBatchSummaryRow(
+                batch_id=summary.batch_id,
+                isotope=summary.radionuclide,
+                patient_count=summary.patient_count,
+                production_window_id=summary.production_window_id,
+                production_window_start_time_minutes=summary.production_window_start_time_minutes,
+                production_window_end_time_minutes=summary.production_window_end_time_minutes,
+                release_time_minutes=summary.release_time_minutes,
+                total_prescribed_activity_mbq=summary.total_prescribed_activity_mbq,
+                total_prescribed_activity_mbq_successfully_served=summary.total_prescribed_activity_mbq_successfully_served,
+                total_required_activity_at_eob_mbq=summary.total_activity_at_eob_mbq,
+                total_required_activity_at_release_mbq=summary.total_activity_at_release_mbq,
+                total_activity_at_injection_mbq=summary.total_activity_at_injection_mbq,
+                total_physical_decay_loss_mbq=summary.total_physical_decay_loss_before_administration_mbq,
+                total_unmet_prescribed_activity_mbq=summary.total_unmet_prescribed_activity_mbq,
+                total_decay_related_loss_mbq=summary.total_physical_decay_loss_before_administration_mbq + summary.total_unmet_prescribed_activity_mbq,
+                feasible_patient_count=summary.feasible_patient_count,
+                infeasible_patient_count=summary.infeasible_patient_count,
+                average_retained_fraction=summary.average_retained_fraction,
+            )
+        )
+    return tuple(rows)
+
+
 def _pathway_chart_data(candidate: ArchitectureCandidateResult, run_reports: Sequence[NativeRunReport]) -> NativePathwayChartData:
     throughput_values = candidate.throughput_distribution.observations
     annual_financials = _annual_cash_flow_rows(candidate.lifecycle_result)
@@ -419,17 +619,23 @@ def _pathway_chart_data(candidate: ArchitectureCandidateResult, run_reports: Seq
         opex_composition=_opex_ledger_chart_items(candidate.opex_result.ledger),
         annual_financials=annual_financials,
         cumulative_discounted_cash_flow=tuple(NativeChartPoint(x=float(row.year), y=float(row.cumulative_npv)) for row in annual_financials),
+        retained_activity_by_patient=_retained_activity_by_patient(run_reports),
+        decay_loss_by_isotope=_decay_loss_by_isotope(run_reports),
+        decay_loss_by_batch=_decay_loss_by_batch(run_reports),
+        elapsed_time_vs_retained_fraction=_elapsed_vs_retained(run_reports),
     )
 
 
 def _run_report(candidate: ArchitectureCandidateResult, run_result) -> NativeRunReport:
     pathway_result = run_result.native_result.conventional if candidate.pathway == "Conventional" else run_result.native_result.mrt
+    pathway_decay_summary = pathway_result.decay_summary
     patient_records = _patient_records_for_run(
         seed=run_result.seed,
         pathway=candidate.pathway,
         candidate_id=candidate.candidate_id,
         generated_patients=run_result.native_result.demand_result.simulation.generated_demand.patients,
         patient_traces=pathway_result.operational_result.production_clinical_result.patient_traces,
+        patient_decay_traces=pathway_decay_summary.patient_traces,
     )
     return NativeRunReport(
         seed=run_result.seed,
@@ -439,6 +645,10 @@ def _run_report(candidate: ArchitectureCandidateResult, run_result) -> NativeRun
         demand_trace_id=run_result.reference.demand_trace_id,
         pathway_trace_id=run_result.reference.pathway_trace_ids[candidate.pathway],
         bottleneck=run_result.reference.bottleneck_by_pathway[candidate.pathway],
+        scheduled_patients=int(pathway_result.operational_result.scheduled_patients),
+        schedule_completed_patients=int(pathway_result.operational_result.schedule_completed_patients),
+        effective_completed_patients=int(pathway_result.operational_result.decay_feasible_completed_patients),
+        decay_infeasible_patients=int(pathway_result.operational_result.decay_infeasible_patients),
         completed_patients=int(pathway_result.operational_result.patients_completed),
         incomplete_patients=int(pathway_result.operational_result.patients_incomplete),
         completion_percentage=float(pathway_result.operational_result.completion_percentage),
@@ -470,6 +680,21 @@ def _pathway_report(candidate: ArchitectureCandidateResult) -> NativePathwayRepo
         opex_ledger=candidate.opex_result.ledger,
         lifecycle_result=candidate.lifecycle_result,
         lifecycle_comparison_result=lifecycle_comparison_result,
+        decay_summary=(
+            candidate.direct_decision_result.conventional.decay_summary
+            if candidate.pathway == "Conventional"
+            else candidate.direct_decision_result.mrt.decay_summary
+        ),
+        isotope_decay_summary_rows=_isotope_decay_rows(
+            candidate.direct_decision_result.conventional.decay_summary
+            if candidate.pathway == "Conventional"
+            else candidate.direct_decision_result.mrt.decay_summary
+        ),
+        batch_decay_summary_rows=_batch_decay_rows(
+            candidate.direct_decision_result.conventional.decay_summary
+            if candidate.pathway == "Conventional"
+            else candidate.direct_decision_result.mrt.decay_summary
+        ),
         annual_cash_flow_rows=chart_data.annual_financials,
         run_reports=run_reports,
         patient_records=tuple(record for run in run_reports for record in run.patient_records),
@@ -486,7 +711,7 @@ def _limitations() -> tuple[str, ...]:
         "Empirical report data depends on the supplied seed set.",
         "No spatially derived guideway geometry.",
         "No demand-driven staffing inference.",
-        "No multi-isotope decay economics.",
+        "Decay physics is integrated, but direct monetization of activity loss requires an authoritative isotope-production cost model.",
         "No PDF/DOCX/XLSX rendering in this build.",
     )
 
@@ -494,7 +719,6 @@ def _limitations() -> tuple[str, ...]:
 def build_native_architecture_report_data(recommendation_result: ArchitectureRecommendationResult) -> NativeArchitectureReportData:
     conventional_report = _pathway_report(recommendation_result.best_qualifying_conventional) if recommendation_result.best_qualifying_conventional is not None else None
     mrt_report = _pathway_report(recommendation_result.best_qualifying_mrt) if recommendation_result.best_qualifying_mrt is not None else None
-    reportable_pathway_reports = tuple(report for report in (conventional_report, mrt_report) if report is not None)
 
     if conventional_report is not None and mrt_report is not None:
         incremental_summary = _incremental_economic_summary(conventional_report, mrt_report)
@@ -504,6 +728,8 @@ def build_native_architecture_report_data(recommendation_result: ArchitectureRec
         mrt_report = NativePathwayReport(
             **{**mrt_report.__dict__, "incremental_economic_summary": incremental_summary}
         )
+
+    reportable_pathway_reports = tuple(report for report in (conventional_report, mrt_report) if report is not None)
 
     selected_pathway_report: NativePathwayReport | None = None
     if recommendation_result.recommended_pathway == "Conventional":
@@ -520,7 +746,38 @@ def build_native_architecture_report_data(recommendation_result: ArchitectureRec
             NativeChartPoint(x=candidate.throughput_distribution.p95, y=candidate.capex_result.total_capex, label=candidate.candidate_id)
             for candidate in recommendation_result.conventional_candidates + recommendation_result.mrt_candidates
         ),
+        conventional_vs_mrt_retained_activity=(
+            tuple(
+                NativeChartPoint(x=0.0, y=conventional_report.decay_summary.mean_retained_fraction, label="Conventional")
+                for _ in [0]
+            )
+            + tuple(
+                NativeChartPoint(x=1.0, y=mrt_report.decay_summary.mean_retained_fraction, label="MRT")
+                for _ in [0]
+            )
+            if conventional_report is not None and mrt_report is not None
+            else ()
+        ),
     )
+
+    pathway_decay_comparison: NativePathwayDecayComparison | None = None
+    if conventional_report is not None and mrt_report is not None:
+        conventional_required_eob = sum(summary.total_activity_at_eob_mbq for summary in conventional_report.decay_summary.isotope_summaries)
+        mrt_required_eob = sum(summary.total_activity_at_eob_mbq for summary in mrt_report.decay_summary.isotope_summaries)
+        conventional_delivered = sum(conventional_report.decay_summary.total_activity_at_injection_mbq_by_isotope.values())
+        mrt_delivered = sum(mrt_report.decay_summary.total_activity_at_injection_mbq_by_isotope.values())
+        retained_pct_conventional = 100.0 * conventional_delivered / conventional_required_eob if conventional_required_eob > 0.0 else 0.0
+        retained_pct_mrt = 100.0 * mrt_delivered / mrt_required_eob if mrt_required_eob > 0.0 else 0.0
+        pathway_decay_comparison = NativePathwayDecayComparison(
+            conventional_physical_decay_loss_mbq=conventional_report.decay_summary.overall_physical_decay_loss_mbq,
+            mrt_physical_decay_loss_mbq=mrt_report.decay_summary.overall_physical_decay_loss_mbq,
+            conventional_unmet_prescribed_activity_mbq=conventional_report.decay_summary.overall_unmet_prescribed_activity_mbq,
+            mrt_unmet_prescribed_activity_mbq=mrt_report.decay_summary.overall_unmet_prescribed_activity_mbq,
+            conventional_total_decay_related_loss_mbq=conventional_report.decay_summary.overall_decay_loss_mbq,
+            mrt_total_decay_related_loss_mbq=mrt_report.decay_summary.overall_decay_loss_mbq,
+            incremental_activity_retained_mrt_minus_conventional_mbq=mrt_delivered - conventional_delivered,
+            retained_activity_percentage_difference_mrt_minus_conventional=retained_pct_mrt - retained_pct_conventional,
+        )
 
     provenance = NativeArchitectureReportProvenance(
         recommendation_trace_id=recommendation_result.provenance.aggregate_trace_id,
@@ -551,6 +808,7 @@ def build_native_architecture_report_data(recommendation_result: ArchitectureRec
         best_qualifying_conventional_report=conventional_report,
         best_qualifying_mrt_report=mrt_report,
         reportable_pathway_reports=reportable_pathway_reports,
+        pathway_decay_comparison=pathway_decay_comparison,
         recommendation_chart_data=recommendation_chart_data,
         provenance=provenance,
         limitations=limitations,

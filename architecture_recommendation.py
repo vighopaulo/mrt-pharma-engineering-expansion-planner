@@ -198,6 +198,12 @@ class ArchitectureCandidateResult:
     selection_reason: str
     rejection_reason: str | None
     resource_intelligence: tuple[str, ...]
+    decay_total_loss_mbq: float = 0.0
+    decay_mean_retained_fraction: float = 1.0
+    decay_loss_mbq_per_completed_patient: float = 0.0
+    effective_completed_patients_per_day: float = 0.0
+    raw_schedule_completed_patients_per_day: float = 0.0
+    decay_infeasible_patients_per_day: float = 0.0
 
 
 @dataclass(frozen=True)
@@ -366,6 +372,18 @@ def _resource_intelligence_notes(
     return tuple(dict.fromkeys(notes))
 
 
+def _decay_metrics_for_pathway(direct_decision_result: NativeDecisionComparisonResult, pathway: Pathway) -> tuple[float, float, float]:
+    pathway_result = direct_decision_result.conventional if pathway == "Conventional" else direct_decision_result.mrt
+    decay_summary = getattr(pathway_result, "decay_summary", None)
+    if decay_summary is None:
+        return 0.0, 1.0, 0.0
+    return (
+        float(getattr(decay_summary, "overall_physical_decay_loss_mbq", getattr(decay_summary, "overall_decay_loss_mbq", 0.0))),
+        float(getattr(decay_summary, "mean_retained_fraction", 1.0)),
+        float(getattr(decay_summary, "physical_decay_loss_mbq_per_feasible_completed_patient", getattr(decay_summary, "decay_loss_mbq_per_completed_patient", 0.0))),
+    )
+
+
 def _evaluate_candidate(
     request: ArchitectureRecommendationRequest,
     candidate_id: str,
@@ -424,9 +442,24 @@ def _evaluate_candidate(
             f"Rejected because measured reliability {measured_reliability:.3f} fell below minimum {request.minimum_reliability:.3f}."
         )
     else:
+        decay_loss_mbq, decay_mean_retained_fraction, _ = _decay_metrics_for_pathway(direct_decision_result, pathway)
         selection_reason = (
-            f"Qualified on empirical reliability {measured_reliability:.3f}; selection uses the mean-case 10-year NPV from the native reliability engine."
+            f"Qualified on empirical reliability {measured_reliability:.3f}; selection uses the mean-case 10-year NPV from the native reliability engine. "
+            f"Decay audit: mean retained fraction {decay_mean_retained_fraction:.4f}, total loss {decay_loss_mbq:.2f} MBq."
         )
+
+    decay_total_loss_mbq, decay_mean_retained_fraction, decay_loss_mbq_per_completed_patient = _decay_metrics_for_pathway(direct_decision_result, pathway)
+    pathway_result = direct_decision_result.conventional if pathway == "Conventional" else direct_decision_result.mrt
+    operational_result = getattr(pathway_result, "operational_result", None)
+    effective_completed = float(
+        getattr(
+            operational_result,
+            "decay_feasible_completed_patients",
+            getattr(operational_result, "patients_completed", pathway_summary.throughput_distribution.mean),
+        )
+    )
+    raw_completed = float(getattr(operational_result, "schedule_completed_patients", effective_completed))
+    decay_infeasible = float(getattr(operational_result, "decay_infeasible_patients", max(0.0, raw_completed - effective_completed)))
 
     return ArchitectureCandidateResult(
         candidate_id=candidate_id,
@@ -450,6 +483,12 @@ def _evaluate_candidate(
         selection_reason=selection_reason,
         rejection_reason=rejection_reason,
         resource_intelligence=(),
+        decay_total_loss_mbq=decay_total_loss_mbq,
+        decay_mean_retained_fraction=decay_mean_retained_fraction,
+        decay_loss_mbq_per_completed_patient=decay_loss_mbq_per_completed_patient,
+        effective_completed_patients_per_day=effective_completed,
+        raw_schedule_completed_patients_per_day=raw_completed,
+        decay_infeasible_patients_per_day=decay_infeasible,
     )
 
 

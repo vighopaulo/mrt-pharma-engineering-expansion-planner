@@ -118,8 +118,6 @@ class DesignDayDemandScenario:
 
         if total_weight <= 0.0:
             raise ValueError("radionuclide mix must have positive total weight")
-        if len(set(positive_radionuclides)) > 3:
-            raise ValueError("Design day cannot contain more than three positive-weight radionuclides")
 
         normalized_activity_models: dict[str, ActivityDemandModel] = {}
         for radionuclide, model in self.activity_distribution_by_radionuclide.items():

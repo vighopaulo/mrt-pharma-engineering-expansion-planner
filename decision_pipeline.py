@@ -11,6 +11,7 @@ from infrastructure_capex import InfrastructureCapexInputs, InfrastructureCapexR
 from infrastructure_opex import InfrastructureOpexInputs, InfrastructureOpexResult, calculate_infrastructure_opex
 from lifecycle_economics import LifecycleComparisonResult, LifecycleEconomicResult, compare_lifecycle_results, evaluate_lifecycle_economics
 from models import PlannerAssumptions, SharedNetworkAssumptions
+from multi_isotope_decay import PathwayDecaySummary, evaluate_pathway_decay
 from patient_radionuclide_demand import (
     FacilityDayPatientDemand,
     RadionuclideBatchDemand,
@@ -195,6 +196,12 @@ class NativeOperationalResult:
     pathway_config: NativePathwayScenario
     demand_result: NativeDemandResult
     production_clinical_result: ProductionClinicalScheduleResult
+    scheduled_patients: int
+    schedule_completed_patients: int
+    decay_feasible_scheduled_patients: int
+    decay_feasible_completed_patients: int
+    decay_infeasible_patients: int
+    effective_completion_percentage: float
     patients_considered: int
     patients_completed: int
     patients_incomplete: int
@@ -206,6 +213,7 @@ class NativeOperationalResult:
     uptake_utilization_pct: float
     distribution_utilization_pct: float
     bottleneck: NativeBottleneckSummary
+    decay_summary: PathwayDecaySummary
     trace_id: str
 
 
@@ -220,6 +228,7 @@ class NativePathwayResult:
     annual_completed_scans: float
     annual_revenue: float
     annual_opex: float
+    decay_summary: PathwayDecaySummary
     trace_id: str
     warnings: tuple[str, ...]
 
@@ -435,14 +444,25 @@ def _build_opex_inputs(
     )
 
 
-def _build_operational_result(
+def _decay_feasibility_guard(request: NativeDecisionPipelineScenario) -> tuple[float, float | None]:
+    minimum_retained = float(request.planner_assumptions.decay_feasibility_min_retained_fraction)
+    if minimum_retained < 0.0 or minimum_retained > 1.0:
+        raise ValueError("planner_assumptions.decay_feasibility_min_retained_fraction must be within [0.0, 1.0]")
+    max_compensation = request.planner_assumptions.decay_feasibility_max_compensation_factor
+    if max_compensation is not None and float(max_compensation) < 1.0:
+        raise ValueError("planner_assumptions.decay_feasibility_max_compensation_factor must be at least 1.0")
+    return minimum_retained, (None if max_compensation is None else float(max_compensation))
+
+
+def _build_schedule_for_batches(
     request: NativeDecisionPipelineScenario,
     pathway_config: NativePathwayScenario,
-    demand_result: NativeDemandResult,
-) -> tuple[ProductionClinicalScheduleResult, NativeOperationalResult]:
+    facility_day_demand: FacilityDayPatientDemand,
+    requested_batch_count_by_radionuclide: Mapping[str, int],
+) -> ProductionClinicalScheduleResult:
     schedule = ProductionClinicalScenario(
-        facility_day_demand=demand_result.simulation.generated_demand,
-        requested_batch_count_by_radionuclide=demand_result.requested_batch_count_by_radionuclide,
+        facility_day_demand=facility_day_demand,
+        requested_batch_count_by_radionuclide=requested_batch_count_by_radionuclide,
         cyclotron_capability=request.cyclotron_capability,
         transport_minutes=pathway_config.transport_minutes,
         injection_service_minutes=request.planner_assumptions.injection_cycle_min,
@@ -454,14 +474,107 @@ def _build_operational_result(
         distribution_concurrency=pathway_config.distribution_concurrency,
         operating_day_minutes=request.operating_day_minutes,
     )
-    production_result = build_production_clinical_schedule(schedule)
+    return build_production_clinical_schedule(schedule)
+
+
+def _optimize_batches_for_decay_feasibility(
+    request: NativeDecisionPipelineScenario,
+    pathway_config: NativePathwayScenario,
+    demand_result: NativeDemandResult,
+) -> tuple[ProductionClinicalScheduleResult, PathwayDecaySummary]:
+    minimum_retained, max_compensation = _decay_feasibility_guard(request)
+    requested = {key: int(value) for key, value in demand_result.requested_batch_count_by_radionuclide.items()}
+    max_batches_by_isotope = {
+        isotope: max(1, int(count))
+        for isotope, count in demand_result.simulation.patient_count_by_radionuclide.items()
+        if int(count) > 0
+    }
+
+    seen: set[tuple[tuple[str, int], ...]] = set()
+    best_schedule = _build_schedule_for_batches(
+        request,
+        pathway_config,
+        demand_result.simulation.generated_demand,
+        requested,
+    )
+    best_decay = evaluate_pathway_decay(
+        pathway=pathway_config.pathway,
+        generated_patients=demand_result.simulation.generated_demand.patients,
+        patient_traces=best_schedule.patient_traces,
+        min_retained_fraction_for_feasibility=minimum_retained,
+        max_decay_compensation_factor=max_compensation,
+    )
+    baseline_completed_patients = best_schedule.clinical_schedule.completed_patients
+
+    for _ in range(64):
+        key = tuple(sorted(requested.items()))
+        if key in seen:
+            break
+        seen.add(key)
+
+        schedule = _build_schedule_for_batches(
+            request,
+            pathway_config,
+            demand_result.simulation.generated_demand,
+            requested,
+        )
+        decay_summary = evaluate_pathway_decay(
+            pathway=pathway_config.pathway,
+            generated_patients=demand_result.simulation.generated_demand.patients,
+            patient_traces=schedule.patient_traces,
+            min_retained_fraction_for_feasibility=minimum_retained,
+            max_decay_compensation_factor=max_compensation,
+        )
+
+        completed_patients = schedule.clinical_schedule.completed_patients
+        if completed_patients >= baseline_completed_patients:
+            if decay_summary.decay_infeasible_patient_count < best_decay.decay_infeasible_patient_count or (
+                decay_summary.decay_infeasible_patient_count == best_decay.decay_infeasible_patient_count
+                and decay_summary.mean_retained_fraction > best_decay.mean_retained_fraction
+            ):
+                best_schedule = schedule
+                best_decay = decay_summary
+
+        if decay_summary.decay_infeasible_patient_count == 0:
+            return schedule, decay_summary
+
+        increments = 0
+        for isotope, count in sorted(decay_summary.decay_infeasible_by_isotope.items(), key=lambda item: item[1], reverse=True):
+            if count <= 0:
+                continue
+            current = requested.get(isotope, 0)
+            maximum = max_batches_by_isotope.get(isotope, current)
+            if current < maximum:
+                requested[isotope] = current + 1
+                increments += 1
+
+        if increments == 0:
+            break
+
+    return best_schedule, best_decay
+
+
+def _build_operational_result(
+    request: NativeDecisionPipelineScenario,
+    pathway_config: NativePathwayScenario,
+    demand_result: NativeDemandResult,
+) -> tuple[ProductionClinicalScheduleResult, NativeOperationalResult]:
+    production_result, decay_summary = _optimize_batches_for_decay_feasibility(request, pathway_config, demand_result)
     clinical_result = production_result.clinical_schedule
+    scheduled_patients = clinical_result.total_patients_considered
+    schedule_completed_patients = clinical_result.completed_patients
+    decay_feasible_scheduled_patients = decay_summary.decay_feasible_patient_count
+    decay_feasible_completed_patients = decay_summary.feasible_completed_patients
+    decay_infeasible_patients = decay_summary.decay_infeasible_patient_count
+    effective_completion_percentage = decay_summary.effective_completion_percentage
     bottleneck = _bottleneck_summary(clinical_result)
     operational_trace_id = _trace_id(
         {
             "demand_trace_id": demand_result.trace_id,
             "pathway": pathway_config.pathway,
-            "completed_patients": clinical_result.completed_patients,
+            "completed_patients": decay_feasible_completed_patients,
+            "scheduled_patients": scheduled_patients,
+            "schedule_completed_patients": schedule_completed_patients,
             "uncompleted_patients": clinical_result.uncompleted_patients,
             "production_elapsed_minutes": production_result.production_schedule.total_elapsed_production_minutes,
             "final_scan_completion_time_minutes": clinical_result.last_scan_completion_minute,
@@ -475,6 +588,9 @@ def _build_operational_result(
                 }
                 for mapping in production_result.batch_release_mappings
             ],
+            "decay_overall_loss_mbq": decay_summary.overall_decay_loss_mbq,
+            "decay_mean_retained_fraction": decay_summary.mean_retained_fraction,
+            "dose_insufficient_if_no_upstream_adjustment": decay_summary.dose_insufficient_patient_count_if_no_upstream_adjustment,
         }
     )
     operational = NativeOperationalResult(
@@ -482,10 +598,16 @@ def _build_operational_result(
         pathway_config=pathway_config,
         demand_result=demand_result,
         production_clinical_result=production_result,
-        patients_considered=clinical_result.total_patients_considered,
-        patients_completed=clinical_result.completed_patients,
-        patients_incomplete=clinical_result.uncompleted_patients,
-        completion_percentage=(100.0 * clinical_result.completed_patients / clinical_result.total_patients_considered) if clinical_result.total_patients_considered else 0.0,
+        scheduled_patients=scheduled_patients,
+        schedule_completed_patients=schedule_completed_patients,
+        decay_feasible_scheduled_patients=decay_feasible_scheduled_patients,
+        decay_feasible_completed_patients=decay_feasible_completed_patients,
+        decay_infeasible_patients=decay_infeasible_patients,
+        effective_completion_percentage=effective_completion_percentage,
+        patients_considered=scheduled_patients,
+        patients_completed=decay_feasible_completed_patients,
+        patients_incomplete=max(0, scheduled_patients - decay_feasible_completed_patients),
+        completion_percentage=effective_completion_percentage,
         production_elapsed_minutes=production_result.production_schedule.total_elapsed_production_minutes,
         final_scan_completion_time_minutes=clinical_result.last_scan_completion_minute,
         scanner_utilization_pct=clinical_result.scanner_utilization_pct,
@@ -493,6 +615,7 @@ def _build_operational_result(
         uptake_utilization_pct=clinical_result.uptake_utilization_pct,
         distribution_utilization_pct=clinical_result.distribution_utilization_pct,
         bottleneck=bottleneck,
+        decay_summary=decay_summary,
         trace_id=operational_trace_id,
     )
     return production_result, operational
@@ -503,9 +626,11 @@ def _limitations() -> tuple[str, ...]:
         "Batch counts are derived from explicit batch_target_patients_per_batch; no canonical repository policy exists.",
         "No spatially derived guideway length.",
         "No floor-area/floor-count resource placement.",
-        "No multi-isotope decay-adjusted economics.",
+        "Decay physics is natively integrated, but direct monetization of activity loss requires an authoritative isotope-production cost model.",
         "No detailed MRT energy physics.",
         "No demand-driven staffing inference.",
+        "Cyclotron manufacturer/model library is not implemented as a permanent repository object.",
+        "Model-specific beam energy, target yields, target-change constraints, and synthesis/QC yield curves are not represented in this native build.",
     )
 
 
@@ -518,6 +643,11 @@ def _warnings(request: NativeDecisionPipelineScenario, pathway_config: NativePat
             notes.append("MRT guideway length must be provided explicitly; this build does not derive it from geometry.")
         if pathway_config.guideway_capex_per_m <= 0.0:
             notes.append("MRT guideway CapEx per meter must be provided explicitly.")
+    unsupported = set(request.radionuclide_mix).difference(request.cyclotron_capability.supported_radionuclides)
+    if unsupported:
+        notes.append(
+            f"Cyclotron capability does not support requested radionuclides: {sorted(unsupported)}"
+        )
     return tuple(notes)
 
 
@@ -532,7 +662,7 @@ def _build_pathway_result(
     capex_result = calculate_infrastructure_capex(capex_inputs)
     opex_result = calculate_infrastructure_opex(opex_inputs)
 
-    completed_per_day = float(operational_result.patients_completed)
+    completed_per_day = float(operational_result.decay_feasible_completed_patients)
     lifecycle_result = evaluate_lifecycle_economics(
         initial_capex=capex_result.total_capex,
         installed_capacity_per_day=completed_per_day,
@@ -568,8 +698,19 @@ def _build_pathway_result(
         annual_completed_scans=annual_completed_scans,
         annual_revenue=annual_revenue,
         annual_opex=annual_opex,
+        decay_summary=operational_result.decay_summary,
         trace_id=pathway_trace_id,
-        warnings=_warnings(request, pathway_config),
+        warnings=_warnings(request, pathway_config)
+        + ((
+            f"{pathway_config.pathway} pathway potential dose-insufficient patients without upstream activity adjustment: "
+            f"{operational_result.decay_summary.dose_insufficient_patient_count_if_no_upstream_adjustment}"
+        ), (
+            f"{pathway_config.pathway} pathway decay-infeasible patients under configured guard: "
+            f"{operational_result.decay_summary.decay_infeasible_patient_count}"
+        ), (
+            f"{pathway_config.pathway} pathway raw schedule-completed patients: {operational_result.schedule_completed_patients}; "
+            f"effective decay-feasible completed patients: {operational_result.decay_feasible_completed_patients}"
+        )),
     )
 
 
@@ -633,7 +774,7 @@ def run_native_decision_pipeline(request: NativeDecisionPipelineScenario) -> Nat
         demand_to_patients="DIRECT NATIVE CONNECTION",
         patients_to_isotope_batching="DIRECT NATIVE CONNECTION",
         batches_to_production="DIRECT NATIVE CONNECTION",
-        production_to_clinical_schedule="DIRECT NATIVE CONNECTION",
+        production_to_clinical_schedule="DIRECT NATIVE CONNECTION (WITH PER-PATIENT DECAY TRACE)",
         resource_quantities_to_capex="DIRECT NATIVE CONNECTION",
         resource_quantities_to_opex="DIRECT NATIVE CONNECTION",
         actual_clinical_completion_to_lifecycle_throughput="DIRECT NATIVE CONNECTION",
