@@ -6,7 +6,7 @@ import math
 from dataclasses import dataclass, field
 from typing import Any, Literal, Mapping
 
-from cyclotron_production_windows import CyclotronProductionCapability
+from cyclotron_production_windows import CyclotronFleet, CyclotronProductionCapability, build_single_cyclotron_fleet
 from infrastructure_capex import InfrastructureCapexInputs, InfrastructureCapexResult, calculate_infrastructure_capex
 from infrastructure_opex import InfrastructureOpexInputs, InfrastructureOpexResult, calculate_infrastructure_opex
 from lifecycle_economics import LifecycleComparisonResult, LifecycleEconomicResult, compare_lifecycle_results, evaluate_lifecycle_economics
@@ -136,6 +136,7 @@ class NativeDecisionPipelineScenario:
     peak_patient_multiplier: float = 1.0
     peak_activity_multiplier: float = 1.0
     seed: int = 0
+    cyclotron_fleet: CyclotronFleet | None = None
     operating_day_minutes: float = 1080.0
     batch_target_patients_per_batch: int = 20
     lifecycle_throughput_mode: Literal["actual_completed"] = "actual_completed"
@@ -186,6 +187,7 @@ class NativeDemandResult:
     requested_batch_count_by_radionuclide: Mapping[str, int]
     batch_demands: tuple[RadionuclideBatchDemand, ...]
     patient_ids_by_radionuclide: Mapping[str, tuple[str, ...]]
+    fleet_supported_radionuclides: tuple[str, ...]
     trace_id: str
     batch_policy_description: str
 
@@ -253,6 +255,9 @@ class NativePipelineProvenance:
     request: NativeDecisionPipelineScenario
     scenario_trace_id: str
     demand_trace_id: str
+    fleet_id: str
+    fleet_asset_ids: tuple[str, ...]
+    fleet_supported_radionuclides: tuple[str, ...]
     conventional_trace_id: str
     mrt_trace_id: str
     comparison_trace_id: str
@@ -322,6 +327,12 @@ def _batch_policy_description(batch_target_patients_per_batch: int) -> str:
     return f"PIPELINE BATCH POLICY: ceil(patient_count / {int(batch_target_patients_per_batch)}) per radionuclide"
 
 
+def _resolved_cyclotron_fleet(request: NativeDecisionPipelineScenario) -> CyclotronFleet:
+    if request.cyclotron_fleet is not None:
+        return request.cyclotron_fleet
+    return build_single_cyclotron_fleet(request.cyclotron_capability)
+
+
 def _derive_requested_batch_counts(
     simulation: DesignDaySimulationResult,
     batch_target_patients_per_batch: int,
@@ -341,11 +352,14 @@ def _patient_ids_by_radionuclide(facility_day: FacilityDayPatientDemand) -> dict
 
 
 def _build_demand_result(request: NativeDecisionPipelineScenario) -> NativeDemandResult:
+    fleet = _resolved_cyclotron_fleet(request)
     scenario = DesignDayDemandScenario(
         target_patients_per_day=request.target_patients_per_day,
         radionuclide_mix=request.radionuclide_mix,
         activity_distribution_by_radionuclide=request.activity_distribution_by_radionuclide,
         day_type=request.day_type,
+        available_radionuclides=fleet.fleet_supported_radionuclides,
+        unsupported_radionuclide_policy="reject",
         peak_patient_multiplier=request.peak_patient_multiplier,
         peak_activity_multiplier=request.peak_activity_multiplier,
         seed=request.seed,
@@ -360,6 +374,9 @@ def _build_demand_result(request: NativeDecisionPipelineScenario) -> NativeDeman
             "target_patients_per_day": request.target_patients_per_day,
             "day_type": request.day_type,
             "patient_count": simulation.patient_count,
+            "fleet_id": fleet.fleet_id,
+            "fleet_asset_ids": tuple(asset.cyclotron_id for asset in fleet.assets),
+            "fleet_supported_radionuclides": tuple(fleet.fleet_supported_radionuclides),
             "patient_count_by_radionuclide": dict(simulation.patient_count_by_radionuclide),
             "total_activity_by_radionuclide": dict(simulation.total_activity_by_radionuclide),
             "requested_batch_count_by_radionuclide": requested,
@@ -370,6 +387,7 @@ def _build_demand_result(request: NativeDecisionPipelineScenario) -> NativeDeman
         requested_batch_count_by_radionuclide=requested,
         batch_demands=batch_demands,
         patient_ids_by_radionuclide=_patient_ids_by_radionuclide(simulation.generated_demand),
+        fleet_supported_radionuclides=fleet.fleet_supported_radionuclides,
         trace_id=demand_trace_id,
         batch_policy_description=_batch_policy_description(request.batch_target_patients_per_batch),
     )
@@ -379,13 +397,14 @@ def _build_capex_inputs(
     request: NativeDecisionPipelineScenario,
     pathway_config: NativePathwayScenario,
 ) -> InfrastructureCapexInputs:
+    fleet_size = _resolved_cyclotron_fleet(request).asset_count
     return InfrastructureCapexInputs(
         pathway=pathway_config.pathway,
         deployment_mode=pathway_config.deployment_mode,
         installed_scanners=pathway_config.scanners,
         installed_injection_resources=pathway_config.injection_resources,
         installed_uptake_resources=pathway_config.uptake_resources,
-        installed_cyclotron_units=pathway_config.installed_cyclotron_units,
+        installed_cyclotron_units=fleet_size,
         installed_radiopharmacy_units=pathway_config.installed_radiopharmacy_units,
         radiopharmacy_unit_capex=pathway_config.radiopharmacy_unit_capex,
         conventional_infrastructure_allowance_units=pathway_config.conventional_infrastructure_allowance_units,
@@ -405,13 +424,14 @@ def _build_opex_inputs(
     request: NativeDecisionPipelineScenario,
     pathway_config: NativePathwayScenario,
 ) -> InfrastructureOpexInputs:
+    fleet_size = _resolved_cyclotron_fleet(request).asset_count
     return InfrastructureOpexInputs(
         pathway=pathway_config.pathway,
         deployment_mode=pathway_config.deployment_mode,
         operated_scanners=pathway_config.scanners,
         operated_injection_resources=pathway_config.injection_resources,
         operated_uptake_resources=pathway_config.uptake_resources,
-        operated_cyclotron_units=pathway_config.operated_cyclotron_units,
+        operated_cyclotron_units=fleet_size,
         operated_radiopharmacy_units=pathway_config.operated_radiopharmacy_units,
         operated_mrt_base_units=pathway_config.operated_mrt_base_units,
         operated_mrt_endpoints=pathway_config.operated_mrt_endpoints,
@@ -460,10 +480,11 @@ def _build_schedule_for_batches(
     facility_day_demand: FacilityDayPatientDemand,
     requested_batch_count_by_radionuclide: Mapping[str, int],
 ) -> ProductionClinicalScheduleResult:
+    fleet = _resolved_cyclotron_fleet(request)
     schedule = ProductionClinicalScenario(
         facility_day_demand=facility_day_demand,
         requested_batch_count_by_radionuclide=requested_batch_count_by_radionuclide,
-        cyclotron_capability=request.cyclotron_capability,
+        cyclotron_fleet=fleet,
         transport_minutes=pathway_config.transport_minutes,
         injection_service_minutes=request.planner_assumptions.injection_cycle_min,
         uptake_minutes=request.planner_assumptions.uptake_cycle_min,
@@ -643,10 +664,19 @@ def _warnings(request: NativeDecisionPipelineScenario, pathway_config: NativePat
             notes.append("MRT guideway length must be provided explicitly; this build does not derive it from geometry.")
         if pathway_config.guideway_capex_per_m <= 0.0:
             notes.append("MRT guideway CapEx per meter must be provided explicitly.")
-    unsupported = set(request.radionuclide_mix).difference(request.cyclotron_capability.supported_radionuclides)
+    supported = set(_resolved_cyclotron_fleet(request).fleet_supported_radionuclides)
+    unsupported = set(request.radionuclide_mix).difference(supported)
     if unsupported:
         notes.append(
             f"Cyclotron capability does not support requested radionuclides: {sorted(unsupported)}"
+        )
+    if pathway_config.installed_cyclotron_units != _resolved_cyclotron_fleet(request).asset_count:
+        notes.append(
+            f"Pathway installed_cyclotron_units ({pathway_config.installed_cyclotron_units}) differs from selected fleet size ({_resolved_cyclotron_fleet(request).asset_count}); fleet size is authoritative for CAPEX/OPEX cyclotron unit counts in this build."
+        )
+    if pathway_config.operated_cyclotron_units != _resolved_cyclotron_fleet(request).asset_count:
+        notes.append(
+            f"Pathway operated_cyclotron_units ({pathway_config.operated_cyclotron_units}) differs from selected fleet size ({_resolved_cyclotron_fleet(request).asset_count}); fleet size is authoritative for CAPEX/OPEX cyclotron unit counts in this build."
         )
     return tuple(notes)
 
@@ -762,6 +792,9 @@ def run_native_decision_pipeline(request: NativeDecisionPipelineScenario) -> Nat
         request=request,
         scenario_trace_id=scenario_trace_id,
         demand_trace_id=demand_result.trace_id,
+        fleet_id=_resolved_cyclotron_fleet(request).fleet_id,
+        fleet_asset_ids=tuple(asset.cyclotron_id for asset in _resolved_cyclotron_fleet(request).assets),
+        fleet_supported_radionuclides=_resolved_cyclotron_fleet(request).fleet_supported_radionuclides,
         conventional_trace_id=conventional_result.trace_id,
         mrt_trace_id=mrt_result.trace_id,
         comparison_trace_id=comparison_trace_id,

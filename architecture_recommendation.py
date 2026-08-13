@@ -167,6 +167,9 @@ class ArchitectureCandidateProvenance:
     architecture_signature: str
     architecture_quantities: Mapping[str, Any]
     seed_set: tuple[int, ...]
+    fleet_id: str
+    fleet_asset_ids: tuple[str, ...]
+    fleet_supported_radionuclides: tuple[str, ...]
     direct_pipeline_trace_id: str
     direct_demand_trace_id: str
     direct_comparison_trace_id: str
@@ -427,6 +430,9 @@ def _evaluate_candidate(
             "installed_mrt_endpoints": candidate_architecture.installed_mrt_endpoints,
         },
         seed_set=tuple(request.seeds),
+        fleet_id=getattr(direct_decision_result.provenance, "fleet_id", "PRIMARY_FLEET"),
+        fleet_asset_ids=tuple(getattr(direct_decision_result.provenance, "fleet_asset_ids", ())),
+        fleet_supported_radionuclides=tuple(getattr(direct_decision_result.provenance, "fleet_supported_radionuclides", ())),
         direct_pipeline_trace_id=direct_decision_result.provenance.comparison_trace_id,
         direct_demand_trace_id=direct_decision_result.provenance.demand_trace_id,
         direct_comparison_trace_id=direct_decision_result.provenance.comparison_trace_id,

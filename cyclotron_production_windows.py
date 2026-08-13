@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from functools import lru_cache
-from typing import Mapping
+from typing import Mapping, Sequence
 
 from diagnostics import load_radionuclide_half_lives
 from patient_radionuclide_demand import RadionuclideBatchDemand
@@ -100,6 +100,7 @@ class CyclotronProductionCapability:
 @dataclass(frozen=True)
 class ProductionWindow:
     window_id: int
+    assigned_cyclotron_id: str
     batch_ids: tuple[int, ...]
     radionuclides: tuple[str, ...]
     start_time_minutes: float
@@ -120,6 +121,108 @@ class CyclotronProductionSchedule:
     max_simultaneous_streams_used: int
     all_batches_scheduled: bool
     fits_within_production_horizon: bool
+
+
+@dataclass(frozen=True)
+class CyclotronAsset:
+    cyclotron_id: str
+    capability: CyclotronProductionCapability
+    model_identifier: str | None = None
+    manufacturer: str | None = None
+    installed_quantity: int = 1
+    capability_provenance: str | None = None
+
+    def __post_init__(self) -> None:
+        cyclotron_id = self.cyclotron_id.strip() if isinstance(self.cyclotron_id, str) else ""
+        if not cyclotron_id:
+            raise ValueError("cyclotron_id must be a non-empty string")
+        if int(self.installed_quantity) < 1:
+            raise ValueError("installed_quantity must be at least 1")
+        if self.capability.cyclotron_id != cyclotron_id:
+            raise ValueError("CyclotronAsset cyclotron_id must match capability.cyclotron_id")
+        object.__setattr__(self, "cyclotron_id", cyclotron_id)
+        object.__setattr__(self, "installed_quantity", int(self.installed_quantity))
+
+
+@dataclass(frozen=True)
+class CyclotronFleet:
+    assets: tuple[CyclotronAsset, ...]
+    fleet_id: str = "PRIMARY_FLEET"
+    maximum_supported_assets: int = 16
+
+    def __post_init__(self) -> None:
+        assets = tuple(self.assets)
+        if not assets:
+            raise ValueError("Cyclotron fleet must contain at least one asset")
+        if int(self.maximum_supported_assets) < 1:
+            raise ValueError("maximum_supported_assets must be at least 1")
+        if len(assets) > int(self.maximum_supported_assets):
+            raise ValueError(
+                f"Cyclotron fleet asset count {len(assets)} exceeds configured maximum_supported_assets {int(self.maximum_supported_assets)}"
+            )
+        seen_ids: set[str] = set()
+        for asset in assets:
+            if asset.cyclotron_id in seen_ids:
+                raise ValueError(f"Duplicate cyclotron ID in fleet: {asset.cyclotron_id}")
+            seen_ids.add(asset.cyclotron_id)
+        object.__setattr__(self, "assets", assets)
+        object.__setattr__(self, "maximum_supported_assets", int(self.maximum_supported_assets))
+
+    @property
+    def fleet_supported_radionuclides(self) -> tuple[str, ...]:
+        seen: dict[str, None] = {}
+        for asset in self.assets:
+            for radionuclide in asset.capability.supported_radionuclides:
+                seen[radionuclide] = None
+        return tuple(seen.keys())
+
+    @property
+    def asset_count(self) -> int:
+        return len(self.assets)
+
+
+@dataclass(frozen=True)
+class BatchCyclotronAssignment:
+    batch_id: int
+    radionuclide: str
+    assigned_cyclotron_id: str
+    assignment_reason: str
+
+
+@dataclass(frozen=True)
+class CyclotronFleetProductionSchedule:
+    fleet_id: str
+    batch_assignments: tuple[BatchCyclotronAssignment, ...]
+    per_cyclotron_schedules: Mapping[str, CyclotronProductionSchedule]
+    windows: tuple[ProductionWindow, ...]
+    total_batches: int
+    total_windows: int
+    production_start_time_minutes: float
+    production_end_time_minutes: float
+    total_elapsed_production_minutes: float
+    max_simultaneous_streams_used: int
+    all_batches_scheduled: bool
+    fits_within_production_horizon: bool
+
+
+def build_single_cyclotron_fleet(
+    capability: CyclotronProductionCapability,
+    *,
+    model_identifier: str | None = None,
+    manufacturer: str | None = None,
+    capability_provenance: str | None = None,
+) -> CyclotronFleet:
+    return CyclotronFleet(
+        assets=(
+            CyclotronAsset(
+                cyclotron_id=capability.cyclotron_id,
+                capability=capability,
+                model_identifier=model_identifier,
+                manufacturer=manufacturer,
+                capability_provenance=capability_provenance,
+            ),
+        )
+    )
 
 
 def _can_share_window(
@@ -193,6 +296,7 @@ def schedule_cyclotron_production_windows(
         windows.append(
             ProductionWindow(
                 window_id=window_id,
+                assigned_cyclotron_id=capability.cyclotron_id,
                 batch_ids=tuple(batch.batch_id for batch in selected_batches),
                 radionuclides=tuple(batch.radionuclide for batch in selected_batches),
                 start_time_minutes=start_time,
@@ -228,4 +332,135 @@ def schedule_cyclotron_production_windows(
         max_simultaneous_streams_used=max_streams_used,
         all_batches_scheduled=(len(ordered_batches) == sum(len(window.batch_ids) for window in windows)),
         fits_within_production_horizon=fits_within_horizon,
+    )
+
+
+def _predicted_end_time_for_assignment(
+    asset: CyclotronAsset,
+    assigned_batches: Sequence[RadionuclideBatchDemand],
+    candidate_batch: RadionuclideBatchDemand,
+    *,
+    production_start_time_minutes: float,
+    production_horizon_minutes: float | None,
+) -> float:
+    schedule = schedule_cyclotron_production_windows(
+        tuple(list(assigned_batches) + [candidate_batch]),
+        asset.capability,
+        production_start_time_minutes=production_start_time_minutes,
+        production_horizon_minutes=production_horizon_minutes,
+    )
+    return schedule.production_end_time_minutes
+
+
+def assign_batches_to_cyclotron_fleet(
+    batch_demands: tuple[RadionuclideBatchDemand, ...] | list[RadionuclideBatchDemand],
+    fleet: CyclotronFleet,
+    *,
+    production_start_time_minutes: float = 0.0,
+    production_horizon_minutes: float | None = None,
+) -> tuple[BatchCyclotronAssignment, ...]:
+    ordered_batches = tuple(batch_demands)
+    assigned_by_cyclotron: dict[str, list[RadionuclideBatchDemand]] = {asset.cyclotron_id: [] for asset in fleet.assets}
+    assignments: list[BatchCyclotronAssignment] = []
+
+    for batch in ordered_batches:
+        eligible_assets = [asset for asset in fleet.assets if batch.radionuclide in asset.capability.supported_radionuclides]
+        if not eligible_assets:
+            raise ValueError(
+                f"Batch {batch.batch_id} requires unsupported radionuclide {batch.radionuclide} for fleet {fleet.fleet_id}"
+            )
+
+        ranked_assets = sorted(
+            (
+                (
+                    _predicted_end_time_for_assignment(
+                        asset,
+                        assigned_by_cyclotron[asset.cyclotron_id],
+                        batch,
+                        production_start_time_minutes=production_start_time_minutes,
+                        production_horizon_minutes=production_horizon_minutes,
+                    ),
+                    asset.cyclotron_id,
+                    asset,
+                )
+                for asset in eligible_assets
+            ),
+            key=lambda item: (item[0], item[1]),
+        )
+        selected_asset = ranked_assets[0][2]
+        assigned_by_cyclotron[selected_asset.cyclotron_id].append(batch)
+        assignments.append(
+            BatchCyclotronAssignment(
+                batch_id=batch.batch_id,
+                radionuclide=batch.radionuclide,
+                assigned_cyclotron_id=selected_asset.cyclotron_id,
+                assignment_reason="deterministic earliest-finish eligible cyclotron",
+            )
+        )
+
+    return tuple(assignments)
+
+
+def schedule_cyclotron_fleet_production_windows(
+    batch_demands: tuple[RadionuclideBatchDemand, ...] | list[RadionuclideBatchDemand],
+    fleet: CyclotronFleet,
+    production_start_time_minutes: float = 0.0,
+    production_horizon_minutes: float | None = None,
+) -> CyclotronFleetProductionSchedule:
+    assignments = assign_batches_to_cyclotron_fleet(
+        batch_demands,
+        fleet,
+        production_start_time_minutes=production_start_time_minutes,
+        production_horizon_minutes=production_horizon_minutes,
+    )
+
+    batches_by_id = {batch.batch_id: batch for batch in tuple(batch_demands)}
+    by_cyclotron: dict[str, list[RadionuclideBatchDemand]] = {asset.cyclotron_id: [] for asset in fleet.assets}
+    for assignment in assignments:
+        by_cyclotron[assignment.assigned_cyclotron_id].append(batches_by_id[assignment.batch_id])
+
+    per_cyclotron: dict[str, CyclotronProductionSchedule] = {}
+    for asset in fleet.assets:
+        per_cyclotron[asset.cyclotron_id] = schedule_cyclotron_production_windows(
+            by_cyclotron[asset.cyclotron_id],
+            asset.capability,
+            production_start_time_minutes=production_start_time_minutes,
+            production_horizon_minutes=production_horizon_minutes,
+        )
+
+    flattened: list[ProductionWindow] = []
+    global_window_id = 1
+    for cyclotron_id, schedule in sorted(per_cyclotron.items()):
+        for window in schedule.windows:
+            flattened.append(
+                ProductionWindow(
+                    window_id=global_window_id,
+                    assigned_cyclotron_id=cyclotron_id,
+                    batch_ids=window.batch_ids,
+                    radionuclides=window.radionuclides,
+                    start_time_minutes=window.start_time_minutes,
+                    end_time_minutes=window.end_time_minutes,
+                    duration_minutes=window.duration_minutes,
+                    simultaneous_stream_count=window.simultaneous_stream_count,
+                )
+            )
+            global_window_id += 1
+
+    ordered_windows = tuple(sorted(flattened, key=lambda window: (window.start_time_minutes, window.end_time_minutes, window.assigned_cyclotron_id, window.window_id)))
+    max_end = max((schedule.production_end_time_minutes for schedule in per_cyclotron.values()), default=production_start_time_minutes)
+    min_start = min((schedule.production_start_time_minutes for schedule in per_cyclotron.values()), default=production_start_time_minutes)
+
+    return CyclotronFleetProductionSchedule(
+        fleet_id=fleet.fleet_id,
+        batch_assignments=assignments,
+        per_cyclotron_schedules=per_cyclotron,
+        windows=ordered_windows,
+        total_batches=len(tuple(batch_demands)),
+        total_windows=len(ordered_windows),
+        production_start_time_minutes=float(min_start),
+        production_end_time_minutes=float(max_end),
+        total_elapsed_production_minutes=float(max_end - min_start),
+        max_simultaneous_streams_used=max((schedule.max_simultaneous_streams_used for schedule in per_cyclotron.values()), default=0),
+        all_batches_scheduled=all(schedule.all_batches_scheduled for schedule in per_cyclotron.values()),
+        fits_within_production_horizon=all(schedule.fits_within_production_horizon for schedule in per_cyclotron.values()),
     )

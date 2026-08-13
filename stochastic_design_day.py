@@ -84,6 +84,8 @@ class DesignDayDemandScenario:
     radionuclide_mix: Mapping[str, float]
     activity_distribution_by_radionuclide: Mapping[str, ActivityDemandModel]
     day_type: DayType = "typical"
+    available_radionuclides: tuple[str, ...] | None = None
+    unsupported_radionuclide_policy: Literal["reject", "filter"] = "reject"
     peak_patient_multiplier: float = 1.0
     peak_activity_multiplier: float = 1.0
     seed: int = 0
@@ -94,6 +96,8 @@ class DesignDayDemandScenario:
             raise ValueError("target_patients_per_day must be greater than zero")
         if self.day_type not in {"typical", "peak"}:
             raise ValueError("day_type must be 'typical' or 'peak'")
+        if self.unsupported_radionuclide_policy not in {"reject", "filter"}:
+            raise ValueError("unsupported_radionuclide_policy must be reject or filter")
         if not self.radionuclide_mix:
             raise ValueError("radionuclide_mix must not be empty")
         if float(self.peak_patient_multiplier) <= 0.0:
@@ -119,6 +123,35 @@ class DesignDayDemandScenario:
         if total_weight <= 0.0:
             raise ValueError("radionuclide mix must have positive total weight")
 
+        normalized_available: tuple[str, ...] | None = None
+        if self.available_radionuclides is not None:
+            normalized_available = tuple(_normalize_radionuclide(radionuclide) for radionuclide in self.available_radionuclides)
+            if not normalized_available:
+                raise ValueError("available_radionuclides must not be empty when provided")
+            if len(set(normalized_available)) != len(normalized_available):
+                raise ValueError("available_radionuclides must contain unique values")
+
+            unsupported_positive_mix = sorted(
+                radionuclide
+                for radionuclide, weight in normalized_mix.items()
+                if weight > 0.0 and radionuclide not in normalized_available
+            )
+            if unsupported_positive_mix and self.unsupported_radionuclide_policy == "reject":
+                raise ValueError(
+                    "Requested radionuclide mix includes isotopes unavailable in the installed cyclotron fleet: "
+                    f"{unsupported_positive_mix}"
+                )
+            if unsupported_positive_mix and self.unsupported_radionuclide_policy == "filter":
+                filtered_mix = {
+                    radionuclide: weight if radionuclide in normalized_available else 0.0
+                    for radionuclide, weight in normalized_mix.items()
+                }
+                if sum(filtered_mix.values()) <= 0.0:
+                    raise ValueError(
+                        "All requested radionuclide mix weights were filtered out by available_radionuclides"
+                    )
+                normalized_mix = filtered_mix
+
         normalized_activity_models: dict[str, ActivityDemandModel] = {}
         for radionuclide, model in self.activity_distribution_by_radionuclide.items():
             normalized_activity_models[_normalize_radionuclide(radionuclide)] = model
@@ -142,6 +175,7 @@ class DesignDayDemandScenario:
         object.__setattr__(self, "target_patients_per_day", int(self.target_patients_per_day))
         object.__setattr__(self, "radionuclide_mix", normalized_mix)
         object.__setattr__(self, "activity_distribution_by_radionuclide", normalized_activity_models)
+        object.__setattr__(self, "available_radionuclides", normalized_available)
         object.__setattr__(self, "seed", int(self.seed))
 
 
@@ -285,6 +319,8 @@ def simulate_design_days(
             radionuclide_mix=scenario.radionuclide_mix,
             activity_distribution_by_radionuclide=scenario.activity_distribution_by_radionuclide,
             day_type=scenario.day_type,
+            available_radionuclides=scenario.available_radionuclides,
+            unsupported_radionuclide_policy=scenario.unsupported_radionuclide_policy,
             peak_patient_multiplier=scenario.peak_patient_multiplier,
             peak_activity_multiplier=scenario.peak_activity_multiplier,
             seed=sub_seed,

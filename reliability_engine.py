@@ -41,7 +41,10 @@ class NativeReliabilityRunReference:
     seed: int
     comparison_trace_id: str
     demand_trace_id: str
-    pathway_trace_ids: Mapping[Pathway, str]
+    fleet_id: str = "PRIMARY_FLEET"
+    fleet_asset_ids: tuple[str, ...] = field(default_factory=tuple)
+    fleet_supported_radionuclides: tuple[str, ...] = field(default_factory=tuple)
+    pathway_trace_ids: Mapping[Pathway, str] = field(default_factory=dict)
     completed_patients_per_day_by_pathway: Mapping[Pathway, int] = field(default_factory=dict)
     completion_percentage_by_pathway: Mapping[Pathway, float] = field(default_factory=dict)
     bottleneck_by_pathway: Mapping[Pathway, NativeBottleneckSummary] = field(default_factory=dict)
@@ -200,6 +203,7 @@ def _build_run_result(request: NativeDecisionPipelineScenario, seed: int) -> Nat
     native_result = run_native_decision_pipeline(replace(request, seed=seed))
     conventional_operational = native_result.conventional.operational_result
     mrt_operational = native_result.mrt.operational_result
+    provenance = native_result.provenance
 
     conventional_raw_completed = int(getattr(conventional_operational, "schedule_completed_patients", conventional_operational.patients_completed))
     mrt_raw_completed = int(getattr(mrt_operational, "schedule_completed_patients", mrt_operational.patients_completed))
@@ -210,8 +214,11 @@ def _build_run_result(request: NativeDecisionPipelineScenario, seed: int) -> Nat
 
     reference = NativeReliabilityRunReference(
         seed=seed,
-        comparison_trace_id=native_result.provenance.comparison_trace_id,
-        demand_trace_id=native_result.provenance.demand_trace_id,
+        comparison_trace_id=provenance.comparison_trace_id,
+        demand_trace_id=provenance.demand_trace_id,
+        fleet_id=getattr(provenance, "fleet_id", "PRIMARY_FLEET"),
+        fleet_asset_ids=tuple(getattr(provenance, "fleet_asset_ids", ())),
+        fleet_supported_radionuclides=tuple(getattr(provenance, "fleet_supported_radionuclides", ())),
         pathway_trace_ids={
             "Conventional": native_result.conventional.trace_id,
             "MRT": native_result.mrt.trace_id,

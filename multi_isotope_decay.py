@@ -45,6 +45,7 @@ class PatientDecayTrace:
     half_life_minutes: float
     prescribed_activity_mbq: float
     batch_id: int
+    assigned_cyclotron_id: str
     production_window_id: int
     production_window_start_time_minutes: float
     production_window_end_time_minutes: float
@@ -82,6 +83,7 @@ class BatchDecaySummary:
     pathway: Pathway
     radionuclide: str
     batch_id: int
+    assigned_cyclotron_id: str
     production_window_id: int
     patient_count: int
     patient_ids: tuple[str, ...]
@@ -243,6 +245,7 @@ def evaluate_pathway_decay(
                 half_life_minutes=half_life,
                 prescribed_activity_mbq=prescribed,
                 batch_id=trace.batch_id,
+                assigned_cyclotron_id=trace.assigned_cyclotron_id,
                 production_window_id=trace.production_window_id,
                 production_window_start_time_minutes=trace.production_window_start_time_minutes,
                 production_window_end_time_minutes=trace.production_window_end_time_minutes,
@@ -290,6 +293,7 @@ def evaluate_pathway_decay(
                 pathway=pathway,
                 radionuclide=radionuclide,
                 batch_id=batch_id,
+                assigned_cyclotron_id=traces[0].assigned_cyclotron_id,
                 production_window_id=traces[0].production_window_id,
                 patient_count=len(traces),
                 patient_ids=tuple(trace.patient_id for trace in traces),

@@ -56,6 +56,7 @@ class NativePatientReportRecord:
     radionuclide: str
     prescribed_activity_mbq: float
     batch_id: int
+    assigned_cyclotron_id: str
     production_window_id: int
     production_window_start_time_minutes: float
     production_window_end_time_minutes: float
@@ -93,6 +94,9 @@ class NativeRunReport:
     candidate_id: str
     comparison_trace_id: str
     demand_trace_id: str
+    fleet_id: str
+    fleet_asset_ids: tuple[str, ...]
+    fleet_supported_radionuclides: tuple[str, ...]
     pathway_trace_id: str
     bottleneck: NativeBottleneckSummary
     scheduled_patients: int
@@ -212,6 +216,7 @@ class NativeDecayBatchSummaryRow:
     batch_id: int
     isotope: str
     patient_count: int
+    assigned_cyclotron_id: str
     production_window_id: int
     production_window_start_time_minutes: float
     production_window_end_time_minutes: float
@@ -253,6 +258,9 @@ class NativePathwayReport:
     economic_summary: NativeEconomicSummary
     incremental_economic_summary: NativeIncrementalEconomicSummary | None
     candidate_result: ArchitectureCandidateResult
+    fleet_id: str
+    fleet_asset_ids: tuple[str, ...]
+    fleet_supported_radionuclides: tuple[str, ...]
     capex_ledger: tuple[CapexLedgerItem, ...]
     opex_ledger: tuple[OpexLedgerItem, ...]
     lifecycle_result: LifecycleEconomicResult
@@ -410,6 +418,7 @@ def _patient_records_for_run(
                 radionuclide=patient.radionuclide,
                 prescribed_activity_mbq=patient.prescribed_activity_mbq,
                 batch_id=trace.batch_id,
+                assigned_cyclotron_id=trace.assigned_cyclotron_id,
                 production_window_id=trace.production_window_id,
                 production_window_start_time_minutes=trace.production_window_start_time_minutes,
                 production_window_end_time_minutes=trace.production_window_end_time_minutes,
@@ -581,6 +590,7 @@ def _batch_decay_rows(pathway_decay_summary: PathwayDecaySummary) -> tuple[Nativ
                 batch_id=summary.batch_id,
                 isotope=summary.radionuclide,
                 patient_count=summary.patient_count,
+                assigned_cyclotron_id=summary.assigned_cyclotron_id,
                 production_window_id=summary.production_window_id,
                 production_window_start_time_minutes=summary.production_window_start_time_minutes,
                 production_window_end_time_minutes=summary.production_window_end_time_minutes,
@@ -643,6 +653,9 @@ def _run_report(candidate: ArchitectureCandidateResult, run_result) -> NativeRun
         candidate_id=candidate.candidate_id,
         comparison_trace_id=run_result.reference.comparison_trace_id,
         demand_trace_id=run_result.reference.demand_trace_id,
+        fleet_id=getattr(run_result.reference, "fleet_id", "PRIMARY_FLEET"),
+        fleet_asset_ids=tuple(getattr(run_result.reference, "fleet_asset_ids", ())),
+        fleet_supported_radionuclides=tuple(getattr(run_result.reference, "fleet_supported_radionuclides", ())),
         pathway_trace_id=run_result.reference.pathway_trace_ids[candidate.pathway],
         bottleneck=run_result.reference.bottleneck_by_pathway[candidate.pathway],
         scheduled_patients=int(pathway_result.operational_result.scheduled_patients),
@@ -676,6 +689,9 @@ def _pathway_report(candidate: ArchitectureCandidateResult) -> NativePathwayRepo
         economic_summary=economic_summary,
         incremental_economic_summary=None,
         candidate_result=candidate,
+        fleet_id=candidate.provenance.fleet_id,
+        fleet_asset_ids=candidate.provenance.fleet_asset_ids,
+        fleet_supported_radionuclides=candidate.provenance.fleet_supported_radionuclides,
         capex_ledger=candidate.capex_result.ledger,
         opex_ledger=candidate.opex_result.ledger,
         lifecycle_result=candidate.lifecycle_result,

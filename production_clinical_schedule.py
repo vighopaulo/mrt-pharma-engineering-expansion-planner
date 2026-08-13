@@ -5,9 +5,11 @@ from dataclasses import dataclass
 from typing import Mapping
 
 from cyclotron_production_windows import (
+    CyclotronFleet,
+    CyclotronFleetProductionSchedule,
     CyclotronProductionCapability,
-    CyclotronProductionSchedule,
-    schedule_cyclotron_production_windows,
+    build_single_cyclotron_fleet,
+    schedule_cyclotron_fleet_production_windows,
 )
 from operating_day_scheduler import (
     BatchRelease,
@@ -26,7 +28,6 @@ from patient_radionuclide_demand import (
 class ProductionClinicalScenario:
     facility_day_demand: FacilityDayPatientDemand
     requested_batch_count_by_radionuclide: Mapping[str, int]
-    cyclotron_capability: CyclotronProductionCapability
     transport_minutes: float
     injection_service_minutes: float
     uptake_minutes: float
@@ -35,6 +36,8 @@ class ProductionClinicalScenario:
     uptake_resources: int
     scanners: int
     distribution_concurrency: int
+    cyclotron_capability: CyclotronProductionCapability | None = None
+    cyclotron_fleet: CyclotronFleet | None = None
     operating_day_minutes: float = 1080.0
     production_start_time_minutes: float = 0.0
     production_horizon_minutes: float | None = None
@@ -63,6 +66,11 @@ class ProductionClinicalScenario:
         if self.distribution_concurrency <= 0:
             raise ValueError("distribution_concurrency must be at least 1")
 
+        if self.cyclotron_capability is None and self.cyclotron_fleet is None:
+            raise ValueError("Either cyclotron_capability or cyclotron_fleet must be provided")
+        if self.cyclotron_capability is not None and self.cyclotron_fleet is not None:
+            raise ValueError("Provide either cyclotron_capability or cyclotron_fleet, not both")
+
         object.__setattr__(self, "requested_batch_count_by_radionuclide", dict(self.requested_batch_count_by_radionuclide))
 
 
@@ -73,6 +81,7 @@ class ProductionBatchReleaseMapping:
     patient_ids: tuple[str, ...]
     patient_count: int
     total_prescribed_activity_mbq: float
+    assigned_cyclotron_id: str
     production_window_id: int
     production_window_start_time_minutes: float
     production_window_end_time_minutes: float
@@ -84,6 +93,7 @@ class ProductionClinicalPatientTrace:
     patient_id: str
     radionuclide: str
     batch_id: int
+    assigned_cyclotron_id: str
     production_window_id: int
     production_window_start_time_minutes: float
     production_window_end_time_minutes: float
@@ -104,7 +114,7 @@ class ProductionClinicalPatientTrace:
 class ProductionClinicalScheduleResult:
     scenario: ProductionClinicalScenario
     batch_demands: tuple[RadionuclideBatchDemand, ...]
-    production_schedule: CyclotronProductionSchedule
+    production_schedule: CyclotronFleetProductionSchedule
     batch_release_mappings: tuple[ProductionBatchReleaseMapping, ...]
     batch_releases: tuple[BatchRelease, ...]
     operating_day_inputs: OperatingDayInputs
@@ -113,9 +123,14 @@ class ProductionClinicalScheduleResult:
 
 
 def _release_processing_minutes(
-    capability: CyclotronProductionCapability,
+    fleet: CyclotronFleet,
+    assigned_cyclotron_id: str,
     radionuclide: str,
 ) -> float:
+    asset = next((entry for entry in fleet.assets if entry.cyclotron_id == assigned_cyclotron_id), None)
+    if asset is None:
+        raise ValueError(f"Assigned cyclotron {assigned_cyclotron_id} not found in fleet")
+    capability = asset.capability
     if capability.release_processing_minutes_by_radionuclide is None:
         return 0.0
     return float(capability.release_processing_minutes_by_radionuclide.get(radionuclide, 0.0))
@@ -123,8 +138,8 @@ def _release_processing_minutes(
 
 def _build_batch_release_mappings(
     batch_demands: tuple[RadionuclideBatchDemand, ...],
-    production_schedule: CyclotronProductionSchedule,
-    capability: CyclotronProductionCapability,
+    production_schedule: CyclotronFleetProductionSchedule,
+    fleet: CyclotronFleet,
 ) -> tuple[ProductionBatchReleaseMapping, ...]:
     window_by_batch_id: dict[int, object] = {}
     for window in production_schedule.windows:
@@ -134,7 +149,7 @@ def _build_batch_release_mappings(
     mappings: list[ProductionBatchReleaseMapping] = []
     for batch in batch_demands:
         window = window_by_batch_id[batch.batch_id]
-        release_time = window.end_time_minutes + _release_processing_minutes(capability, batch.radionuclide)
+        release_time = window.end_time_minutes + _release_processing_minutes(fleet, window.assigned_cyclotron_id, batch.radionuclide)
         mappings.append(
             ProductionBatchReleaseMapping(
                 batch_id=batch.batch_id,
@@ -142,6 +157,7 @@ def _build_batch_release_mappings(
                 patient_ids=batch.patient_ids,
                 patient_count=batch.patient_count,
                 total_prescribed_activity_mbq=batch.total_prescribed_activity_mbq,
+            assigned_cyclotron_id=window.assigned_cyclotron_id,
                 production_window_id=window.window_id,
                 production_window_start_time_minutes=window.start_time_minutes,
                 production_window_end_time_minutes=window.end_time_minutes,
@@ -185,6 +201,7 @@ def _build_patient_traces(
                     patient_id=patient_id,
                     radionuclide=mapping.radionuclide,
                     batch_id=mapping.batch_id,
+                    assigned_cyclotron_id=mapping.assigned_cyclotron_id,
                     production_window_id=mapping.production_window_id,
                     production_window_start_time_minutes=mapping.production_window_start_time_minutes,
                     production_window_end_time_minutes=mapping.production_window_end_time_minutes,
@@ -207,22 +224,23 @@ def _build_patient_traces(
 def build_production_clinical_schedule(
     scenario: ProductionClinicalScenario,
 ) -> ProductionClinicalScheduleResult:
+    fleet = scenario.cyclotron_fleet if scenario.cyclotron_fleet is not None else build_single_cyclotron_fleet(scenario.cyclotron_capability)
     batch_demands = tuple(
         partition_facility_day_patient_demand(
             scenario.facility_day_demand,
             scenario.requested_batch_count_by_radionuclide,
         )
     )
-    production_schedule = schedule_cyclotron_production_windows(
+    production_schedule = schedule_cyclotron_fleet_production_windows(
         batch_demands,
-        scenario.cyclotron_capability,
+        fleet,
         production_start_time_minutes=scenario.production_start_time_minutes,
         production_horizon_minutes=scenario.production_horizon_minutes,
     )
     batch_release_mappings = _build_batch_release_mappings(
         batch_demands,
         production_schedule,
-        scenario.cyclotron_capability,
+        fleet,
     )
     batch_releases = _build_batch_releases(batch_release_mappings)
 
