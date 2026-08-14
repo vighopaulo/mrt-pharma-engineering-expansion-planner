@@ -54,6 +54,7 @@ class NativePathwayScenario:
     operated_building_connections: int = 0
     annual_conventional_transport_opex: float = 0.0
     annual_production_variable_cost: float = 0.0
+    cyclotron_annual_opex_per_unit: float = 0.0
     conventional_transport_staff_fte: float = 0.0
     conventional_transport_staff_loaded_cost_per_fte: float = 0.0
     mrt_base_annual_opex_per_unit: float = 0.0
@@ -119,6 +120,8 @@ class NativePathwayScenario:
             raise ValueError("operated_building_connections must be non-negative")
         if self.annual_production_variable_cost < 0.0:
             raise ValueError("annual_production_variable_cost must be non-negative")
+        if self.cyclotron_annual_opex_per_unit < 0.0:
+            raise ValueError("cyclotron_annual_opex_per_unit must be non-negative")
 
 
 @dataclass(frozen=True)
@@ -447,6 +450,7 @@ def _build_opex_inputs(
         vertical_transition_annual_opex_per_unit=pathway_config.vertical_transition_annual_opex_per_unit,
         building_connection_annual_opex_per_unit=pathway_config.building_connection_annual_opex_per_unit,
         annual_production_variable_cost=pathway_config.annual_production_variable_cost,
+        cyclotron_annual_opex_per_unit=pathway_config.cyclotron_annual_opex_per_unit,
         annual_scanner_energy_kwh=pathway_config.annual_scanner_energy_kwh,
         annual_cyclotron_energy_kwh=pathway_config.annual_cyclotron_energy_kwh,
         annual_mrt_energy_kwh=pathway_config.annual_mrt_energy_kwh,
