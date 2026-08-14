@@ -148,6 +148,37 @@ def test_no_payback_case_returns_none():
     assert result.payback_year is None
 
 
+def test_zero_capacity_is_allowed_and_produces_zero_served_zero_revenue_and_no_payback():
+    result = evaluate_lifecycle_economics(
+        initial_capex=1_000.0,
+        installed_capacity_per_day=0.0,
+        annual_opex=900.0,
+        revenue_per_scan=1.0,
+        operating_days_per_year=300,
+        discount_rate_pct=0.0,
+        analysis_years=2,
+        starting_demand_per_day=10.0,
+    )
+
+    year1 = result.annual_rows[0]
+    year2 = result.annual_rows[1]
+
+    assert math.isclose(year1.installed_capacity_per_day, 0.0, rel_tol=0.0, abs_tol=1e-9)
+    assert math.isclose(year1.patients_served_per_day, 0.0, rel_tol=0.0, abs_tol=1e-9)
+    assert math.isclose(year1.unmet_demand_per_day, 10.0, rel_tol=0.0, abs_tol=1e-9)
+    assert math.isclose(year1.capacity_utilization_pct, 0.0, rel_tol=0.0, abs_tol=1e-9)
+    assert math.isclose(year1.annual_revenue, 0.0, rel_tol=0.0, abs_tol=1e-9)
+    assert math.isclose(year1.annual_net_cash_flow, -900.0, rel_tol=0.0, abs_tol=1e-9)
+
+    assert math.isclose(year2.installed_capacity_per_day, 0.0, rel_tol=0.0, abs_tol=1e-9)
+    assert math.isclose(year2.patients_served_per_day, 0.0, rel_tol=0.0, abs_tol=1e-9)
+    assert math.isclose(year2.unmet_demand_per_day, 10.0, rel_tol=0.0, abs_tol=1e-9)
+    assert math.isclose(year2.capacity_utilization_pct, 0.0, rel_tol=0.0, abs_tol=1e-9)
+    assert math.isclose(year2.annual_revenue, 0.0, rel_tol=0.0, abs_tol=1e-9)
+    assert math.isclose(result.final_npv, -2800.0, rel_tol=0.0, abs_tol=1e-9)
+    assert result.payback_year is None
+
+
 def test_crossover_interpolation():
     conventional = evaluate_lifecycle_economics(
         initial_capex=50.0,

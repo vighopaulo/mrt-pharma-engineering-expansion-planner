@@ -190,16 +190,16 @@ def evaluate_lifecycle_economics(
 ) -> LifecycleEconomicResult:
     if analysis_years < 1:
         raise ValueError("analysis_years must be at least 1")
-    if installed_capacity_per_day <= 0.0 and installed_capacity_per_day_by_year is None:
-        raise ValueError("installed_capacity_per_day must be positive")
+    if installed_capacity_per_day < 0.0 and installed_capacity_per_day_by_year is None:
+        raise ValueError("installed_capacity_per_day must be non-negative")
     if operating_days_per_year <= 0:
         raise ValueError("operating_days_per_year must be positive")
 
     if installed_capacity_per_day_by_year is not None:
         if len(installed_capacity_per_day_by_year) != analysis_years:
             raise ValueError("installed_capacity_per_day_by_year length must equal analysis_years")
-        if any(float(value) <= 0.0 for value in installed_capacity_per_day_by_year):
-            raise ValueError("installed_capacity_per_day_by_year values must be positive")
+        if any(float(value) < 0.0 for value in installed_capacity_per_day_by_year):
+            raise ValueError("installed_capacity_per_day_by_year values must be non-negative")
     if annual_opex_by_year is not None:
         if len(annual_opex_by_year) != analysis_years:
             raise ValueError("annual_opex_by_year length must equal analysis_years")
@@ -228,7 +228,7 @@ def evaluate_lifecycle_economics(
         capacity = float(installed_capacity_per_day if installed_capacity_per_day_by_year is None else installed_capacity_per_day_by_year[year - 1])
         served = min(forecast, capacity)
         unmet = max(0.0, forecast - capacity)
-        utilization = 100.0 * served / capacity
+        utilization = 0.0 if capacity <= 0.0 else 100.0 * served / capacity
 
         annual_revenue = served * float(revenue_per_scan) * float(operating_days_per_year)
         yearly_opex = float(annual_opex if annual_opex_by_year is None else annual_opex_by_year[year - 1])
