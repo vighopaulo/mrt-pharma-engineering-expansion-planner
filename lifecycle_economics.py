@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Literal, Mapping
 
 
 @dataclass(frozen=True)
@@ -8,6 +9,7 @@ class DemandTrajectory:
     analysis_years: int
     daily_demand_by_year: list[float]
     source: str
+    interpolation_method: str
 
 
 @dataclass(frozen=True)
@@ -20,10 +22,47 @@ class AnnualLifecycleRow:
     capacity_utilization_pct: float
     annual_revenue: float
     annual_opex: float
+    annual_capex: float
     annual_net_cash_flow: float
     discount_factor: float
+    discounted_capex: float
     discounted_cash_flow: float
     cumulative_npv: float
+
+
+DemandTrajectoryMode = Literal["explicit", "generated", "milestone_interpolated"]
+
+
+def _interpolate_milestones(
+    *,
+    analysis_years: int,
+    milestone_daily_demand_by_year: Mapping[int, float],
+) -> list[float]:
+    if not milestone_daily_demand_by_year:
+        raise ValueError("milestone_daily_demand_by_year must not be empty")
+
+    normalized = {int(year): float(value) for year, value in milestone_daily_demand_by_year.items()}
+    invalid_years = sorted(year for year in normalized if year < 1 or year > analysis_years)
+    if invalid_years:
+        raise ValueError(f"milestone years must be within [1, {analysis_years}]: {invalid_years}")
+    if 1 not in normalized:
+        raise ValueError("milestone_daily_demand_by_year must include year 1")
+    if analysis_years not in normalized:
+        raise ValueError("milestone_daily_demand_by_year must include the final analysis year")
+
+    years = sorted(normalized)
+    daily = [0.0] * analysis_years
+    for index, year in enumerate(years[:-1]):
+        next_year = years[index + 1]
+        start_value = normalized[year]
+        end_value = normalized[next_year]
+        span = next_year - year
+        for offset in range(span):
+            interpolation_fraction = float(offset) / float(span)
+            interpolated = start_value + (end_value - start_value) * interpolation_fraction
+            daily[year - 1 + offset] = interpolated
+    daily[analysis_years - 1] = normalized[analysis_years]
+    return daily
 
 
 @dataclass(frozen=True)
@@ -54,15 +93,28 @@ def build_demand_trajectory(
     starting_demand_per_day: float,
     annual_growth_rate: float,
     explicit_daily_demand_by_year: list[float] | None = None,
+    milestone_daily_demand_by_year: Mapping[int, float] | None = None,
 ) -> DemandTrajectory:
     if analysis_years < 1:
         raise ValueError("analysis_years must be at least 1")
 
+    if explicit_daily_demand_by_year is not None and milestone_daily_demand_by_year is not None:
+        raise ValueError("Provide either explicit_daily_demand_by_year or milestone_daily_demand_by_year, not both")
+
+    source: DemandTrajectoryMode
+    interpolation_method = "none"
     if explicit_daily_demand_by_year is not None:
         if len(explicit_daily_demand_by_year) != analysis_years:
             raise ValueError("explicit_daily_demand_by_year length must equal analysis_years")
         daily = [float(v) for v in explicit_daily_demand_by_year]
         source = "explicit"
+    elif milestone_daily_demand_by_year is not None:
+        daily = _interpolate_milestones(
+            analysis_years=analysis_years,
+            milestone_daily_demand_by_year=milestone_daily_demand_by_year,
+        )
+        source = "milestone_interpolated"
+        interpolation_method = "linear_by_year"
     else:
         start = float(starting_demand_per_day)
         growth = float(annual_growth_rate)
@@ -76,6 +128,7 @@ def build_demand_trajectory(
         analysis_years=analysis_years,
         daily_demand_by_year=daily,
         source=source,
+        interpolation_method=interpolation_method,
     )
 
 
@@ -130,19 +183,40 @@ def evaluate_lifecycle_economics(
     starting_demand_per_day: float,
     annual_demand_growth_rate: float = 0.0,
     explicit_daily_demand_by_year: list[float] | None = None,
+    milestone_daily_demand_by_year: Mapping[int, float] | None = None,
+    installed_capacity_per_day_by_year: list[float] | None = None,
+    annual_opex_by_year: list[float] | None = None,
+    annual_capex_by_year: list[float] | None = None,
 ) -> LifecycleEconomicResult:
     if analysis_years < 1:
         raise ValueError("analysis_years must be at least 1")
-    if installed_capacity_per_day <= 0.0:
+    if installed_capacity_per_day <= 0.0 and installed_capacity_per_day_by_year is None:
         raise ValueError("installed_capacity_per_day must be positive")
     if operating_days_per_year <= 0:
         raise ValueError("operating_days_per_year must be positive")
+
+    if installed_capacity_per_day_by_year is not None:
+        if len(installed_capacity_per_day_by_year) != analysis_years:
+            raise ValueError("installed_capacity_per_day_by_year length must equal analysis_years")
+        if any(float(value) <= 0.0 for value in installed_capacity_per_day_by_year):
+            raise ValueError("installed_capacity_per_day_by_year values must be positive")
+    if annual_opex_by_year is not None:
+        if len(annual_opex_by_year) != analysis_years:
+            raise ValueError("annual_opex_by_year length must equal analysis_years")
+        if any(float(value) < 0.0 for value in annual_opex_by_year):
+            raise ValueError("annual_opex_by_year values must be non-negative")
+    if annual_capex_by_year is not None:
+        if len(annual_capex_by_year) != analysis_years:
+            raise ValueError("annual_capex_by_year length must equal analysis_years")
+        if any(float(value) < 0.0 for value in annual_capex_by_year):
+            raise ValueError("annual_capex_by_year values must be non-negative")
 
     demand = build_demand_trajectory(
         analysis_years=analysis_years,
         starting_demand_per_day=starting_demand_per_day,
         annual_growth_rate=annual_demand_growth_rate,
         explicit_daily_demand_by_year=explicit_daily_demand_by_year,
+        milestone_daily_demand_by_year=milestone_daily_demand_by_year,
     )
 
     discount_rate = float(discount_rate_pct) / 100.0
@@ -151,16 +225,18 @@ def evaluate_lifecycle_economics(
 
     for year in range(1, analysis_years + 1):
         forecast = demand.daily_demand_by_year[year - 1]
-        capacity = float(installed_capacity_per_day)
+        capacity = float(installed_capacity_per_day if installed_capacity_per_day_by_year is None else installed_capacity_per_day_by_year[year - 1])
         served = min(forecast, capacity)
         unmet = max(0.0, forecast - capacity)
         utilization = 100.0 * served / capacity
 
         annual_revenue = served * float(revenue_per_scan) * float(operating_days_per_year)
-        yearly_opex = float(annual_opex)
-        annual_net_cash_flow = annual_revenue - yearly_opex
+        yearly_opex = float(annual_opex if annual_opex_by_year is None else annual_opex_by_year[year - 1])
+        yearly_capex = 0.0 if annual_capex_by_year is None else float(annual_capex_by_year[year - 1])
+        annual_net_cash_flow = annual_revenue - yearly_opex - yearly_capex
 
         discount_factor = 1.0 / ((1.0 + discount_rate) ** year)
+        discounted_capex = yearly_capex * discount_factor
         discounted_cash_flow = annual_net_cash_flow * discount_factor
         cumulative_npv += discounted_cash_flow
 
@@ -174,8 +250,10 @@ def evaluate_lifecycle_economics(
                 capacity_utilization_pct=utilization,
                 annual_revenue=annual_revenue,
                 annual_opex=yearly_opex,
+                annual_capex=yearly_capex,
                 annual_net_cash_flow=annual_net_cash_flow,
                 discount_factor=discount_factor,
+                discounted_capex=discounted_capex,
                 discounted_cash_flow=discounted_cash_flow,
                 cumulative_npv=cumulative_npv,
             )
