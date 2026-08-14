@@ -135,6 +135,17 @@ class NativeEngineeringDetail:
     injection_resources: int
     uptake_resources: int
     distribution_concurrency: int
+    installed_mrt_carriers: int
+    operated_mrt_carriers: int
+    spare_mrt_carriers: int
+    carrier_quantity_constrained_throughput: bool
+    carrier_proxy_relationship: str | None
+    carrier_capex_modeled: bool
+    carrier_opex_modeled: bool
+    carrier_energy_modeled: bool
+    carrier_capex_status: str
+    carrier_opex_status: str
+    carrier_energy_status: str
     transport_minutes: float
     installed_cyclotron_units: int
     installed_radiopharmacy_units: int
@@ -333,6 +344,26 @@ def _incremental_economic_summary(
 
 def _engineering_detail(candidate_result: ArchitectureCandidateResult) -> NativeEngineeringDetail:
     architecture = candidate_result.architecture
+    carrier_fleet = (
+        candidate_result.direct_decision_result.mrt.operational_result.mrt_carrier_fleet
+        if candidate_result.pathway == "MRT"
+        else None
+    )
+    carrier_capex_status = (
+        "NOT APPLICABLE: Conventional pathway does not use MRT carriers."
+        if carrier_fleet is None
+        else carrier_fleet.carrier_capex_status
+    )
+    carrier_opex_status = (
+        "NOT APPLICABLE: Conventional pathway does not use MRT carriers."
+        if carrier_fleet is None
+        else carrier_fleet.carrier_opex_status
+    )
+    carrier_energy_status = (
+        "NOT APPLICABLE: Conventional pathway does not use MRT carriers."
+        if carrier_fleet is None
+        else carrier_fleet.carrier_energy_status
+    )
     guideway_maintenance_annual_cost = 0.0
     for item in candidate_result.opex_result.ledger:
         if item.component == "Guideway maintenance":
@@ -343,6 +374,17 @@ def _engineering_detail(candidate_result: ArchitectureCandidateResult) -> Native
         injection_resources=architecture.injection_resources,
         uptake_resources=architecture.uptake_resources,
         distribution_concurrency=architecture.distribution_concurrency,
+        installed_mrt_carriers=0 if carrier_fleet is None else carrier_fleet.installed_carriers,
+        operated_mrt_carriers=0 if carrier_fleet is None else carrier_fleet.operated_carriers,
+        spare_mrt_carriers=0 if carrier_fleet is None else carrier_fleet.spare_carriers,
+        carrier_quantity_constrained_throughput=False if carrier_fleet is None else carrier_fleet.carrier_constrained_throughput,
+        carrier_proxy_relationship=None if carrier_fleet is None else carrier_fleet.proxy_relationship,
+        carrier_capex_modeled=False if carrier_fleet is None else carrier_fleet.carrier_capex_modeled,
+        carrier_opex_modeled=False if carrier_fleet is None else carrier_fleet.carrier_opex_modeled,
+        carrier_energy_modeled=False if carrier_fleet is None else carrier_fleet.carrier_energy_modeled,
+        carrier_capex_status=carrier_capex_status,
+        carrier_opex_status=carrier_opex_status,
+        carrier_energy_status=carrier_energy_status,
         transport_minutes=architecture.transport_minutes,
         installed_cyclotron_units=architecture.installed_cyclotron_units,
         installed_radiopharmacy_units=architecture.installed_radiopharmacy_units,

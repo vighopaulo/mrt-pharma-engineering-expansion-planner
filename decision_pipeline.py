@@ -11,6 +11,7 @@ from infrastructure_capex import InfrastructureCapexInputs, InfrastructureCapexR
 from infrastructure_opex import InfrastructureOpexInputs, InfrastructureOpexResult, calculate_infrastructure_opex
 from lifecycle_economics import LifecycleComparisonResult, LifecycleEconomicResult, compare_lifecycle_results, evaluate_lifecycle_economics
 from models import PlannerAssumptions, SharedNetworkAssumptions
+from mrt_carrier_fleet import MrtCarrierFleetResult, audit_native_mrt_carrier_integration, resolve_mrt_carrier_fleet
 from multi_isotope_decay import PathwayDecaySummary, evaluate_pathway_decay
 from patient_radionuclide_demand import (
     FacilityDayPatientDemand,
@@ -45,6 +46,7 @@ class NativePathwayScenario:
     guideway_capex_per_m: float = 0.0
     installed_vertical_transitions: int = 0
     installed_building_connections: int = 0
+    installed_mrt_carriers: int | None = None
     operated_cyclotron_units: int = 1
     operated_radiopharmacy_units: int = 1
     operated_mrt_base_units: int = 0
@@ -52,6 +54,7 @@ class NativePathwayScenario:
     operated_guideway_length_m: float = 0.0
     operated_vertical_transitions: int = 0
     operated_building_connections: int = 0
+    operated_mrt_carriers: int | None = None
     annual_conventional_transport_opex: float = 0.0
     annual_production_variable_cost: float = 0.0
     cyclotron_annual_opex_per_unit: float = 0.0
@@ -104,6 +107,8 @@ class NativePathwayScenario:
             raise ValueError("installed_vertical_transitions must be non-negative")
         if self.installed_building_connections < 0:
             raise ValueError("installed_building_connections must be non-negative")
+        if self.installed_mrt_carriers is not None and self.installed_mrt_carriers < 0:
+            raise ValueError("installed_mrt_carriers must be non-negative")
         if self.operated_cyclotron_units < 0:
             raise ValueError("operated_cyclotron_units must be non-negative")
         if self.operated_radiopharmacy_units < 0:
@@ -118,10 +123,24 @@ class NativePathwayScenario:
             raise ValueError("operated_vertical_transitions must be non-negative")
         if self.operated_building_connections < 0:
             raise ValueError("operated_building_connections must be non-negative")
+        if self.operated_mrt_carriers is not None and self.operated_mrt_carriers < 0:
+            raise ValueError("operated_mrt_carriers must be non-negative")
         if self.annual_production_variable_cost < 0.0:
             raise ValueError("annual_production_variable_cost must be non-negative")
         if self.cyclotron_annual_opex_per_unit < 0.0:
             raise ValueError("cyclotron_annual_opex_per_unit must be non-negative")
+
+        if self.pathway == "MRT":
+            carrier_fleet = resolve_mrt_carrier_fleet(
+                distribution_concurrency=self.distribution_concurrency,
+                installed_carriers=self.installed_mrt_carriers,
+                operated_carriers=self.operated_mrt_carriers,
+            )
+            object.__setattr__(self, "installed_mrt_carriers", carrier_fleet.installed_carriers)
+            object.__setattr__(self, "operated_mrt_carriers", carrier_fleet.operated_carriers)
+        else:
+            object.__setattr__(self, "installed_mrt_carriers", 0 if self.installed_mrt_carriers is None else int(self.installed_mrt_carriers))
+            object.__setattr__(self, "operated_mrt_carriers", 0 if self.operated_mrt_carriers is None else int(self.operated_mrt_carriers))
 
 
 @dataclass(frozen=True)
@@ -218,6 +237,7 @@ class NativeOperationalResult:
     uptake_utilization_pct: float
     distribution_utilization_pct: float
     bottleneck: NativeBottleneckSummary
+    mrt_carrier_fleet: MrtCarrierFleetResult | None
     decay_summary: PathwayDecaySummary
     trace_id: str
 
@@ -593,6 +613,16 @@ def _build_operational_result(
     decay_infeasible_patients = decay_summary.decay_infeasible_patient_count
     effective_completion_percentage = decay_summary.effective_completion_percentage
     bottleneck = _bottleneck_summary(clinical_result)
+    mrt_carrier_fleet = (
+        resolve_mrt_carrier_fleet(
+            distribution_concurrency=pathway_config.distribution_concurrency,
+            installed_carriers=pathway_config.installed_mrt_carriers,
+            operated_carriers=pathway_config.operated_mrt_carriers,
+            bottleneck_resource=bottleneck.resource,
+        )
+        if pathway_config.pathway == "MRT"
+        else None
+    )
     operational_trace_id = _trace_id(
         {
             "demand_trace_id": demand_result.trace_id,
@@ -605,6 +635,17 @@ def _build_operational_result(
             "final_scan_completion_time_minutes": clinical_result.last_scan_completion_minute,
             "bottleneck": bottleneck.resource,
             "utilization": bottleneck.utilization_by_resource,
+            "mrt_carrier_fleet": (
+                None
+                if mrt_carrier_fleet is None
+                else {
+                    "installed_carriers": mrt_carrier_fleet.installed_carriers,
+                    "operated_carriers": mrt_carrier_fleet.operated_carriers,
+                    "spare_carriers": mrt_carrier_fleet.spare_carriers,
+                    "distribution_concurrency": mrt_carrier_fleet.distribution_concurrency,
+                    "carrier_constrained_throughput": mrt_carrier_fleet.carrier_constrained_throughput,
+                }
+            ),
             "batch_release_mappings": [
                 {
                     "batch_id": mapping.batch_id,
@@ -640,6 +681,7 @@ def _build_operational_result(
         uptake_utilization_pct=clinical_result.uptake_utilization_pct,
         distribution_utilization_pct=clinical_result.distribution_utilization_pct,
         bottleneck=bottleneck,
+        mrt_carrier_fleet=mrt_carrier_fleet,
         decay_summary=decay_summary,
         trace_id=operational_trace_id,
     )
@@ -651,6 +693,7 @@ def _limitations() -> tuple[str, ...]:
         "Batch counts are derived from explicit batch_target_patients_per_batch; no canonical repository policy exists.",
         "No spatially derived guideway length.",
         "No floor-area/floor-count resource placement.",
+        "MRT carrier quantity is represented via distribution_concurrency; no authoritative separate per-carrier CAPEX/OPEX/energy coefficients exist in the repository baseline.",
         "Decay physics is natively integrated, but direct monetization of activity loss requires an authoritative isotope-production cost model.",
         "No detailed MRT energy physics.",
         "No demand-driven staffing inference.",
@@ -668,6 +711,9 @@ def _warnings(request: NativeDecisionPipelineScenario, pathway_config: NativePat
             notes.append("MRT guideway length must be provided explicitly; this build does not derive it from geometry.")
         if pathway_config.guideway_capex_per_m <= 0.0:
             notes.append("MRT guideway CapEx per meter must be provided explicitly.")
+        notes.append(
+            "MRT carrier quantity is modeled through distribution_concurrency; separate per-carrier CAPEX/OPEX/energy remain not yet modeled in this build."
+        )
     supported = set(_resolved_cyclotron_fleet(request).fleet_supported_radionuclides)
     unsupported = set(request.radionuclide_mix).difference(supported)
     if unsupported:

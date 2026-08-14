@@ -18,6 +18,7 @@ from decision_pipeline import (
 from infrastructure_capex import InfrastructureCapexResult
 from infrastructure_opex import InfrastructureOpexResult
 from lifecycle_economics import LifecycleEconomicResult
+from mrt_carrier_fleet import resized_mrt_carrier_counts
 from reliability_engine import (
     NativeReliabilityComparisonResult,
     NativeReliabilityDistributionSummary,
@@ -80,6 +81,8 @@ def _architecture_signature(pathway: Pathway, pathway_config: NativePathwayScena
             "transport_minutes": pathway_config.transport_minutes,
             "installed_mrt_endpoints": pathway_config.installed_mrt_endpoints,
             "operated_mrt_endpoints": pathway_config.operated_mrt_endpoints,
+            "installed_mrt_carriers": pathway_config.installed_mrt_carriers,
+            "operated_mrt_carriers": pathway_config.operated_mrt_carriers,
         }
     )
 
@@ -288,6 +291,12 @@ def _mrt_candidate_architectures(
         bounds.installed_mrt_endpoints,
         bounds.transport_minutes,
     ):
+        installed_mrt_carriers, operated_mrt_carriers = resized_mrt_carrier_counts(
+            base_distribution_concurrency=base.distribution_concurrency,
+            base_installed_carriers=base.installed_mrt_carriers,
+            base_operated_carriers=base.operated_mrt_carriers,
+            candidate_distribution_concurrency=distribution_concurrency,
+        )
         candidates.append(
             replace(
                 base,
@@ -298,6 +307,8 @@ def _mrt_candidate_architectures(
                 transport_minutes=transport_minutes,
                 installed_mrt_endpoints=installed_mrt_endpoints,
                 operated_mrt_endpoints=installed_mrt_endpoints,
+                installed_mrt_carriers=installed_mrt_carriers,
+                operated_mrt_carriers=operated_mrt_carriers,
                 installed_cyclotron_units=base.installed_cyclotron_units,
                 installed_radiopharmacy_units=base.installed_radiopharmacy_units,
                 operated_cyclotron_units=base.operated_cyclotron_units,
@@ -428,6 +439,9 @@ def _evaluate_candidate(
             "distribution_concurrency": candidate_architecture.distribution_concurrency,
             "transport_minutes": candidate_architecture.transport_minutes,
             "installed_mrt_endpoints": candidate_architecture.installed_mrt_endpoints,
+            "installed_mrt_carriers": candidate_architecture.installed_mrt_carriers,
+            "operated_mrt_carriers": candidate_architecture.operated_mrt_carriers,
+            "spare_mrt_carriers": candidate_architecture.installed_mrt_carriers - candidate_architecture.operated_mrt_carriers,
         },
         seed_set=tuple(request.seeds),
         fleet_id=getattr(direct_decision_result.provenance, "fleet_id", "PRIMARY_FLEET"),

@@ -17,6 +17,7 @@ from decision_pipeline import (
 from infrastructure_capex import InfrastructureCapexResult
 from infrastructure_opex import InfrastructureOpexResult
 from lifecycle_economics import LifecycleComparisonResult, LifecycleEconomicResult, compare_lifecycle_results, evaluate_lifecycle_economics
+from mrt_carrier_fleet import MrtCarrierFleetResult
 
 
 ReliabilityThroughputCase = Literal["mean", "p50", "p5"]
@@ -51,6 +52,11 @@ class NativeReliabilityRunReference:
     raw_schedule_completed_patients_per_day_by_pathway: Mapping[Pathway, int] = field(default_factory=dict)
     effective_completed_patients_per_day_by_pathway: Mapping[Pathway, int] = field(default_factory=dict)
     decay_infeasible_patients_by_pathway: Mapping[Pathway, int] = field(default_factory=dict)
+    distribution_concurrency_by_pathway: Mapping[Pathway, int] = field(default_factory=dict)
+    installed_carriers_by_pathway: Mapping[Pathway, int] = field(default_factory=dict)
+    operated_carriers_by_pathway: Mapping[Pathway, int] = field(default_factory=dict)
+    spare_carriers_by_pathway: Mapping[Pathway, int] = field(default_factory=dict)
+    carrier_constrained_throughput_by_pathway: Mapping[Pathway, bool] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -79,6 +85,7 @@ class NativeReliabilityPathwaySummary:
     potential_shortfall_distribution_mbq: NativeReliabilityDistributionSummary
     capex_result: InfrastructureCapexResult
     opex_result: InfrastructureOpexResult
+    mrt_carrier_fleet: MrtCarrierFleetResult | None
     source_run_reference: NativeReliabilityRunReference
 
 
@@ -211,6 +218,7 @@ def _build_run_result(request: NativeDecisionPipelineScenario, seed: int) -> Nat
     mrt_effective_completed = int(getattr(mrt_operational, "decay_feasible_completed_patients", mrt_operational.patients_completed))
     conventional_infeasible = int(getattr(conventional_operational, "decay_infeasible_patients", 0))
     mrt_infeasible = int(getattr(mrt_operational, "decay_infeasible_patients", 0))
+    mrt_carrier_fleet = getattr(mrt_operational, "mrt_carrier_fleet", None)
 
     reference = NativeReliabilityRunReference(
         seed=seed,
@@ -246,6 +254,26 @@ def _build_run_result(request: NativeDecisionPipelineScenario, seed: int) -> Nat
         bottleneck_by_pathway={
             "Conventional": native_result.bottleneck_information["Conventional"],
             "MRT": native_result.bottleneck_information["MRT"],
+        },
+        distribution_concurrency_by_pathway={
+            "Conventional": getattr(getattr(native_result, "request", request), "conventional", request.conventional).distribution_concurrency,
+            "MRT": getattr(getattr(native_result, "request", request), "mrt", request.mrt).distribution_concurrency,
+        },
+        installed_carriers_by_pathway={
+            "Conventional": 0,
+            "MRT": 0 if mrt_carrier_fleet is None else mrt_carrier_fleet.installed_carriers,
+        },
+        operated_carriers_by_pathway={
+            "Conventional": 0,
+            "MRT": 0 if mrt_carrier_fleet is None else mrt_carrier_fleet.operated_carriers,
+        },
+        spare_carriers_by_pathway={
+            "Conventional": 0,
+            "MRT": 0 if mrt_carrier_fleet is None else mrt_carrier_fleet.spare_carriers,
+        },
+        carrier_constrained_throughput_by_pathway={
+            "Conventional": False,
+            "MRT": False if mrt_carrier_fleet is None else mrt_carrier_fleet.carrier_constrained_throughput,
         },
     )
     return NativeReliabilityRunResult(seed=seed, native_result=native_result, reference=reference)
@@ -295,9 +323,11 @@ def _build_pathway_summary(
     if pathway == "Conventional":
         capex_result = source_native_result.conventional.capex_result
         opex_result = source_native_result.conventional.opex_result
+        mrt_carrier_fleet = None
     else:
         capex_result = source_native_result.mrt.capex_result
         opex_result = source_native_result.mrt.opex_result
+        mrt_carrier_fleet = getattr(source_native_result.mrt.operational_result, "mrt_carrier_fleet", None)
 
     throughput_distribution = _distribution_summary(completed_values)
     raw_schedule_completed_distribution = _distribution_summary(raw_schedule_completed_values)
@@ -324,6 +354,7 @@ def _build_pathway_summary(
         potential_shortfall_distribution_mbq=shortfall_distribution,
         capex_result=capex_result,
         opex_result=opex_result,
+        mrt_carrier_fleet=mrt_carrier_fleet,
         source_run_reference=source_run_reference,
     )
 
