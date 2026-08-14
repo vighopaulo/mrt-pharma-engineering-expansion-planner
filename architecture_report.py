@@ -4,9 +4,15 @@ import hashlib
 import json
 from collections import Counter
 from dataclasses import dataclass
-from typing import Literal, Mapping, Sequence
+from typing import Any, Literal, Mapping, Sequence
 
 from architecture_recommendation import ArchitectureCandidateResult, ArchitectureRecommendationResult
+from design_horizon_planning import (
+    DesignHorizonPlanningResult,
+    DesignHorizonYearResult,
+    HorizonExpansionAction,
+    _apply_resource_step,
+)
 from decision_pipeline import NativeBottleneckSummary, NativePathwayScenario, Pathway
 from infrastructure_capex import CapexLedgerItem
 from infrastructure_opex import OpexLedgerItem
@@ -870,4 +876,851 @@ def build_native_architecture_report_data(recommendation_result: ArchitectureRec
         recommendation_chart_data=recommendation_chart_data,
         provenance=provenance,
         limitations=limitations,
+    )
+
+
+@dataclass(frozen=True)
+class NativeHorizonMetadata:
+    project_name: str
+    analysis_years: int
+    demand_mode: str
+    demand_trajectory_source: str
+    demand_trajectory_interpolation_method: str
+    seeds: tuple[int, ...]
+    operating_days_per_year: int
+    revenue_per_scan: float
+    discount_rate_pct: float
+    horizon_trace_id: str
+
+
+@dataclass(frozen=True)
+class NativeHorizonDemandYearRecord:
+    year: int
+    demand_patients_per_day: float
+
+
+@dataclass(frozen=True)
+class NativeHorizonResourceState:
+    scanners: int
+    injection_resources: int
+    uptake_resources: int
+    distribution_concurrency: int
+    installed_mrt_carriers: int
+    operated_mrt_carriers: int
+    spare_mrt_carriers: int
+    installed_mrt_endpoints: int
+    installed_guideway_length_m: float
+    cyclotron_units: int
+
+
+@dataclass(frozen=True)
+class NativeHorizonPathwayYearRecord:
+    pathway: Pathway
+    year: int
+    demand_patients_per_day: float
+    installed_reliable_effective_capacity_patients_per_day: float
+    patients_served_per_day: float
+    unmet_demand_per_day: float
+    headroom_per_day: float
+    capacity_utilization_pct: float
+    probability_meeting_target_demand: float
+    binding_bottleneck_resource: str
+    annual_opex: float
+    annual_revenue: float
+    annual_expansion_capex: float
+    resources: NativeHorizonResourceState
+    fleet_id: str
+    fleet_asset_ids: tuple[str, ...]
+    fleet_supported_radionuclides: tuple[str, ...]
+
+
+@dataclass(frozen=True)
+class NativeHorizonExpansionResourceDelta:
+    resource: str
+    step: int
+
+
+@dataclass(frozen=True)
+class NativeHorizonExpansionDecisionRecord:
+    year: int
+    pathway: Pathway
+    decision_id: str
+    action_identifier: str
+    action_type: Literal["single_resource", "multi_resource_combo"]
+    resources_changed: tuple[NativeHorizonExpansionResourceDelta, ...]
+    pre_expansion_capacity: float | None
+    post_expansion_capacity: float | None
+    capacity_delta: float | None
+    pre_expansion_reliability: float | None
+    post_expansion_reliability: float | None
+    reliability_delta: float | None
+    bottleneck_before: str | None
+    bottleneck_after: str | None
+    incremental_capex: float
+    incremental_annual_opex: float
+    reason: str
+    trace_id: str
+
+
+@dataclass(frozen=True)
+class NativeHorizonCapacityExhaustionRecord:
+    pathway: Pathway
+    exhaustion_within_horizon: bool
+    first_exhaustion_year: int | None
+    demand_at_exhaustion: float | None
+    capacity_at_exhaustion: float | None
+    headroom_at_exhaustion: float | None
+    reliability_at_exhaustion: float | None
+    bottleneck_at_exhaustion: str | None
+
+
+@dataclass(frozen=True)
+class NativeHorizonBottleneckYearState:
+    pathway: Pathway
+    year: int
+    bottleneck: str
+
+
+@dataclass(frozen=True)
+class NativeHorizonBottleneckMigrationEvent:
+    pathway: Pathway
+    year: int
+    previous_bottleneck: str
+    new_bottleneck: str
+
+
+@dataclass(frozen=True)
+class NativeHorizonStrategyPathwaySummary:
+    pathway: Pathway
+    strategy: Literal["build_ahead", "phased"]
+    feasible: bool
+    infeasibility_reason: str | None
+    horizon_peak_demand: float
+    year_zero_installed_capacity: float
+    final_modeled_capacity: float
+    year_zero_capex: float
+    nominal_future_expansion_capex: float
+    discounted_pv_future_expansion_capex: float
+    total_horizon_opex: float
+    total_horizon_revenue: float
+    lifecycle_npv: float
+    payback_year: float | None
+    expansion_intervention_count: int
+    expansion_intervention_years: tuple[int, ...]
+    final_headroom: float
+    final_bottleneck: str
+
+
+@dataclass(frozen=True)
+class NativeHorizonPathwayStrategyComparison:
+    pathway: Pathway
+    build_ahead_feasible: bool
+    build_ahead_npv: float
+    phased_npv: float
+    npv_delta_build_ahead_minus_phased: float
+    capex_delta_build_ahead_minus_phased: float
+    opex_delta_build_ahead_minus_phased: float
+    intervention_count_delta_build_ahead_minus_phased: int
+    preferred_strategy: str
+    recommendation_reason: str | None
+
+
+@dataclass(frozen=True)
+class NativeHorizonYearComparisonRecord:
+    year: int
+    demand_patients_per_day: float
+    conventional_capacity: float
+    mrt_capacity: float
+    capacity_delta_mrt_minus_conventional: float
+    conventional_headroom: float
+    mrt_headroom: float
+    headroom_delta_mrt_minus_conventional: float
+    conventional_reliability: float
+    mrt_reliability: float
+    reliability_delta_mrt_minus_conventional: float
+    conventional_annual_opex: float
+    mrt_annual_opex: float
+    opex_delta_mrt_minus_conventional: float
+    conventional_annual_revenue: float
+    mrt_annual_revenue: float
+    revenue_delta_mrt_minus_conventional: float
+    conventional_expansion_capex: float
+    mrt_expansion_capex: float
+    conventional_bottleneck: str
+    mrt_bottleneck: str
+
+
+@dataclass(frozen=True)
+class NativeHorizonFinalComparison:
+    final_year: int
+    final_demand: float
+    conventional_final_capacity: float
+    mrt_final_capacity: float
+    conventional_final_headroom: float
+    mrt_final_headroom: float
+    conventional_cumulative_expansion_capex: float
+    mrt_cumulative_expansion_capex: float
+    conventional_lifecycle_npv: float
+    mrt_lifecycle_npv: float
+    lifecycle_npv_delta_mrt_minus_conventional: float
+    conventional_intervention_count: int
+    mrt_intervention_count: int
+    pathway_strategy_preference: Mapping[Pathway, str]
+
+
+@dataclass(frozen=True)
+class NativeHorizonChartSeries:
+    demand: tuple[NativeChartPoint, ...]
+    conventional_capacity: tuple[NativeChartPoint, ...]
+    mrt_capacity: tuple[NativeChartPoint, ...]
+    conventional_headroom: tuple[NativeChartPoint, ...]
+    mrt_headroom: tuple[NativeChartPoint, ...]
+    conventional_reliability: tuple[NativeChartPoint, ...]
+    mrt_reliability: tuple[NativeChartPoint, ...]
+    conventional_annual_opex: tuple[NativeChartPoint, ...]
+    mrt_annual_opex: tuple[NativeChartPoint, ...]
+    conventional_annual_revenue: tuple[NativeChartPoint, ...]
+    mrt_annual_revenue: tuple[NativeChartPoint, ...]
+    conventional_expansion_capex: tuple[NativeChartPoint, ...]
+    mrt_expansion_capex: tuple[NativeChartPoint, ...]
+    conventional_cumulative_expansion_capex: tuple[NativeChartPoint, ...]
+    mrt_cumulative_expansion_capex: tuple[NativeChartPoint, ...]
+    conventional_bottleneck_by_year: tuple[NativeCategoricalChartItem, ...]
+    mrt_bottleneck_by_year: tuple[NativeCategoricalChartItem, ...]
+    conventional_scanners: tuple[NativeChartPoint, ...]
+    mrt_scanners: tuple[NativeChartPoint, ...]
+    conventional_injection_resources: tuple[NativeChartPoint, ...]
+    mrt_injection_resources: tuple[NativeChartPoint, ...]
+    conventional_uptake_resources: tuple[NativeChartPoint, ...]
+    mrt_uptake_resources: tuple[NativeChartPoint, ...]
+    conventional_distribution_concurrency: tuple[NativeChartPoint, ...]
+    mrt_distribution_concurrency: tuple[NativeChartPoint, ...]
+    mrt_operated_carriers: tuple[NativeChartPoint, ...]
+    strategy_lifecycle_npv_comparison: tuple[NativeChartPoint, ...]
+    strategy_capex_comparison: tuple[NativeChartPoint, ...]
+    strategy_opex_comparison: tuple[NativeChartPoint, ...]
+
+
+@dataclass(frozen=True)
+class NativeDesignHorizonReportData:
+    metadata: NativeHorizonMetadata
+    demand_trajectory_rows: tuple[NativeHorizonDemandYearRecord, ...]
+    conventional_year_rows: tuple[NativeHorizonPathwayYearRecord, ...]
+    mrt_year_rows: tuple[NativeHorizonPathwayYearRecord, ...]
+    year_comparison_rows: tuple[NativeHorizonYearComparisonRecord, ...]
+    conventional_expansion_decisions: tuple[NativeHorizonExpansionDecisionRecord, ...]
+    mrt_expansion_decisions: tuple[NativeHorizonExpansionDecisionRecord, ...]
+    conventional_exhaustion: NativeHorizonCapacityExhaustionRecord
+    mrt_exhaustion: NativeHorizonCapacityExhaustionRecord
+    bottleneck_year_states: tuple[NativeHorizonBottleneckYearState, ...]
+    bottleneck_migration_events: tuple[NativeHorizonBottleneckMigrationEvent, ...]
+    build_ahead_conventional: NativeHorizonStrategyPathwaySummary
+    build_ahead_mrt: NativeHorizonStrategyPathwaySummary
+    phased_conventional: NativeHorizonStrategyPathwaySummary
+    phased_mrt: NativeHorizonStrategyPathwaySummary
+    strategy_comparison_by_pathway: Mapping[Pathway, NativeHorizonPathwayStrategyComparison]
+    final_comparison: NativeHorizonFinalComparison
+    chart_series: NativeHorizonChartSeries
+    provenance: Mapping[str, Any]
+    derived_value_notes: tuple[str, ...]
+
+
+def _split_combo_action(resource: str, step: int) -> tuple[NativeHorizonExpansionResourceDelta, ...]:
+    if resource.startswith("combo(") and resource.endswith(")"):
+        payload = resource[6:-1].strip()
+        if not payload:
+            return ()
+        changes: list[NativeHorizonExpansionResourceDelta] = []
+        for token in payload.split(","):
+            part = token.strip()
+            if "=" not in part:
+                continue
+            name, amount = part.split("=", 1)
+            changes.append(NativeHorizonExpansionResourceDelta(resource=name.strip(), step=int(amount.strip())))
+        return tuple(changes)
+    return (NativeHorizonExpansionResourceDelta(resource=resource, step=step),)
+
+
+def _year_rows_by_pathway(result: DesignHorizonPlanningResult, pathway: Pathway) -> tuple[Any, ...]:
+    rows: list[Any] = []
+    for year in result.year_results:
+        rows.append(year.conventional if pathway == "Conventional" else year.mrt)
+    return tuple(rows)
+
+
+def _resource_state_timeline(result: DesignHorizonPlanningResult, pathway: Pathway) -> tuple[NativeHorizonResourceState, ...]:
+    scenario = result.request.pipeline_template
+    architecture = scenario.conventional if pathway == "Conventional" else scenario.mrt
+    states: list[NativeHorizonResourceState] = []
+    for year in result.year_results:
+        pathway_row = year.conventional if pathway == "Conventional" else year.mrt
+        for action in pathway_row.expansion_actions:
+            architecture = _apply_resource_step(pathway, architecture, action.resource, action.step)
+        installed_carriers = int(architecture.installed_mrt_carriers or 0)
+        operated_carriers = int(architecture.operated_mrt_carriers or 0)
+        states.append(
+            NativeHorizonResourceState(
+                scanners=int(architecture.scanners),
+                injection_resources=int(architecture.injection_resources),
+                uptake_resources=int(architecture.uptake_resources),
+                distribution_concurrency=int(architecture.distribution_concurrency),
+                installed_mrt_carriers=installed_carriers,
+                operated_mrt_carriers=operated_carriers,
+                spare_mrt_carriers=installed_carriers - operated_carriers,
+                installed_mrt_endpoints=int(architecture.installed_mrt_endpoints),
+                installed_guideway_length_m=float(architecture.installed_guideway_length_m),
+                cyclotron_units=int(architecture.operated_cyclotron_units),
+            )
+        )
+    return tuple(states)
+
+
+def _annual_revenue_from_row(result: DesignHorizonPlanningResult, served_per_day: float) -> float:
+    assumptions = result.request.pipeline_template.planner_assumptions
+    return float(served_per_day) * float(assumptions.revenue_per_scan) * float(assumptions.operating_days_per_year)
+
+
+def _horizon_pathway_rows(
+    result: DesignHorizonPlanningResult,
+    pathway: Pathway,
+    *,
+    fleet_id: str,
+    fleet_asset_ids: tuple[str, ...],
+    fleet_supported_radionuclides: tuple[str, ...],
+) -> tuple[NativeHorizonPathwayYearRecord, ...]:
+    native_rows = _year_rows_by_pathway(result, pathway)
+    states = _resource_state_timeline(result, pathway)
+    output: list[NativeHorizonPathwayYearRecord] = []
+    for index, native_row in enumerate(native_rows):
+        state = states[index]
+        output.append(
+            NativeHorizonPathwayYearRecord(
+                pathway=pathway,
+                year=index + 1,
+                demand_patients_per_day=float(native_row.demand_per_day),
+                installed_reliable_effective_capacity_patients_per_day=float(native_row.installed_capacity_per_day),
+                patients_served_per_day=float(native_row.patients_served_per_day),
+                unmet_demand_per_day=float(native_row.unmet_demand_per_day),
+                headroom_per_day=float(native_row.headroom_per_day),
+                capacity_utilization_pct=float(native_row.capacity_utilization_pct),
+                probability_meeting_target_demand=float(native_row.reliability_probability_meeting_target),
+                binding_bottleneck_resource=str(native_row.binding_bottleneck_resource),
+                annual_opex=float(native_row.annual_opex),
+                annual_revenue=_annual_revenue_from_row(result, float(native_row.patients_served_per_day)),
+                annual_expansion_capex=float(native_row.annual_capex),
+                resources=state,
+                fleet_id=fleet_id,
+                fleet_asset_ids=fleet_asset_ids,
+                fleet_supported_radionuclides=fleet_supported_radionuclides,
+            )
+        )
+    return tuple(output)
+
+
+def _expansion_decisions(result: DesignHorizonPlanningResult, pathway: Pathway) -> tuple[NativeHorizonExpansionDecisionRecord, ...]:
+    native_rows = _year_rows_by_pathway(result, pathway)
+    decisions: list[NativeHorizonExpansionDecisionRecord] = []
+    prior_capacity: float | None = None
+    prior_reliability: float | None = None
+    prior_bottleneck: str | None = None
+    for year_index, native_row in enumerate(native_rows, start=1):
+        gains = [float(action.throughput_gain_per_day) for action in native_row.expansion_actions]
+        running_capacity = float(native_row.installed_capacity_per_day) - sum(gains)
+        for action_index, action in enumerate(native_row.expansion_actions, start=1):
+            action_type: Literal["single_resource", "multi_resource_combo"] = (
+                "multi_resource_combo" if action.resource.startswith("combo(") else "single_resource"
+            )
+            resources_changed = _split_combo_action(action.resource, action.step)
+            pre_capacity = running_capacity
+            post_capacity = pre_capacity + float(action.throughput_gain_per_day)
+            running_capacity = post_capacity
+            is_last_action = action_index == len(native_row.expansion_actions)
+            post_reliability = float(native_row.reliability_probability_meeting_target) if is_last_action else None
+            pre_reliability = prior_reliability if action_index == 1 else None
+            reliability_delta = (
+                None
+                if pre_reliability is None or post_reliability is None
+                else float(post_reliability - pre_reliability)
+            )
+            bottleneck_before = prior_bottleneck if action_index == 1 else None
+            bottleneck_after = str(native_row.binding_bottleneck_resource) if is_last_action else None
+
+            decisions.append(
+                NativeHorizonExpansionDecisionRecord(
+                    year=year_index,
+                    pathway=pathway,
+                    decision_id=f"{pathway}-Y{year_index}-A{action_index}",
+                    action_identifier=action.resource,
+                    action_type=action_type,
+                    resources_changed=resources_changed,
+                    pre_expansion_capacity=pre_capacity,
+                    post_expansion_capacity=post_capacity,
+                    capacity_delta=float(action.throughput_gain_per_day),
+                    pre_expansion_reliability=pre_reliability,
+                    post_expansion_reliability=post_reliability,
+                    reliability_delta=reliability_delta,
+                    bottleneck_before=bottleneck_before,
+                    bottleneck_after=bottleneck_after,
+                    incremental_capex=float(action.annual_capex_delta),
+                    incremental_annual_opex=float(action.annual_opex_delta),
+                    reason=action.reason,
+                    trace_id=action.trace_id,
+                )
+            )
+
+        prior_capacity = float(native_row.installed_capacity_per_day)
+        prior_reliability = float(native_row.reliability_probability_meeting_target)
+        prior_bottleneck = str(native_row.binding_bottleneck_resource)
+    return tuple(decisions)
+
+
+def _exhaustion_record(pathway: Pathway, rows: Sequence[NativeHorizonPathwayYearRecord]) -> NativeHorizonCapacityExhaustionRecord:
+    for row in rows:
+        if row.unmet_demand_per_day > 0.0:
+            return NativeHorizonCapacityExhaustionRecord(
+                pathway=pathway,
+                exhaustion_within_horizon=True,
+                first_exhaustion_year=row.year,
+                demand_at_exhaustion=row.demand_patients_per_day,
+                capacity_at_exhaustion=row.installed_reliable_effective_capacity_patients_per_day,
+                headroom_at_exhaustion=row.headroom_per_day,
+                reliability_at_exhaustion=row.probability_meeting_target_demand,
+                bottleneck_at_exhaustion=row.binding_bottleneck_resource,
+            )
+    return NativeHorizonCapacityExhaustionRecord(
+        pathway=pathway,
+        exhaustion_within_horizon=False,
+        first_exhaustion_year=None,
+        demand_at_exhaustion=None,
+        capacity_at_exhaustion=None,
+        headroom_at_exhaustion=None,
+        reliability_at_exhaustion=None,
+        bottleneck_at_exhaustion=None,
+    )
+
+
+def _bottleneck_contract(
+    conventional_rows: Sequence[NativeHorizonPathwayYearRecord],
+    mrt_rows: Sequence[NativeHorizonPathwayYearRecord],
+) -> tuple[tuple[NativeHorizonBottleneckYearState, ...], tuple[NativeHorizonBottleneckMigrationEvent, ...]]:
+    year_states: list[NativeHorizonBottleneckYearState] = []
+    events: list[NativeHorizonBottleneckMigrationEvent] = []
+    for pathway, rows in (("Conventional", conventional_rows), ("MRT", mrt_rows)):
+        previous: str | None = None
+        for row in rows:
+            year_states.append(
+                NativeHorizonBottleneckYearState(pathway=pathway, year=row.year, bottleneck=row.binding_bottleneck_resource)
+            )
+            if previous is not None and previous != row.binding_bottleneck_resource:
+                events.append(
+                    NativeHorizonBottleneckMigrationEvent(
+                        pathway=pathway,
+                        year=row.year,
+                        previous_bottleneck=previous,
+                        new_bottleneck=row.binding_bottleneck_resource,
+                    )
+                )
+            previous = row.binding_bottleneck_resource
+    return tuple(year_states), tuple(events)
+
+
+def _strategy_summary(
+    *,
+    result: DesignHorizonPlanningResult,
+    pathway: Pathway,
+    strategy: Literal["build_ahead", "phased"],
+    rows: Sequence[NativeHorizonPathwayYearRecord],
+) -> NativeHorizonStrategyPathwaySummary:
+    lifecycle = (
+        result.build_ahead_strategy.conventional_lifecycle
+        if strategy == "build_ahead" and pathway == "Conventional"
+        else result.build_ahead_strategy.mrt_lifecycle
+        if strategy == "build_ahead"
+        else result.phased_strategy.conventional_lifecycle
+        if pathway == "Conventional"
+        else result.phased_strategy.mrt_lifecycle
+    )
+    comparison = result.strategy_comparison_by_pathway[pathway]
+    feasible = True if strategy == "phased" else bool(comparison.build_ahead_feasible)
+    infeasibility_reason = None if strategy == "phased" else comparison.build_ahead_infeasibility_reason
+    if strategy == "build_ahead":
+        # Native build-ahead encodes Year-0 sizing into the first modeled year CAPEX row.
+        # Reporting normalizes this to Year-0 so future interventions remain zero.
+        staged_year_zero_incremental_capex = sum(float(row.annual_capex) for row in lifecycle.annual_rows)
+        year_zero_capex = float(lifecycle.initial_capex) + staged_year_zero_incremental_capex
+        intervention_years = tuple(row.year for row in lifecycle.annual_rows[1:] if float(row.annual_capex) > 0.0)
+        future_nominal = sum(float(row.annual_capex) for row in lifecycle.annual_rows[1:])
+        future_pv = sum(float(row.discounted_capex) for row in lifecycle.annual_rows[1:])
+    else:
+        year_zero_capex = float(lifecycle.initial_capex)
+        intervention_years = tuple(row.year for row in lifecycle.annual_rows if float(row.annual_capex) > 0.0)
+        future_nominal = sum(float(row.annual_capex) for row in lifecycle.annual_rows)
+        future_pv = sum(float(row.discounted_capex) for row in lifecycle.annual_rows)
+    final_row = rows[-1]
+    return NativeHorizonStrategyPathwaySummary(
+        pathway=pathway,
+        strategy=strategy,
+        feasible=feasible,
+        infeasibility_reason=infeasibility_reason,
+        horizon_peak_demand=max(float(value) for value in result.demand_trajectory.daily_demand_by_year),
+        year_zero_installed_capacity=float(lifecycle.annual_rows[0].installed_capacity_per_day),
+        final_modeled_capacity=float(lifecycle.annual_rows[-1].installed_capacity_per_day),
+        year_zero_capex=year_zero_capex,
+        nominal_future_expansion_capex=float(future_nominal),
+        discounted_pv_future_expansion_capex=float(future_pv),
+        total_horizon_opex=float(sum(float(row.annual_opex) for row in lifecycle.annual_rows)),
+        total_horizon_revenue=float(sum(float(row.annual_revenue) for row in lifecycle.annual_rows)),
+        lifecycle_npv=float(lifecycle.final_npv),
+        payback_year=lifecycle.payback_year,
+        expansion_intervention_count=len(intervention_years),
+        expansion_intervention_years=intervention_years,
+        final_headroom=float(final_row.headroom_per_day),
+        final_bottleneck=final_row.binding_bottleneck_resource,
+    )
+
+
+def _strategy_reason(summary: NativeHorizonPathwayStrategyComparison) -> str | None:
+    if not summary.build_ahead_feasible:
+        return "Build-ahead infeasible in native horizon engine; phased retained by rule."
+    if summary.preferred_strategy == "build_ahead":
+        return "Native horizon engine selected build_ahead based on pathway lifecycle comparison."
+    if summary.preferred_strategy == "phased":
+        return "Native horizon engine selected phased based on pathway lifecycle comparison."
+    return "Native horizon engine reported strategy tie."
+
+
+def _year_comparisons(
+    conventional_rows: Sequence[NativeHorizonPathwayYearRecord],
+    mrt_rows: Sequence[NativeHorizonPathwayYearRecord],
+) -> tuple[NativeHorizonYearComparisonRecord, ...]:
+    rows: list[NativeHorizonYearComparisonRecord] = []
+    for conventional, mrt in zip(conventional_rows, mrt_rows):
+        rows.append(
+            NativeHorizonYearComparisonRecord(
+                year=conventional.year,
+                demand_patients_per_day=conventional.demand_patients_per_day,
+                conventional_capacity=conventional.installed_reliable_effective_capacity_patients_per_day,
+                mrt_capacity=mrt.installed_reliable_effective_capacity_patients_per_day,
+                capacity_delta_mrt_minus_conventional=(
+                    mrt.installed_reliable_effective_capacity_patients_per_day
+                    - conventional.installed_reliable_effective_capacity_patients_per_day
+                ),
+                conventional_headroom=conventional.headroom_per_day,
+                mrt_headroom=mrt.headroom_per_day,
+                headroom_delta_mrt_minus_conventional=mrt.headroom_per_day - conventional.headroom_per_day,
+                conventional_reliability=conventional.probability_meeting_target_demand,
+                mrt_reliability=mrt.probability_meeting_target_demand,
+                reliability_delta_mrt_minus_conventional=(
+                    mrt.probability_meeting_target_demand - conventional.probability_meeting_target_demand
+                ),
+                conventional_annual_opex=conventional.annual_opex,
+                mrt_annual_opex=mrt.annual_opex,
+                opex_delta_mrt_minus_conventional=mrt.annual_opex - conventional.annual_opex,
+                conventional_annual_revenue=conventional.annual_revenue,
+                mrt_annual_revenue=mrt.annual_revenue,
+                revenue_delta_mrt_minus_conventional=mrt.annual_revenue - conventional.annual_revenue,
+                conventional_expansion_capex=conventional.annual_expansion_capex,
+                mrt_expansion_capex=mrt.annual_expansion_capex,
+                conventional_bottleneck=conventional.binding_bottleneck_resource,
+                mrt_bottleneck=mrt.binding_bottleneck_resource,
+            )
+        )
+    return tuple(rows)
+
+
+def _categorical_bottleneck_series(rows: Sequence[NativeHorizonPathwayYearRecord]) -> tuple[NativeCategoricalChartItem, ...]:
+    counts: dict[str, float] = {}
+    for row in rows:
+        counts[row.binding_bottleneck_resource] = counts.get(row.binding_bottleneck_resource, 0.0) + 1.0
+    return _categorical_items(counts)
+
+
+def _chart_series(
+    demand_rows: Sequence[NativeHorizonDemandYearRecord],
+    conventional_rows: Sequence[NativeHorizonPathwayYearRecord],
+    mrt_rows: Sequence[NativeHorizonPathwayYearRecord],
+    build_ahead_conventional: NativeHorizonStrategyPathwaySummary,
+    build_ahead_mrt: NativeHorizonStrategyPathwaySummary,
+    phased_conventional: NativeHorizonStrategyPathwaySummary,
+    phased_mrt: NativeHorizonStrategyPathwaySummary,
+) -> NativeHorizonChartSeries:
+    conventional_cum = 0.0
+    mrt_cum = 0.0
+    conventional_cum_points: list[NativeChartPoint] = []
+    mrt_cum_points: list[NativeChartPoint] = []
+    for conv, mrt in zip(conventional_rows, mrt_rows):
+        conventional_cum += conv.annual_expansion_capex
+        mrt_cum += mrt.annual_expansion_capex
+        conventional_cum_points.append(NativeChartPoint(x=float(conv.year), y=conventional_cum))
+        mrt_cum_points.append(NativeChartPoint(x=float(mrt.year), y=mrt_cum))
+
+    return NativeHorizonChartSeries(
+        demand=tuple(NativeChartPoint(x=float(row.year), y=float(row.demand_patients_per_day)) for row in demand_rows),
+        conventional_capacity=tuple(
+            NativeChartPoint(x=float(row.year), y=row.installed_reliable_effective_capacity_patients_per_day)
+            for row in conventional_rows
+        ),
+        mrt_capacity=tuple(
+            NativeChartPoint(x=float(row.year), y=row.installed_reliable_effective_capacity_patients_per_day)
+            for row in mrt_rows
+        ),
+        conventional_headroom=tuple(NativeChartPoint(x=float(row.year), y=row.headroom_per_day) for row in conventional_rows),
+        mrt_headroom=tuple(NativeChartPoint(x=float(row.year), y=row.headroom_per_day) for row in mrt_rows),
+        conventional_reliability=tuple(
+            NativeChartPoint(x=float(row.year), y=row.probability_meeting_target_demand) for row in conventional_rows
+        ),
+        mrt_reliability=tuple(NativeChartPoint(x=float(row.year), y=row.probability_meeting_target_demand) for row in mrt_rows),
+        conventional_annual_opex=tuple(NativeChartPoint(x=float(row.year), y=row.annual_opex) for row in conventional_rows),
+        mrt_annual_opex=tuple(NativeChartPoint(x=float(row.year), y=row.annual_opex) for row in mrt_rows),
+        conventional_annual_revenue=tuple(NativeChartPoint(x=float(row.year), y=row.annual_revenue) for row in conventional_rows),
+        mrt_annual_revenue=tuple(NativeChartPoint(x=float(row.year), y=row.annual_revenue) for row in mrt_rows),
+        conventional_expansion_capex=tuple(
+            NativeChartPoint(x=float(row.year), y=row.annual_expansion_capex) for row in conventional_rows
+        ),
+        mrt_expansion_capex=tuple(NativeChartPoint(x=float(row.year), y=row.annual_expansion_capex) for row in mrt_rows),
+        conventional_cumulative_expansion_capex=tuple(conventional_cum_points),
+        mrt_cumulative_expansion_capex=tuple(mrt_cum_points),
+        conventional_bottleneck_by_year=_categorical_bottleneck_series(conventional_rows),
+        mrt_bottleneck_by_year=_categorical_bottleneck_series(mrt_rows),
+        conventional_scanners=tuple(NativeChartPoint(x=float(row.year), y=float(row.resources.scanners)) for row in conventional_rows),
+        mrt_scanners=tuple(NativeChartPoint(x=float(row.year), y=float(row.resources.scanners)) for row in mrt_rows),
+        conventional_injection_resources=tuple(
+            NativeChartPoint(x=float(row.year), y=float(row.resources.injection_resources)) for row in conventional_rows
+        ),
+        mrt_injection_resources=tuple(
+            NativeChartPoint(x=float(row.year), y=float(row.resources.injection_resources)) for row in mrt_rows
+        ),
+        conventional_uptake_resources=tuple(
+            NativeChartPoint(x=float(row.year), y=float(row.resources.uptake_resources)) for row in conventional_rows
+        ),
+        mrt_uptake_resources=tuple(
+            NativeChartPoint(x=float(row.year), y=float(row.resources.uptake_resources)) for row in mrt_rows
+        ),
+        conventional_distribution_concurrency=tuple(
+            NativeChartPoint(x=float(row.year), y=float(row.resources.distribution_concurrency)) for row in conventional_rows
+        ),
+        mrt_distribution_concurrency=tuple(
+            NativeChartPoint(x=float(row.year), y=float(row.resources.distribution_concurrency)) for row in mrt_rows
+        ),
+        mrt_operated_carriers=tuple(
+            NativeChartPoint(x=float(row.year), y=float(row.resources.operated_mrt_carriers)) for row in mrt_rows
+        ),
+        strategy_lifecycle_npv_comparison=(
+            NativeChartPoint(x=0.0, y=build_ahead_conventional.lifecycle_npv, label="Conventional build_ahead"),
+            NativeChartPoint(x=1.0, y=phased_conventional.lifecycle_npv, label="Conventional phased"),
+            NativeChartPoint(x=2.0, y=build_ahead_mrt.lifecycle_npv, label="MRT build_ahead"),
+            NativeChartPoint(x=3.0, y=phased_mrt.lifecycle_npv, label="MRT phased"),
+        ),
+        strategy_capex_comparison=(
+            NativeChartPoint(
+                x=0.0,
+                y=build_ahead_conventional.year_zero_capex + build_ahead_conventional.nominal_future_expansion_capex,
+                label="Conventional build_ahead",
+            ),
+            NativeChartPoint(
+                x=1.0,
+                y=phased_conventional.year_zero_capex + phased_conventional.nominal_future_expansion_capex,
+                label="Conventional phased",
+            ),
+            NativeChartPoint(
+                x=2.0,
+                y=build_ahead_mrt.year_zero_capex + build_ahead_mrt.nominal_future_expansion_capex,
+                label="MRT build_ahead",
+            ),
+            NativeChartPoint(
+                x=3.0,
+                y=phased_mrt.year_zero_capex + phased_mrt.nominal_future_expansion_capex,
+                label="MRT phased",
+            ),
+        ),
+        strategy_opex_comparison=(
+            NativeChartPoint(x=0.0, y=build_ahead_conventional.total_horizon_opex, label="Conventional build_ahead"),
+            NativeChartPoint(x=1.0, y=phased_conventional.total_horizon_opex, label="Conventional phased"),
+            NativeChartPoint(x=2.0, y=build_ahead_mrt.total_horizon_opex, label="MRT build_ahead"),
+            NativeChartPoint(x=3.0, y=phased_mrt.total_horizon_opex, label="MRT phased"),
+        ),
+    )
+
+
+def build_native_design_horizon_report_data(result: DesignHorizonPlanningResult) -> NativeDesignHorizonReportData:
+    scenario = result.request.pipeline_template
+    assumptions = scenario.planner_assumptions
+    fleet = scenario.cyclotron_fleet
+    fleet_id = "PRIMARY_FLEET" if fleet is None else fleet.fleet_id
+    fleet_asset_ids = () if fleet is None else tuple(asset.cyclotron_id for asset in fleet.assets)
+    fleet_supported = (
+        tuple(scenario.cyclotron_capability.supported_radionuclides)
+        if fleet is None
+        else tuple(fleet.fleet_supported_radionuclides)
+    )
+
+    metadata = NativeHorizonMetadata(
+        project_name=scenario.project_name,
+        analysis_years=int(result.demand_trajectory.analysis_years),
+        demand_mode=str(result.request.demand_mode),
+        demand_trajectory_source=str(result.demand_trajectory.source),
+        demand_trajectory_interpolation_method=str(result.demand_trajectory.interpolation_method),
+        seeds=tuple(int(seed) for seed in result.request.seeds),
+        operating_days_per_year=int(assumptions.operating_days_per_year),
+        revenue_per_scan=float(assumptions.revenue_per_scan),
+        discount_rate_pct=float(assumptions.discount_rate_pct),
+        horizon_trace_id=result.trace_id,
+    )
+
+    demand_rows = tuple(
+        NativeHorizonDemandYearRecord(year=index + 1, demand_patients_per_day=float(value))
+        for index, value in enumerate(result.demand_trajectory.daily_demand_by_year)
+    )
+
+    conventional_rows = _horizon_pathway_rows(
+        result,
+        "Conventional",
+        fleet_id=fleet_id,
+        fleet_asset_ids=fleet_asset_ids,
+        fleet_supported_radionuclides=fleet_supported,
+    )
+    mrt_rows = _horizon_pathway_rows(
+        result,
+        "MRT",
+        fleet_id=fleet_id,
+        fleet_asset_ids=fleet_asset_ids,
+        fleet_supported_radionuclides=fleet_supported,
+    )
+
+    conventional_expansions = _expansion_decisions(result, "Conventional")
+    mrt_expansions = _expansion_decisions(result, "MRT")
+
+    conventional_exhaustion = _exhaustion_record("Conventional", conventional_rows)
+    mrt_exhaustion = _exhaustion_record("MRT", mrt_rows)
+
+    bottleneck_year_states, bottleneck_events = _bottleneck_contract(conventional_rows, mrt_rows)
+
+    build_ahead_conventional = _strategy_summary(
+        result=result,
+        pathway="Conventional",
+        strategy="build_ahead",
+        rows=conventional_rows,
+    )
+    build_ahead_mrt = _strategy_summary(
+        result=result,
+        pathway="MRT",
+        strategy="build_ahead",
+        rows=mrt_rows,
+    )
+    phased_conventional = _strategy_summary(
+        result=result,
+        pathway="Conventional",
+        strategy="phased",
+        rows=conventional_rows,
+    )
+    phased_mrt = _strategy_summary(
+        result=result,
+        pathway="MRT",
+        strategy="phased",
+        rows=mrt_rows,
+    )
+
+    strategy_comparison: dict[Pathway, NativeHorizonPathwayStrategyComparison] = {}
+    for pathway in ("Conventional", "MRT"):
+        native = result.strategy_comparison_by_pathway[pathway]
+        build_summary = build_ahead_conventional if pathway == "Conventional" else build_ahead_mrt
+        phased_summary = phased_conventional if pathway == "Conventional" else phased_mrt
+        strategy_row = NativeHorizonPathwayStrategyComparison(
+            pathway=pathway,
+            build_ahead_feasible=bool(native.build_ahead_feasible),
+            build_ahead_npv=float(native.build_ahead_final_npv),
+            phased_npv=float(native.phased_final_npv),
+            npv_delta_build_ahead_minus_phased=float(native.incremental_npv_build_ahead_minus_phased),
+            capex_delta_build_ahead_minus_phased=float(
+                (build_summary.year_zero_capex + build_summary.nominal_future_expansion_capex)
+                - (phased_summary.year_zero_capex + phased_summary.nominal_future_expansion_capex)
+            ),
+            opex_delta_build_ahead_minus_phased=float(build_summary.total_horizon_opex - phased_summary.total_horizon_opex),
+            intervention_count_delta_build_ahead_minus_phased=(
+                build_summary.expansion_intervention_count - phased_summary.expansion_intervention_count
+            ),
+            preferred_strategy=str(native.preferred_strategy),
+            recommendation_reason=None,
+        )
+        strategy_comparison[pathway] = NativeHorizonPathwayStrategyComparison(
+            **{**strategy_row.__dict__, "recommendation_reason": _strategy_reason(strategy_row)}
+        )
+
+    year_comparison_rows = _year_comparisons(conventional_rows, mrt_rows)
+
+    final_comparison = NativeHorizonFinalComparison(
+        final_year=conventional_rows[-1].year,
+        final_demand=conventional_rows[-1].demand_patients_per_day,
+        conventional_final_capacity=conventional_rows[-1].installed_reliable_effective_capacity_patients_per_day,
+        mrt_final_capacity=mrt_rows[-1].installed_reliable_effective_capacity_patients_per_day,
+        conventional_final_headroom=conventional_rows[-1].headroom_per_day,
+        mrt_final_headroom=mrt_rows[-1].headroom_per_day,
+        conventional_cumulative_expansion_capex=sum(row.annual_expansion_capex for row in conventional_rows),
+        mrt_cumulative_expansion_capex=sum(row.annual_expansion_capex for row in mrt_rows),
+        conventional_lifecycle_npv=float(result.phased_strategy.conventional_lifecycle.final_npv),
+        mrt_lifecycle_npv=float(result.phased_strategy.mrt_lifecycle.final_npv),
+        lifecycle_npv_delta_mrt_minus_conventional=float(
+            result.phased_strategy.pathway_comparison.incremental_final_npv_mrt_minus_conventional
+        ),
+        conventional_intervention_count=len(conventional_expansions),
+        mrt_intervention_count=len(mrt_expansions),
+        pathway_strategy_preference={
+            "Conventional": strategy_comparison["Conventional"].preferred_strategy,
+            "MRT": strategy_comparison["MRT"].preferred_strategy,
+        },
+    )
+
+    chart_series = _chart_series(
+        demand_rows,
+        conventional_rows,
+        mrt_rows,
+        build_ahead_conventional,
+        build_ahead_mrt,
+        phased_conventional,
+        phased_mrt,
+    )
+
+    provenance: dict[str, Any] = {
+        "horizon_trace_id": result.trace_id,
+        "request_project_name": scenario.project_name,
+        "seed_set": tuple(int(seed) for seed in result.request.seeds),
+        "pipeline_cyclotron_id": scenario.cyclotron_capability.cyclotron_id,
+        "fleet_id": fleet_id,
+        "fleet_asset_ids": fleet_asset_ids,
+        "fleet_supported_radionuclides": fleet_supported,
+        "build_ahead_strategy": {
+            "conventional_feasible": result.strategy_comparison_by_pathway["Conventional"].build_ahead_feasible,
+            "mrt_feasible": result.strategy_comparison_by_pathway["MRT"].build_ahead_feasible,
+        },
+        "expansion_trace_ids": {
+            "conventional": tuple(decision.trace_id for decision in conventional_expansions),
+            "mrt": tuple(decision.trace_id for decision in mrt_expansions),
+        },
+    }
+
+    return NativeDesignHorizonReportData(
+        metadata=metadata,
+        demand_trajectory_rows=demand_rows,
+        conventional_year_rows=conventional_rows,
+        mrt_year_rows=mrt_rows,
+        year_comparison_rows=year_comparison_rows,
+        conventional_expansion_decisions=conventional_expansions,
+        mrt_expansion_decisions=mrt_expansions,
+        conventional_exhaustion=conventional_exhaustion,
+        mrt_exhaustion=mrt_exhaustion,
+        bottleneck_year_states=bottleneck_year_states,
+        bottleneck_migration_events=bottleneck_events,
+        build_ahead_conventional=build_ahead_conventional,
+        build_ahead_mrt=build_ahead_mrt,
+        phased_conventional=phased_conventional,
+        phased_mrt=phased_mrt,
+        strategy_comparison_by_pathway=strategy_comparison,
+        final_comparison=final_comparison,
+        chart_series=chart_series,
+        provenance=provenance,
+        derived_value_notes=(
+            "Reporting-only arithmetic includes deltas, annual revenue (served * revenue_per_scan * operating_days_per_year), and cumulative sums.",
+            "Expansion pre/post reliability per action is only directly native for the year-level post value; non-native intermediate reliability values remain null.",
+            "Expansion pre/post bottleneck per action uses adjacent year-level native bottlenecks when available.",
+        ),
     )
