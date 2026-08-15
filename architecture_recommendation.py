@@ -117,7 +117,7 @@ class MrtArchitectureBounds:
         object.__setattr__(self, "injection_resources", _validate_int_values("injection_resources", self.injection_resources))
         object.__setattr__(self, "uptake_resources", _validate_int_values("uptake_resources", self.uptake_resources))
         object.__setattr__(self, "distribution_concurrency", _validate_int_values("distribution_concurrency", self.distribution_concurrency))
-        object.__setattr__(self, "installed_mrt_endpoints", _validate_int_values("installed_mrt_endpoints", self.installed_mrt_endpoints))
+        object.__setattr__(self, "installed_mrt_endpoints", _validate_int_values("installed_mrt_endpoints", self.installed_mrt_endpoints, minimum=0))
         object.__setattr__(self, "transport_minutes", _validate_float_values("transport_minutes", self.transport_minutes, minimum=0.0))
 
 

@@ -31,21 +31,32 @@ class NativePathwayScenario:
     pathway: Pathway
     deployment_mode: DeploymentMode = "greenfield"
     scanners: int = 0
+    existing_scanners: int = 0
     injection_resources: int = 0
+    existing_injection_resources: int = 0
     uptake_resources: int = 0
+    existing_uptake_resources: int = 0
     distribution_concurrency: int = 1
     transport_minutes: float = 0.0
     installed_cyclotron_units: int = 1
+    existing_cyclotron_units: int = 0
     installed_radiopharmacy_units: int = 1
+    existing_radiopharmacy_units: int = 0
     radiopharmacy_unit_capex: float = 0.0
     conventional_infrastructure_allowance_units: int = 0
+    existing_conventional_infrastructure_allowance_units: int = 0
     conventional_infrastructure_allowance_unit_capex: float = 0.0
     installed_mrt_base_infrastructure_units: int = 0
+    existing_mrt_base_infrastructure_units: int = 0
     installed_mrt_endpoints: int = 0
+    existing_mrt_endpoints: int = 0
     installed_guideway_length_m: float = 0.0
+    existing_guideway_length_m: float = 0.0
     guideway_capex_per_m: float = 0.0
     installed_vertical_transitions: int = 0
+    existing_vertical_transitions: int = 0
     installed_building_connections: int = 0
+    existing_building_connections: int = 0
     installed_mrt_carriers: int | None = None
     operated_cyclotron_units: int = 1
     operated_radiopharmacy_units: int = 1
@@ -93,20 +104,64 @@ class NativePathwayScenario:
             raise ValueError("distribution_concurrency must be at least 1")
         if self.transport_minutes < 0.0:
             raise ValueError("transport_minutes must be non-negative")
+        if self.existing_scanners < 0:
+            raise ValueError("existing_scanners must be non-negative")
+        if self.existing_scanners > self.scanners:
+            raise ValueError("existing_scanners cannot exceed scanners")
+        if self.existing_injection_resources < 0:
+            raise ValueError("existing_injection_resources must be non-negative")
+        if self.existing_injection_resources > self.injection_resources:
+            raise ValueError("existing_injection_resources cannot exceed injection_resources")
+        if self.existing_uptake_resources < 0:
+            raise ValueError("existing_uptake_resources must be non-negative")
+        if self.existing_uptake_resources > self.uptake_resources:
+            raise ValueError("existing_uptake_resources cannot exceed uptake_resources")
         if self.installed_cyclotron_units < 0:
             raise ValueError("installed_cyclotron_units must be non-negative")
+        if self.existing_cyclotron_units < 0:
+            raise ValueError("existing_cyclotron_units must be non-negative")
+        if self.existing_cyclotron_units > self.installed_cyclotron_units:
+            raise ValueError("existing_cyclotron_units cannot exceed installed_cyclotron_units")
         if self.installed_radiopharmacy_units < 0:
             raise ValueError("installed_radiopharmacy_units must be non-negative")
+        if self.existing_radiopharmacy_units < 0:
+            raise ValueError("existing_radiopharmacy_units must be non-negative")
+        if self.existing_radiopharmacy_units > self.installed_radiopharmacy_units:
+            raise ValueError("existing_radiopharmacy_units cannot exceed installed_radiopharmacy_units")
+        if self.existing_conventional_infrastructure_allowance_units < 0:
+            raise ValueError("existing_conventional_infrastructure_allowance_units must be non-negative")
+        if self.existing_conventional_infrastructure_allowance_units > self.conventional_infrastructure_allowance_units:
+            raise ValueError("existing_conventional_infrastructure_allowance_units cannot exceed conventional_infrastructure_allowance_units")
         if self.installed_mrt_base_infrastructure_units < 0:
             raise ValueError("installed_mrt_base_infrastructure_units must be non-negative")
+        if self.existing_mrt_base_infrastructure_units < 0:
+            raise ValueError("existing_mrt_base_infrastructure_units must be non-negative")
+        if self.existing_mrt_base_infrastructure_units > self.installed_mrt_base_infrastructure_units:
+            raise ValueError("existing_mrt_base_infrastructure_units cannot exceed installed_mrt_base_infrastructure_units")
         if self.installed_mrt_endpoints < 0:
             raise ValueError("installed_mrt_endpoints must be non-negative")
+        if self.existing_mrt_endpoints < 0:
+            raise ValueError("existing_mrt_endpoints must be non-negative")
+        if self.existing_mrt_endpoints > self.installed_mrt_endpoints:
+            raise ValueError("existing_mrt_endpoints cannot exceed installed_mrt_endpoints")
         if self.installed_guideway_length_m < 0.0:
             raise ValueError("installed_guideway_length_m must be non-negative")
+        if self.existing_guideway_length_m < 0.0:
+            raise ValueError("existing_guideway_length_m must be non-negative")
+        if self.existing_guideway_length_m > self.installed_guideway_length_m:
+            raise ValueError("existing_guideway_length_m cannot exceed installed_guideway_length_m")
         if self.installed_vertical_transitions < 0:
             raise ValueError("installed_vertical_transitions must be non-negative")
+        if self.existing_vertical_transitions < 0:
+            raise ValueError("existing_vertical_transitions must be non-negative")
+        if self.existing_vertical_transitions > self.installed_vertical_transitions:
+            raise ValueError("existing_vertical_transitions cannot exceed installed_vertical_transitions")
         if self.installed_building_connections < 0:
             raise ValueError("installed_building_connections must be non-negative")
+        if self.existing_building_connections < 0:
+            raise ValueError("existing_building_connections must be non-negative")
+        if self.existing_building_connections > self.installed_building_connections:
+            raise ValueError("existing_building_connections cannot exceed installed_building_connections")
         if self.installed_mrt_carriers is not None and self.installed_mrt_carriers < 0:
             raise ValueError("installed_mrt_carriers must be non-negative")
         if self.operated_cyclotron_units < 0:
@@ -421,23 +476,36 @@ def _build_capex_inputs(
     pathway_config: NativePathwayScenario,
 ) -> InfrastructureCapexInputs:
     fleet_size = _resolved_cyclotron_fleet(request).asset_count
+    if pathway_config.existing_cyclotron_units > fleet_size:
+        raise ValueError("existing_cyclotron_units cannot exceed selected fleet size")
     return InfrastructureCapexInputs(
         pathway=pathway_config.pathway,
         deployment_mode=pathway_config.deployment_mode,
         installed_scanners=pathway_config.scanners,
+        existing_scanners=pathway_config.existing_scanners,
         installed_injection_resources=pathway_config.injection_resources,
+        existing_injection_resources=pathway_config.existing_injection_resources,
         installed_uptake_resources=pathway_config.uptake_resources,
+        existing_uptake_resources=pathway_config.existing_uptake_resources,
         installed_cyclotron_units=fleet_size,
+        existing_cyclotron_units=pathway_config.existing_cyclotron_units,
         installed_radiopharmacy_units=pathway_config.installed_radiopharmacy_units,
+        existing_radiopharmacy_units=pathway_config.existing_radiopharmacy_units,
         radiopharmacy_unit_capex=pathway_config.radiopharmacy_unit_capex,
         conventional_infrastructure_allowance_units=pathway_config.conventional_infrastructure_allowance_units,
+        existing_conventional_infrastructure_allowance_units=pathway_config.existing_conventional_infrastructure_allowance_units,
         conventional_infrastructure_allowance_unit_capex=pathway_config.conventional_infrastructure_allowance_unit_capex,
         installed_mrt_base_infrastructure_units=pathway_config.installed_mrt_base_infrastructure_units,
+        existing_mrt_base_infrastructure_units=pathway_config.existing_mrt_base_infrastructure_units,
         installed_mrt_endpoints=pathway_config.installed_mrt_endpoints,
+        existing_mrt_endpoints=pathway_config.existing_mrt_endpoints,
         installed_guideway_length_m=pathway_config.installed_guideway_length_m,
+        existing_guideway_length_m=pathway_config.existing_guideway_length_m,
         guideway_capex_per_m=pathway_config.guideway_capex_per_m,
         installed_vertical_transitions=pathway_config.installed_vertical_transitions,
+        existing_vertical_transitions=pathway_config.existing_vertical_transitions,
         installed_building_connections=pathway_config.installed_building_connections,
+        existing_building_connections=pathway_config.existing_building_connections,
         assumptions=request.planner_assumptions,
         network_assumptions=request.shared_network_assumptions,
     )

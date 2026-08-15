@@ -559,8 +559,10 @@ def test_invalid_reliability_requirements_are_rejected(minimum_reliability, targ
 def test_invalid_candidate_bounds_are_rejected():
     with pytest.raises(ValueError, match="must not be empty"):
         ConventionalArchitectureBounds(scanners=(), injection_resources=(2,), uptake_resources=(7,), distribution_concurrency=(1,), transport_minutes=(7.0,))
-    with pytest.raises(ValueError, match="values must be at least 1"):
-        MrtArchitectureBounds(scanners=(5,), injection_resources=(3,), uptake_resources=(10,), distribution_concurrency=(2,), installed_mrt_endpoints=(0,), transport_minutes=(5.0,))
+    with pytest.raises(ValueError, match="must not be empty"):
+        MrtArchitectureBounds(scanners=(5,), injection_resources=(3,), uptake_resources=(10,), distribution_concurrency=(2,), installed_mrt_endpoints=(), transport_minutes=(5.0,))
+    with pytest.raises(ValueError, match="values must be at least 0"):
+        MrtArchitectureBounds(scanners=(5,), injection_resources=(3,), uptake_resources=(10,), distribution_concurrency=(2,), installed_mrt_endpoints=(-1,), transport_minutes=(5.0,))
 
 
 def test_candidate_count_guard_works(monkeypatch):
