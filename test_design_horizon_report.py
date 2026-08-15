@@ -20,6 +20,19 @@ def _horizon_result():
     return run_native_design_horizon_planning(request)
 
 
+def _torture_result():
+    request = DesignHorizonPlanningRequest(
+        pipeline_template=replace(baseline_request(seed=20260813), target_patients_per_day=220),
+        seeds=(20260813,),
+        analysis_years=10,
+        demand_mode="milestone",
+        milestone_daily_demand_by_year={1: 180.0, 2: 190.0, 3: 205.0, 4: 215.0, 5: 235.0, 6: 245.0, 7: 270.0, 8: 285.0, 9: 295.0, 10: 310.0},
+        throughput_thresholds_per_day=(120.0, 220.0),
+        worst_run_count=2,
+    )
+    return run_native_design_horizon_planning(request)
+
+
 def test_demand_trajectory_and_pathway_rows_reconcile_exactly_to_native_horizon():
     result = _horizon_result()
     report = build_native_design_horizon_report_data(result)
@@ -66,17 +79,57 @@ def test_combo_actions_stay_coherent_and_build_ahead_semantics_preserved():
     mrt_strategy = report.strategy_comparison_by_pathway["MRT"]
 
     assert conventional_strategy.build_ahead_feasible is False
-    assert mrt_strategy.build_ahead_feasible is True
+    assert mrt_strategy.build_ahead_feasible is result.strategy_comparison_by_pathway["MRT"].build_ahead_feasible
+    assert conventional_strategy.phased_feasible is result.strategy_comparison_by_pathway["Conventional"].phased_feasible
+    assert mrt_strategy.phased_feasible is result.strategy_comparison_by_pathway["MRT"].phased_feasible
     assert report.build_ahead_conventional.expansion_intervention_count == 0
     assert report.build_ahead_mrt.expansion_intervention_count == 0
     assert report.build_ahead_conventional.expansion_intervention_years == ()
     assert report.build_ahead_mrt.expansion_intervention_years == ()
+    assert report.build_ahead_conventional.nominal_future_expansion_capex == pytest.approx(0.0)
+    assert report.build_ahead_mrt.nominal_future_expansion_capex == pytest.approx(0.0)
 
     assert report.build_ahead_conventional.final_modeled_capacity < report.build_ahead_conventional.horizon_peak_demand
-    assert report.build_ahead_mrt.final_modeled_capacity >= report.build_ahead_mrt.horizon_peak_demand
+    if mrt_strategy.build_ahead_feasible:
+        assert report.build_ahead_mrt.final_modeled_capacity >= report.build_ahead_mrt.horizon_peak_demand
+    else:
+        assert report.build_ahead_mrt.final_modeled_capacity < report.build_ahead_mrt.horizon_peak_demand
 
     assert conventional_strategy.preferred_strategy == result.strategy_comparison_by_pathway["Conventional"].preferred_strategy
     assert mrt_strategy.preferred_strategy == result.strategy_comparison_by_pathway["MRT"].preferred_strategy
+
+
+def test_torture_trajectory_reports_infeasible_build_ahead_and_phased_statuses():
+    result = _torture_result()
+    report = build_native_design_horizon_report_data(result)
+
+    assert result.strategy_comparison_by_pathway["Conventional"].build_ahead_feasible is False
+    assert result.strategy_comparison_by_pathway["MRT"].build_ahead_feasible is False
+    assert result.strategy_comparison_by_pathway["Conventional"].phased_feasible is False
+    assert result.strategy_comparison_by_pathway["MRT"].phased_feasible is False
+    assert result.strategy_comparison_by_pathway["Conventional"].preferred_strategy == "no_feasible_strategy"
+    assert result.strategy_comparison_by_pathway["MRT"].preferred_strategy == "no_feasible_strategy"
+
+    assert report.build_ahead_conventional.expansion_intervention_count == 0
+    assert report.build_ahead_mrt.expansion_intervention_count == 0
+    assert report.build_ahead_conventional.nominal_future_expansion_capex == pytest.approx(0.0)
+    assert report.build_ahead_mrt.nominal_future_expansion_capex == pytest.approx(0.0)
+    assert report.build_ahead_conventional.feasible is False
+    assert report.build_ahead_mrt.feasible is False
+    assert report.phased_conventional.feasible is False
+    assert report.phased_mrt.feasible is False
+    assert report.build_ahead_conventional.lifecycle_npv != 0.0
+    assert report.build_ahead_mrt.lifecycle_npv != 0.0
+    assert report.phased_conventional.lifecycle_npv != 0.0
+    assert report.phased_mrt.lifecycle_npv != 0.0
+    assert report.build_ahead_conventional.payback_year is not None
+    assert report.build_ahead_mrt.payback_year is not None
+    assert report.phased_conventional.final_modeled_capacity == pytest.approx(196.0)
+    assert report.phased_mrt.final_modeled_capacity == pytest.approx(294.0)
+    assert report.phased_conventional.final_headroom == pytest.approx(-114.0)
+    assert report.phased_mrt.final_headroom == pytest.approx(-16.0)
+    assert report.strategy_comparison_by_pathway["Conventional"].preferred_strategy == "no_feasible_strategy"
+    assert report.strategy_comparison_by_pathway["MRT"].preferred_strategy == "no_feasible_strategy"
 
 
 def test_strategy_financials_carriers_chart_reconciliation_determinism_and_no_replanning(monkeypatch):

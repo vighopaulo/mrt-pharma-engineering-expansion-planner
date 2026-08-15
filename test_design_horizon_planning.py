@@ -244,8 +244,8 @@ def test_phased_capex_discounting_and_strategy_comparison(monkeypatch):
 
     assert "Conventional" in result.strategy_comparison_by_pathway
     assert "MRT" in result.strategy_comparison_by_pathway
-    assert result.strategy_comparison_by_pathway["Conventional"].preferred_strategy in {"phased", "build_ahead", "tie"}
-    assert result.strategy_comparison_by_pathway["MRT"].preferred_strategy in {"phased", "build_ahead", "tie"}
+    assert result.strategy_comparison_by_pathway["Conventional"].preferred_strategy in {"phased", "build_ahead", "tie", "no_feasible_strategy"}
+    assert result.strategy_comparison_by_pathway["MRT"].preferred_strategy in {"phased", "build_ahead", "tie", "no_feasible_strategy"}
 
 
 def test_build_ahead_marks_infeasible_when_bounded_sizing_cannot_reach_peak(monkeypatch):
@@ -272,10 +272,14 @@ def test_build_ahead_marks_infeasible_when_bounded_sizing_cannot_reach_peak(monk
 
     assert conventional_strategy.build_ahead_feasible is False
     assert mrt_strategy.build_ahead_feasible is False
+    assert conventional_strategy.phased_feasible is False
+    assert mrt_strategy.phased_feasible is False
     assert conventional_strategy.build_ahead_infeasibility_reason is not None
     assert mrt_strategy.build_ahead_infeasibility_reason is not None
-    assert conventional_strategy.preferred_strategy == "phased"
-    assert mrt_strategy.preferred_strategy == "phased"
+    assert conventional_strategy.phased_infeasibility_reason is not None
+    assert mrt_strategy.phased_infeasibility_reason is not None
+    assert conventional_strategy.preferred_strategy == "no_feasible_strategy"
+    assert mrt_strategy.preferred_strategy == "no_feasible_strategy"
 
 
 def test_phased_uses_single_combo_decision_when_no_single_resource_qualifies(monkeypatch):
@@ -303,3 +307,52 @@ def test_phased_uses_single_combo_decision_when_no_single_resource_qualifies(mon
     assert "scanner=1" in year_one_conventional_actions[0].resource
     assert "injection=1" in year_one_conventional_actions[0].resource
     assert "multi-resource combination" in year_one_conventional_actions[0].reason
+
+
+def test_phased_and_build_ahead_track_feasibility_independently(monkeypatch):
+    monkeypatch.setattr(horizon_module, "run_native_reliability_engine", _fake_reliability_engine)
+    monkeypatch.setattr(horizon_module, "run_native_decision_pipeline", _fake_decision_pipeline)
+
+    request = DesignHorizonPlanningRequest(
+        pipeline_template=_pipeline_template(),
+        seeds=(1, 2),
+        demand_mode="explicit",
+        explicit_daily_demand_by_year=[100.0, 110.0, 120.0, 130.0, 140.0],
+        max_expansion_actions_per_year=1,
+        max_total_build_ahead_actions=3,
+    )
+
+    result = run_native_design_horizon_planning(request)
+
+    for pathway in ("Conventional", "MRT"):
+        summary = result.strategy_comparison_by_pathway[pathway]
+        assert summary.phased_feasible is True
+        assert summary.phased_infeasibility_reason is None
+        assert summary.build_ahead_feasible is True
+        assert summary.build_ahead_infeasibility_reason is None
+        assert summary.preferred_strategy in {"phased", "build_ahead", "tie"}
+
+
+def test_build_ahead_capacity_stays_fixed_after_year_zero(monkeypatch):
+    monkeypatch.setattr(horizon_module, "run_native_reliability_engine", _fake_reliability_engine)
+    monkeypatch.setattr(horizon_module, "run_native_decision_pipeline", _fake_decision_pipeline)
+
+    request = DesignHorizonPlanningRequest(
+        pipeline_template=_pipeline_template(),
+        seeds=(1, 2),
+        demand_mode="explicit",
+        explicit_daily_demand_by_year=[100.0, 120.0, 130.0, 135.0, 140.0],
+        max_expansion_actions_per_year=1,
+        max_total_build_ahead_actions=3,
+    )
+
+    result = run_native_design_horizon_planning(request)
+
+    for pathway, lifecycle in (
+        ("Conventional", result.build_ahead_strategy.conventional_lifecycle),
+        ("MRT", result.build_ahead_strategy.mrt_lifecycle),
+    ):
+        installed = [row.installed_capacity_per_day for row in lifecycle.annual_rows]
+        assert installed
+        assert all(value == installed[0] for value in installed[1:]), pathway
+        assert all(row.annual_capex == 0.0 for row in lifecycle.annual_rows[1:]), pathway

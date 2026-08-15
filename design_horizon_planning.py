@@ -27,6 +27,7 @@ from reliability_engine import NativeReliabilityComparisonResult, NativeReliabil
 
 DemandMode = Literal["constant", "compound", "explicit", "milestone"]
 PlanningStrategy = Literal["phased", "build_ahead"]
+StrategyPreference = PlanningStrategy | Literal["tie", "no_feasible_strategy"]
 
 
 @dataclass(frozen=True)
@@ -90,7 +91,9 @@ class PathwayStrategyComparison:
     phased_final_npv: float
     build_ahead_final_npv: float
     incremental_npv_build_ahead_minus_phased: float
-    preferred_strategy: PlanningStrategy | Literal["tie"]
+    preferred_strategy: StrategyPreference
+    phased_feasible: bool
+    phased_infeasibility_reason: str | None
     build_ahead_feasible: bool
     build_ahead_infeasibility_reason: str | None
 
@@ -558,6 +561,25 @@ def _summarize_pathway(pathway: Pathway, year_results: Sequence[DesignHorizonYea
     )
 
 
+def _phased_feasibility(
+    pathway: Pathway,
+    year_results: Sequence[DesignHorizonYearResult],
+) -> tuple[bool, str | None]:
+    pathway_rows = [row.conventional if pathway == "Conventional" else row.mrt for row in year_results]
+    for row, year_result in zip(pathway_rows, year_results):
+        if (
+            row.patients_served_per_day + 1e-9 < row.demand_per_day
+            or row.unmet_demand_per_day > 1e-9
+            or row.headroom_per_day < -1e-9
+        ):
+            return (
+                False,
+                f"Unable to meet Year {year_result.year} demand {row.demand_per_day:.2f} after bounded phased expansion; "
+                f"achieved reliable effective capacity {row.installed_capacity_per_day:.2f}.",
+            )
+    return (True, None)
+
+
 def _lifecycle_for_pathway(
     *,
     request: DesignHorizonPlanningRequest,
@@ -823,11 +845,16 @@ def run_native_design_horizon_planning(request: DesignHorizonPlanningRequest) ->
         phased_lifecycle = phased_conventional_lifecycle if pathway == "Conventional" else phased_mrt_lifecycle
         build_lifecycle = build_ahead_conventional_lifecycle if pathway == "Conventional" else build_ahead_mrt_lifecycle
         build_status = build_ahead_feasibility[pathway]
+        phased_feasible, phased_infeasibility_reason = _phased_feasibility(pathway, year_results)
         delta = build_lifecycle.final_npv - phased_lifecycle.final_npv
-        if not build_status.feasible:
-            preferred: PlanningStrategy | Literal["tie"] = "phased"
+        if build_status.feasible and not phased_feasible:
+            preferred: StrategyPreference = "build_ahead"
+        elif phased_feasible and not build_status.feasible:
+            preferred = "phased"
+        elif not build_status.feasible and not phased_feasible:
+            preferred = "no_feasible_strategy"
         elif delta > 0.0:
-            preferred: PlanningStrategy | Literal["tie"] = "build_ahead"
+            preferred = "build_ahead"
         elif delta < 0.0:
             preferred = "phased"
         else:
@@ -838,6 +865,8 @@ def run_native_design_horizon_planning(request: DesignHorizonPlanningRequest) ->
             build_ahead_final_npv=build_lifecycle.final_npv,
             incremental_npv_build_ahead_minus_phased=delta,
             preferred_strategy=preferred,
+            phased_feasible=phased_feasible,
+            phased_infeasibility_reason=phased_infeasibility_reason,
             build_ahead_feasible=build_status.feasible,
             build_ahead_infeasibility_reason=build_status.infeasibility_reason,
         )

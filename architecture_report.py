@@ -1015,6 +1015,7 @@ class NativeHorizonStrategyPathwaySummary:
 class NativeHorizonPathwayStrategyComparison:
     pathway: Pathway
     build_ahead_feasible: bool
+    phased_feasible: bool
     build_ahead_npv: float
     phased_npv: float
     npv_delta_build_ahead_minus_phased: float
@@ -1341,8 +1342,8 @@ def _strategy_summary(
         else result.phased_strategy.mrt_lifecycle
     )
     comparison = result.strategy_comparison_by_pathway[pathway]
-    feasible = True if strategy == "phased" else bool(comparison.build_ahead_feasible)
-    infeasibility_reason = None if strategy == "phased" else comparison.build_ahead_infeasibility_reason
+    feasible = bool(comparison.phased_feasible) if strategy == "phased" else bool(comparison.build_ahead_feasible)
+    infeasibility_reason = comparison.phased_infeasibility_reason if strategy == "phased" else comparison.build_ahead_infeasibility_reason
     if strategy == "build_ahead":
         # Native build-ahead encodes Year-0 sizing into the first modeled year CAPEX row.
         # Reporting normalizes this to Year-0 so future interventions remain zero.
@@ -1380,8 +1381,10 @@ def _strategy_summary(
 
 
 def _strategy_reason(summary: NativeHorizonPathwayStrategyComparison) -> str | None:
+    if summary.preferred_strategy == "no_feasible_strategy":
+        return "Neither native horizon strategy met the required capacity/reliability contract within bounded expansion limits."
     if not summary.build_ahead_feasible:
-        return "Build-ahead infeasible in native horizon engine; phased retained by rule."
+        return "Build-ahead infeasible in native horizon engine; phased retained only if it remained feasible."
     if summary.preferred_strategy == "build_ahead":
         return "Native horizon engine selected build_ahead based on pathway lifecycle comparison."
     if summary.preferred_strategy == "phased":
@@ -1628,6 +1631,7 @@ def build_native_design_horizon_report_data(result: DesignHorizonPlanningResult)
         strategy_row = NativeHorizonPathwayStrategyComparison(
             pathway=pathway,
             build_ahead_feasible=bool(native.build_ahead_feasible),
+            phased_feasible=bool(native.phased_feasible),
             build_ahead_npv=float(native.build_ahead_final_npv),
             phased_npv=float(native.phased_final_npv),
             npv_delta_build_ahead_minus_phased=float(native.incremental_npv_build_ahead_minus_phased),
