@@ -665,6 +665,34 @@ def _build_cost_comparisons(
             )
             continue
 
+        if target_item.amount is None:
+            comparisons.append(
+                ComparableProjectCostComparison(
+                    cost_field=comparable_item.cost_field,
+                    target=target_item,
+                    comparable=comparable_item,
+                    absolute_difference=None,
+                    percentage_difference=None,
+                    comparison_status="MISSING_TARGET",
+                    reason="target monetary amount missing",
+                )
+            )
+            continue
+
+        if comparable_item.amount is None:
+            comparisons.append(
+                ComparableProjectCostComparison(
+                    cost_field=comparable_item.cost_field,
+                    target=target_item,
+                    comparable=comparable_item,
+                    absolute_difference=None,
+                    percentage_difference=None,
+                    comparison_status="MISSING_COMPARABLE",
+                    reason="comparable monetary amount missing",
+                )
+            )
+            continue
+
         same_currency = (target_item.currency or "").upper() == (comparable_item.currency or "").upper() and target_item.currency is not None and comparable_item.currency is not None
         same_year = target_item.currency_year is not None and comparable_item.currency_year is not None and int(target_item.currency_year) == int(comparable_item.currency_year)
         same_scope = (target_item.cost_scope or "").strip().lower() == (comparable_item.cost_scope or "").strip().lower()

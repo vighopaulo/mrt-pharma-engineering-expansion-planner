@@ -279,9 +279,9 @@ def test_cost_comparability_blocks_cross_currency_year_and_scope():
 
     comparable_row = next(row for row in report.rows if row.project_id == "SYN-A")
     capex_comparison = next(item for item in comparable_row.cost_comparisons if item.cost_field == "reported_project_capex")
-    assert capex_comparison.comparison_status in {"COMPARABLE", "NOT_COMPARABLE"}
-    if capex_comparison.comparison_status == "COMPARABLE":
-        assert capex_comparison.percentage_difference is not None
+    assert capex_comparison.comparison_status == "COMPARABLE"
+    assert capex_comparison.absolute_difference is not None
+    assert capex_comparison.percentage_difference is not None
 
     year_shift = next(row for row in report.rows if row.project_id == "SYN-Y")
     year_cost = next(item for item in year_shift.cost_comparisons if item.cost_field == "reported_project_capex")
@@ -292,6 +292,8 @@ def test_cost_comparability_blocks_cross_currency_year_and_scope():
     eur_shift = next(row for row in report.rows if row.project_id == "SYN-EUR")
     eur_cost = next(item for item in eur_shift.cost_comparisons if item.cost_field == "reported_project_capex")
     assert eur_cost.comparison_status == "NOT_COMPARABLE"
+    assert eur_cost.absolute_difference is None
+    assert eur_cost.percentage_difference is None
 
     scope_project = replace(base_project, identity=replace(base_project.identity, project_id="SYN-SCOPE", facility_name="Synthetic Scope Shift"), economics=replace(base_project.economics, reported_project_capex=70_000_000.0, currency="USD", currency_year=2026, value_basis="actual"))
     scope_ranked = rank_comparable_projects(target=build_target_profile_from_native(native), projects=(scope_project,), options=ProjectRankingOptions(top_n=1))
@@ -319,6 +321,79 @@ def test_cost_comparability_blocks_cross_currency_year_and_scope():
     scope_shift = scope_report.rows[0]
     scope_cost = next(item for item in scope_shift.cost_comparisons if item.cost_field == "reported_project_capex")
     assert scope_cost.comparison_status == "NOT_COMPARABLE"
+    assert scope_cost.absolute_difference is None
+    assert scope_cost.percentage_difference is None
+
+    conflict_project = replace(base_project, identity=replace(base_project.identity, project_id="SYN-CONFLICT", facility_name="Synthetic Conflict"), conflicts=(EngineeringEvidenceConflict(
+        conflict_id="cnf-project-capex",
+        subject="Synthetic Conflict",
+        field="project_capex",
+        candidate_values=(60_000_000.0, 70_000_000.0),
+        source_claim_ids=("clm-conflict-1", "clm-conflict-2"),
+        source_tiers=("TIER_1", "TIER_3"),
+        dates=(date(2025, 1, 1), date(2026, 1, 1)),
+        units=("USD",),
+        conflict_status="conflict",
+        resolution_status="unresolved",
+    ),))
+    conflict_ranked = rank_comparable_projects(target=build_target_profile_from_native(native), projects=(conflict_project,), options=ProjectRankingOptions(top_n=1))
+    conflict_report = build_native_comparable_project_report_data(
+        native_result=native,
+        ranked_projects=conflict_ranked,
+        provider=type("Provider", (), {"list_projects": lambda self: (conflict_project,)})(),
+        repository=_seed_repository_for_projects((conflict_project,)),
+        target_cost_evidence=_target_cost_map(),
+        top_n=None,
+        options=ProjectRankingOptions(top_n=1),
+    )
+    conflict_cost = next(item for item in conflict_report.rows[0].cost_comparisons if item.cost_field == "reported_project_capex")
+    assert conflict_cost.comparison_status == "CONFLICTED"
+    assert conflict_cost.absolute_difference is None
+    assert conflict_cost.percentage_difference is None
+
+    missing_comparable_project = replace(base_project, identity=replace(base_project.identity, project_id="SYN-MISSING-COMP", facility_name="Synthetic Missing Comparable"), economics=replace(base_project.economics, reported_project_capex=None))
+    missing_comparable_ranked = rank_comparable_projects(target=build_target_profile_from_native(native), projects=(missing_comparable_project,), options=ProjectRankingOptions(top_n=1))
+    missing_comparable_report = build_native_comparable_project_report_data(
+        native_result=native,
+        ranked_projects=missing_comparable_ranked,
+        provider=type("Provider", (), {"list_projects": lambda self: (missing_comparable_project,)})(),
+        repository=_seed_repository_for_projects((missing_comparable_project,)),
+        target_cost_evidence=_target_cost_map(),
+        top_n=None,
+        options=ProjectRankingOptions(top_n=1),
+    )
+    missing_comparable_cost = next(item for item in missing_comparable_report.rows[0].cost_comparisons if item.cost_field == "reported_project_capex")
+    assert missing_comparable_cost.comparison_status == "MISSING_COMPARABLE"
+    assert missing_comparable_cost.absolute_difference is None
+    assert missing_comparable_cost.percentage_difference is None
+    assert not missing_comparable_report.chart_series.directly_comparable_project_cost
+
+    missing_target_report = build_native_comparable_project_report_data(
+        native_result=native,
+        ranked_projects=ranked,
+        provider=provider,
+        repository=repository,
+        target_cost_evidence={
+            "reported_project_capex": _cost_evidence(
+                amount=None,
+                currency="USD",
+                currency_year=2026,
+                cost_scope="total_project_cost",
+                cost_category="project_capex",
+                status="none",
+                source_id="target-src",
+                claim_id="target-clm",
+                document_id="target-doc",
+            )
+        },
+        top_n=None,
+        options=ProjectRankingOptions(top_n=6),
+    )
+    missing_target_cost = next(item for item in missing_target_report.rows[0].cost_comparisons if item.cost_field == "reported_project_capex")
+    assert missing_target_cost.comparison_status == "MISSING_TARGET"
+    assert missing_target_cost.absolute_difference is None
+    assert missing_target_cost.percentage_difference is None
+    assert not missing_target_report.chart_series.directly_comparable_project_cost
 
 
 def test_chart_series_reconcile_to_rows_and_exclude_non_comparable_cost_points():
@@ -328,7 +403,8 @@ def test_chart_series_reconcile_to_rows_and_exclude_non_comparable_cost_points()
     assert [point.project_id for point in report.chart_series.scanner_count_comparison] == [row.project_id for row in report.rows]
     assert [point.project_id for point in report.chart_series.cyclotron_count_comparison] == [row.project_id for row in report.rows]
     assert all(point.comparison_status == "COMPARABLE" for point in report.chart_series.similarity_ranking)
-    assert all(point.comparison_status != "NOT_COMPARABLE" for point in report.chart_series.directly_comparable_project_cost)
+    direct_cost_rows = {row.project_id: next(item for item in row.cost_comparisons if item.cost_field == "reported_project_capex").comparison_status for row in report.rows}
+    assert all(direct_cost_rows[point.project_id] == "COMPARABLE" for point in report.chart_series.directly_comparable_project_cost)
 
 
 def test_limitations_and_top_five_match_first_five_native_rankings():
