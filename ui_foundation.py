@@ -40,6 +40,7 @@ DraftStatus = Literal["SAVED", "DRAFT", "DIRTY_UNSAVED"]
 RunStatus = Literal["NO_RUN_YET", "SUCCESS", "FAILED_WITH_PREVIOUS_SUCCESS", "FAILED_NO_SUCCESS"]
 ProjectMode = Literal["UNSPECIFIED", "GREENFIELD", "EXISTING_FACILITY_RETROFIT"]
 ProjectSupplyArchitecture = Literal["UNSPECIFIED", "ON_SITE_PRODUCTION", "EXTERNAL_SUPPLY_HUB_SPOKE"]
+InventoryStatus = Literal["NONE", "KNOWN", "UNKNOWN"]
 
 
 PAGE_LABELS: dict[RouteId, str] = {
@@ -78,6 +79,35 @@ FIELD_STATE_NON_EQUIVALENCE_RULES: tuple[str, ...] = (
     "DEFAULT_MODEL_VALUE != USER_OVERRIDE",
     "CONFLICTED != ACCEPTED",
 )
+
+RESOURCE_FIELD_LABELS: tuple[tuple[str, str], ...] = (
+    ("cyclotron_units", "Cyclotron units"),
+    ("radiopharmacy_units", "Radiopharmacy units"),
+    ("scanner_resources", "PET/SPECT scanner resources"),
+    ("injection_resources", "Injection resources"),
+    ("uptake_resources", "Uptake resources"),
+    ("distribution_concurrency", "Distribution concurrency/resources"),
+    ("mrt_endpoints", "MRT endpoints already installed"),
+    ("mrt_carriers", "MRT carriers already installed"),
+)
+
+PROJECT_MODE_LABELS: Mapping[ProjectMode, str] = {
+    "UNSPECIFIED": "Unspecified",
+    "GREENFIELD": "Greenfield",
+    "EXISTING_FACILITY_RETROFIT": "Retrofit / Existing Facility Expansion",
+}
+
+SUPPLY_ARCHITECTURE_LABELS: Mapping[ProjectSupplyArchitecture, str] = {
+    "UNSPECIFIED": "Unspecified",
+    "ON_SITE_PRODUCTION": "On-site Production",
+    "EXTERNAL_SUPPLY_HUB_SPOKE": "External Supply / Hub-and-Spoke",
+}
+
+INVENTORY_STATUS_LABELS: Mapping[InventoryStatus, str] = {
+    "NONE": "None",
+    "KNOWN": "Known",
+    "UNKNOWN": "Unknown",
+}
 
 
 @dataclass(frozen=True)
@@ -275,6 +305,15 @@ class AppActionResult:
 T = TypeVar("T")
 
 
+def _is_streamlit_control_flow_exception(exc: Exception) -> bool:
+    """Identify Streamlit rerun/stop exceptions across Streamlit versions."""
+    class_name = type(exc).__name__
+    module_name = type(exc).__module__
+    return class_name in {"RerunException", "StopException", "ScriptControlException"} and (
+        "streamlit.runtime.scriptrunner" in module_name
+    )
+
+
 def run_safe_action(
     action: Callable[[], T],
     *,
@@ -284,8 +323,73 @@ def run_safe_action(
         value = action()
         return AppActionResult(ok=True, user_message="OK"), value
     except Exception as exc:  # noqa: BLE001
+        if _is_streamlit_control_flow_exception(exc):
+            raise
         details = "".join(traceback.format_exception(type(exc), exc, exc.__traceback__))
         return AppActionResult(ok=False, user_message=user_message_on_error, technical_details=details), None
+
+
+def validate_mode_supply_selection(
+    mode: ProjectMode,
+    supply_architecture: ProjectSupplyArchitecture,
+) -> tuple[str, ...]:
+    issues: list[str] = []
+    if mode == "UNSPECIFIED":
+        issues.append("Project mode is required.")
+    if supply_architecture == "UNSPECIFIED":
+        issues.append("Supply architecture is required.")
+    return tuple(issues)
+
+
+def is_mode_supply_selection_complete(
+    mode: ProjectMode,
+    supply_architecture: ProjectSupplyArchitecture,
+) -> bool:
+    return mode != "UNSPECIFIED" and supply_architecture != "UNSPECIFIED"
+
+
+def parse_non_negative_integer(value: str) -> tuple[int | None, str | None]:
+    text = value.strip()
+    if text == "":
+        return None, "Quantity is required when status is KNOWN."
+    try:
+        parsed = int(text)
+    except ValueError:
+        return None, "Quantity must be a whole number."
+    if parsed < 0:
+        return None, "Quantity cannot be negative."
+    return parsed, None
+
+
+def validate_resource_inventory(
+    *,
+    status: InventoryStatus,
+    quantity_text: str,
+) -> tuple[int | None, str | None]:
+    if status == "UNKNOWN":
+        return None, None
+    if status == "NONE":
+        return 0, None
+    return parse_non_negative_integer(quantity_text)
+
+
+def cyclotron_inventory_semantics(
+    *,
+    status: InventoryStatus,
+    quantity_text: str,
+) -> str:
+    if status == "UNKNOWN":
+        return "Current on-site cyclotron inventory has not been established."
+    if status == "NONE":
+        return "There are confirmed to be no on-site cyclotrons."
+    quantity, issue = parse_non_negative_integer(quantity_text)
+    if issue:
+        return issue
+    if quantity == 0:
+        return "There are confirmed to be no on-site cyclotrons."
+    if quantity == 1:
+        return "One on-site cyclotron currently exists."
+    return f"{quantity} on-site cyclotrons currently exist."
 
 
 def default_readiness_snapshot() -> ReadinessSnapshot:

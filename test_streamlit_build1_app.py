@@ -61,7 +61,7 @@ def test_project_overview_renders_workflow_entry_cards() -> None:
     assert [node.value for node in at.title] == ["Project Overview"]
     labels = [getattr(button, "label", None) for button in at.button]
     for expected in [
-        "Project Definition",
+        "Project Definition / Project Mode",
         "Facility & Existing Resources",
         "Demand / Clinical Workflow / Radionuclides",
         "Production / Supply",
@@ -104,6 +104,19 @@ def test_shell_navigation_controls_render_on_primary_routes() -> None:
         shell_text = "\n".join(node.value for node in at.markdown[:6])
         assert "Page: Home / Landing" not in shell_text
         assert "Project: No project open" not in shell_text
+
+
+def test_shared_shell_uses_mrt_pharma_branding() -> None:
+    at = _app()
+    at.run()
+
+    shell_text = "\n".join(node.value for node in at.markdown[:6])
+    assert "<span class='brand-word-mrt'>MRT</span><span class='brand-word-pharma'>Pharma</span>" in shell_text
+    assert "Digital Twin" in shell_text
+    assert ".brand-word-mrt" in shell_text
+    assert ".brand-word-pharma" in shell_text
+    assert "MRTWay" not in shell_text
+    assert "Engineering Expansion Planner" not in shell_text
 
 
 def test_project_overview_preserves_internal_project_context_without_global_header() -> None:
