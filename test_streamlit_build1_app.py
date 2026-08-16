@@ -63,9 +63,9 @@ def test_project_overview_renders_workflow_entry_cards() -> None:
     for expected in [
         "Project Definition / Project Mode",
         "Facility & Existing Resources",
-        "Demand / Clinical Workflow / Radionuclides",
-        "Production / Supply",
-        "Geometry / Transport",
+        "Demand & Clinical Workflow",
+        "Production / Cyclotron / External Supply",
+        "Geometry / Floor Plan / Transport",
         "MRT Infrastructure",
         "Economics",
         "Review & Run",

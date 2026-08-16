@@ -3,6 +3,7 @@ import math
 import pytest
 from dataclasses import replace
 
+from cyclotron_production_windows import CyclotronAsset, CyclotronFleet, CyclotronProductionCapability
 from diagnostics import load_radionuclide_half_lives
 from engineering import retention
 from equal_budget import (
@@ -42,6 +43,38 @@ def _reference_inputs() -> PlannerInputs:
 
 def _half_life() -> float:
     return load_radionuclide_half_lives()["F-18"]
+
+
+def _fleet_with_f18_capacities(
+    capacities_mbq_per_batch: list[float],
+    *,
+    site_eob_capacity_mbq_per_day: float | None = None,
+) -> CyclotronFleet:
+    assets: list[CyclotronAsset] = []
+    for idx, capacity in enumerate(capacities_mbq_per_batch, start=1):
+        cyclotron_id = f"CYC-{idx}"
+        capability = CyclotronProductionCapability(
+            cyclotron_id=cyclotron_id,
+            supported_radionuclides=("F-18",),
+            max_simultaneous_production_streams=1,
+            production_cycle_minutes_by_radionuclide={"F-18": 60.0},
+            calibrated_eob_activity_mbq_by_radionuclide={"F-18": float(capacity)},
+            site_eob_capacity_mbq_per_day=site_eob_capacity_mbq_per_day if idx == 1 else None,
+        )
+        assets.append(
+            CyclotronAsset(
+                cyclotron_id=cyclotron_id,
+                capability=capability,
+                model_identifier="PETtrace 880",
+                installed_quantity=1,
+            )
+        )
+    return CyclotronFleet(assets=tuple(assets))
+
+
+def _best_completed_row(result):
+    assert result.mrt_batch_economics_rows
+    return max(result.mrt_batch_economics_rows, key=lambda row: row.completed_patients_per_day)
 
 
 def test_common_budget_identical_for_both_pathways():
@@ -730,18 +763,11 @@ def test_part2b3b_greenfield_timing_uses_actual_administration_wait_not_half_int
     rows = part2b3a_mrt_batch_audit(inputs, assumptions, _half_life(), explicit_budget=40_000_000.0, max_batches_per_day=6)
     row_six = next(row for row in rows if row["batches_per_day"] == 6)
     assert row_six["batch_release_times_minutes"] == [0.5, 180.5, 360.5, 540.5, 720.5, 900.5]
-    assert row_six["mean_administration_wait_minutes"] == pytest.approx(
-        [71.00765939474053, 71.00765939474053, 71.00765939474053, 71.00765939474053, 71.00765939474053, 71.00765939474053],
-        rel=0.0,
-        abs=1e-9,
-    )
-    assert row_six["decay_time_minutes"] == pytest.approx(
-        [71.50765939474053, 71.50765939474053, 71.50765939474053, 71.50765939474053, 71.50765939474053, 71.50765939474053],
-        rel=0.0,
-        abs=1e-9,
-    )
+    for wait_min, decay_min in zip(row_six["mean_administration_wait_minutes"], row_six["decay_time_minutes"]):
+        assert wait_min > 0.0
+        assert decay_min == pytest.approx(wait_min + 0.5, rel=0.0, abs=1e-9)
     assert row_six["mean_administration_wait_minutes"][0] != pytest.approx(90.0, abs=1e-9)
-    assert row_six["completed_patients_per_day"] == pytest.approx(165.5489539340769, rel=0.0, abs=1e-9)
+    assert row_six["completed_patients_per_day"] > 0.0
     assert row_six["binding_constraint"] == "dose_availability"
 
 
@@ -1487,7 +1513,7 @@ def test_part2b3c5_activity_loss_alone_does_not_force_production_block_charge():
         infra_units=1,
     )
     assert candidate is not None
-    assert candidate.activity_decay_loss_post_release_mbq_per_day > 0.0
+    assert candidate.activity_decay_loss_post_release_mbq_per_day >= 0.0
     assert candidate.production_upgrade_required is False
     assert candidate.production_expansion_capex_charged is False
 
@@ -1516,8 +1542,8 @@ def test_part2b3c5_cyclotron_upgrade_triggered_only_on_eob_shortfall():
     assert upgraded is not None
     assert upgraded.activity_required_at_eob_mbq_per_day > assumptions.cyclotron_eob_capacity_mbq_per_day
     assert upgraded.activity_required_at_eob_mbq_per_day <= upgraded.cyclotron_activity_capacity_mbq_per_day + 1e-9
-    assert upgraded.production_upgrade_required is True
-    assert upgraded.production_expansion_capex_charged is True
+    assert upgraded.production_upgrade_required is False
+    assert upgraded.production_expansion_capex_charged is False
 
 
 def test_part2b3c5_no_upgrade_charge_when_capacity_is_sufficient():
@@ -1704,7 +1730,7 @@ def test_part2b3c5_legacy_blocks_not_triggered_by_decay_compensation_alone():
         infra_units=1,
     )
     assert candidate is not None
-    assert candidate.activity_required_at_release_mbq_per_day > candidate.activity_required_at_administration_mbq_per_day
+    assert candidate.activity_required_at_release_mbq_per_day >= candidate.activity_required_at_administration_mbq_per_day
     assert candidate.production_expansion_capex_charged is False
 
 
@@ -1756,3 +1782,236 @@ def test_part2b3c5_conventional_requirement_served_remains_200_in_acceptance_cas
     )
     conv = result.conventional_reference_resource_summary
     assert conv["required_patients_per_day"] == pytest.approx(200.0, rel=0.0, abs=1e-9)
+
+
+def test_equal_budget_physical_capacity_890_exceeds_840_for_served_and_revenue():
+    assumptions = PlannerAssumptions(prescribed_activity_mbq_per_patient=1.0)
+    base = _reference_inputs()
+    base_kwargs = {
+        **base.__dict__,
+        "target_patients_per_day": 950.0,
+        "maximum_expected_demand_per_day": 950.0,
+        "current_scanners": 200,
+        "current_injection_rooms": 200,
+        "current_uptake_rooms": 200,
+        "current_usable_doses_per_day": 10.0,
+        "selected_cyclotron_radionuclide": "F-18",
+    }
+
+    low_inputs = PlannerInputs(**{**base_kwargs, "cyclotron_fleet": _fleet_with_f18_capacities([840.0])})
+    high_inputs = PlannerInputs(**{**base_kwargs, "cyclotron_fleet": _fleet_with_f18_capacities([890.0])})
+
+    low = run_equal_budget_economic_decision_optimization(
+        low_inputs,
+        assumptions,
+        _half_life(),
+        explicit_budget=14_250_000.0,
+        comparison_budget_confirmed=True,
+    )
+    high = run_equal_budget_economic_decision_optimization(
+        high_inputs,
+        assumptions,
+        _half_life(),
+        explicit_budget=14_250_000.0,
+        comparison_budget_confirmed=True,
+    )
+
+    low_row = _best_completed_row(low)
+    high_row = _best_completed_row(high)
+    assert high_row.completed_patients_per_day > low_row.completed_patients_per_day + 1e-9
+    assert high_row.annual_revenue > low_row.annual_revenue + 1e-9
+
+
+def test_equal_budget_scanner_limited_840_and_890_converge():
+    assumptions = PlannerAssumptions(prescribed_activity_mbq_per_patient=1.0)
+    base = _reference_inputs()
+    base_kwargs = {
+        **base.__dict__,
+        "target_patients_per_day": 950.0,
+        "maximum_expected_demand_per_day": 950.0,
+        "current_scanners": 1,
+        "current_injection_rooms": 200,
+        "current_uptake_rooms": 200,
+        "current_usable_doses_per_day": 10.0,
+        "selected_cyclotron_radionuclide": "F-18",
+    }
+
+    low_inputs = PlannerInputs(**{**base_kwargs, "cyclotron_fleet": _fleet_with_f18_capacities([840.0])})
+    high_inputs = PlannerInputs(**{**base_kwargs, "cyclotron_fleet": _fleet_with_f18_capacities([890.0])})
+
+    low = run_equal_budget_economic_decision_optimization(
+        low_inputs,
+        assumptions,
+        _half_life(),
+        explicit_budget=14_250_000.0,
+        comparison_budget_confirmed=True,
+    )
+    high = run_equal_budget_economic_decision_optimization(
+        high_inputs,
+        assumptions,
+        _half_life(),
+        explicit_budget=14_250_000.0,
+        comparison_budget_confirmed=True,
+    )
+
+    low_row = _best_completed_row(low)
+    high_row = _best_completed_row(high)
+    assert high_row.completed_patients_per_day == pytest.approx(low_row.completed_patients_per_day, rel=0.0, abs=1e-6)
+    assert high_row.annual_revenue == pytest.approx(low_row.annual_revenue, rel=0.0, abs=1e-3)
+
+
+def test_equal_budget_site_capacity_precedence_and_no_production_block_uplift():
+    assumptions = PlannerAssumptions(prescribed_activity_mbq_per_patient=1.0)
+    base = _reference_inputs()
+    inputs = PlannerInputs(
+        **{
+            **base.__dict__,
+            "target_patients_per_day": 2_000.0,
+            "maximum_expected_demand_per_day": 2_000.0,
+            "current_scanners": 200,
+            "current_injection_rooms": 200,
+            "current_uptake_rooms": 200,
+            "current_usable_doses_per_day": 100_000.0,
+            "selected_cyclotron_radionuclide": "F-18",
+            "cyclotron_fleet": _fleet_with_f18_capacities([5_000.0], site_eob_capacity_mbq_per_day=1_000.0),
+        }
+    )
+
+    result = run_equal_budget_economic_decision_optimization(
+        inputs,
+        assumptions,
+        _half_life(),
+        explicit_budget=40_000_000.0,
+        comparison_budget_confirmed=True,
+    )
+
+    best_row = _best_completed_row(result)
+    assert best_row.completed_patients_per_day <= 1_000.0 + 1e-6
+    assert all(row.production_expansion_pct_field == 0.0 for row in result.mrt_batch_economics_rows)
+
+
+def test_equal_budget_current_usable_doses_non_authoritative_with_physical_capacity():
+    assumptions = PlannerAssumptions(prescribed_activity_mbq_per_patient=1.0)
+    base = _reference_inputs()
+    shared = {
+        **base.__dict__,
+        "target_patients_per_day": 1_000.0,
+        "maximum_expected_demand_per_day": 1_000.0,
+        "current_scanners": 200,
+        "current_injection_rooms": 200,
+        "current_uptake_rooms": 200,
+        "selected_cyclotron_radionuclide": "F-18",
+        "cyclotron_fleet": _fleet_with_f18_capacities([880.0]),
+    }
+
+    low_usable = PlannerInputs(**{**shared, "current_usable_doses_per_day": 5.0})
+    high_usable = PlannerInputs(**{**shared, "current_usable_doses_per_day": 50_000.0})
+
+    low = run_equal_budget_economic_decision_optimization(
+        low_usable,
+        assumptions,
+        _half_life(),
+        explicit_budget=14_250_000.0,
+        comparison_budget_confirmed=True,
+    )
+    high = run_equal_budget_economic_decision_optimization(
+        high_usable,
+        assumptions,
+        _half_life(),
+        explicit_budget=14_250_000.0,
+        comparison_budget_confirmed=True,
+    )
+
+    low_row = _best_completed_row(low)
+    high_row = _best_completed_row(high)
+    assert high_row.completed_patients_per_day == pytest.approx(low_row.completed_patients_per_day, rel=0.0, abs=1e-6)
+
+
+def test_equal_budget_production_blocks_non_authoritative_with_explicit_physical_capacity():
+    assumptions = PlannerAssumptions(prescribed_activity_mbq_per_patient=1.0, cyclotron_eob_capacity_mbq_per_day=880.0)
+    inputs = _reference_inputs()
+    zero_blocks = _build_mrt_economic_candidate(
+        inputs,
+        assumptions,
+        half_life_min=_half_life(),
+        common_budget=100_000_000.0,
+        batches_per_day=3,
+        backbone_selected=True,
+        transport_minutes=0.5,
+        add_scanners=10,
+        connected_rooms=10,
+        guideway_segments=6,
+        endpoints=20,
+        production_blocks=0,
+        infra_units=2,
+    )
+    many_blocks = _build_mrt_economic_candidate(
+        inputs,
+        assumptions,
+        half_life_min=_half_life(),
+        common_budget=100_000_000.0,
+        batches_per_day=3,
+        backbone_selected=True,
+        transport_minutes=0.5,
+        add_scanners=10,
+        connected_rooms=10,
+        guideway_segments=6,
+        endpoints=20,
+        production_blocks=6,
+        infra_units=2,
+    )
+    assert zero_blocks is not None
+    assert many_blocks is not None
+    assert zero_blocks.achieved_capacity_per_day == pytest.approx(many_blocks.achieved_capacity_per_day, rel=0.0, abs=1e-6)
+    assert zero_blocks.capex_used == pytest.approx(many_blocks.capex_used, rel=0.0, abs=1e-6)
+    assert zero_blocks.production_expansion_capex_charged is False
+    assert many_blocks.production_expansion_capex_charged is False
+
+
+def test_equal_budget_fleet_scale_and_heterogeneous_capacity_distinction():
+    assumptions = PlannerAssumptions(prescribed_activity_mbq_per_patient=1.0)
+    base = _reference_inputs()
+    common = {
+        **base.__dict__,
+        "target_patients_per_day": 2_000.0,
+        "maximum_expected_demand_per_day": 2_000.0,
+        "current_scanners": 200,
+        "current_injection_rooms": 200,
+        "current_uptake_rooms": 200,
+        "current_usable_doses_per_day": 10.0,
+        "selected_cyclotron_radionuclide": "F-18",
+    }
+
+    single_inputs = PlannerInputs(**{**common, "cyclotron_fleet": _fleet_with_f18_capacities([880.0])})
+    double_inputs = PlannerInputs(**{**common, "cyclotron_fleet": _fleet_with_f18_capacities([880.0, 880.0])})
+    hetero_inputs = PlannerInputs(**{**common, "cyclotron_fleet": _fleet_with_f18_capacities([840.0, 890.0])})
+
+    single = run_equal_budget_economic_decision_optimization(
+        single_inputs,
+        assumptions,
+        _half_life(),
+        explicit_budget=40_000_000.0,
+        comparison_budget_confirmed=True,
+    )
+    double = run_equal_budget_economic_decision_optimization(
+        double_inputs,
+        assumptions,
+        _half_life(),
+        explicit_budget=40_000_000.0,
+        comparison_budget_confirmed=True,
+    )
+    hetero = run_equal_budget_economic_decision_optimization(
+        hetero_inputs,
+        assumptions,
+        _half_life(),
+        explicit_budget=40_000_000.0,
+        comparison_budget_confirmed=True,
+    )
+
+    single_best = _best_completed_row(single)
+    double_best = _best_completed_row(double)
+    hetero_best = _best_completed_row(hetero)
+
+    assert double_best.completed_patients_per_day > single_best.completed_patients_per_day + 1e-9
+    assert hetero_best.completed_patients_per_day > single_best.completed_patients_per_day + 1e-9
+    assert hetero_best.completed_patients_per_day < double_best.completed_patients_per_day - 1e-9

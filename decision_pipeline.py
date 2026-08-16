@@ -279,6 +279,9 @@ class NativeOperationalResult:
     schedule_completed_patients: int
     decay_feasible_scheduled_patients: int
     decay_feasible_completed_patients: int
+    production_activity_feasible_scheduled_patients: int
+    production_activity_feasible_completed_patients: int
+    production_activity_infeasible_patients: int
     decay_infeasible_patients: int
     effective_completion_percentage: float
     patients_considered: int
@@ -294,6 +297,7 @@ class NativeOperationalResult:
     bottleneck: NativeBottleneckSummary
     mrt_carrier_fleet: MrtCarrierFleetResult | None
     decay_summary: PathwayDecaySummary
+    activity_capacity_warnings: tuple[str, ...]
     trace_id: str
 
 
@@ -678,8 +682,21 @@ def _build_operational_result(
     schedule_completed_patients = clinical_result.completed_patients
     decay_feasible_scheduled_patients = decay_summary.decay_feasible_patient_count
     decay_feasible_completed_patients = decay_summary.feasible_completed_patients
+    (
+        production_feasible_patient_ids,
+        production_activity_feasible_scheduled_patients,
+        production_activity_feasible_completed_patients,
+        activity_capacity_warnings,
+    ) = _apply_production_activity_capacity_guard(
+        request=request,
+        pathway=pathway_config.pathway,
+        production_result=production_result,
+        decay_summary=decay_summary,
+    )
+    effective_completed_patients = production_activity_feasible_completed_patients
+    production_activity_infeasible_patients = max(0, decay_feasible_scheduled_patients - production_activity_feasible_scheduled_patients)
     decay_infeasible_patients = decay_summary.decay_infeasible_patient_count
-    effective_completion_percentage = decay_summary.effective_completion_percentage
+    effective_completion_percentage = (100.0 * effective_completed_patients / scheduled_patients) if scheduled_patients > 0 else 0.0
     bottleneck = _bottleneck_summary(clinical_result)
     mrt_carrier_fleet = (
         resolve_mrt_carrier_fleet(
@@ -696,6 +713,7 @@ def _build_operational_result(
             "demand_trace_id": demand_result.trace_id,
             "pathway": pathway_config.pathway,
             "completed_patients": decay_feasible_completed_patients,
+            "production_activity_feasible_patient_ids": tuple(sorted(production_feasible_patient_ids)),
             "scheduled_patients": scheduled_patients,
             "schedule_completed_patients": schedule_completed_patients,
             "uncompleted_patients": clinical_result.uncompleted_patients,
@@ -736,11 +754,14 @@ def _build_operational_result(
         schedule_completed_patients=schedule_completed_patients,
         decay_feasible_scheduled_patients=decay_feasible_scheduled_patients,
         decay_feasible_completed_patients=decay_feasible_completed_patients,
+        production_activity_feasible_scheduled_patients=production_activity_feasible_scheduled_patients,
+        production_activity_feasible_completed_patients=production_activity_feasible_completed_patients,
+        production_activity_infeasible_patients=production_activity_infeasible_patients,
         decay_infeasible_patients=decay_infeasible_patients,
         effective_completion_percentage=effective_completion_percentage,
         patients_considered=scheduled_patients,
-        patients_completed=decay_feasible_completed_patients,
-        patients_incomplete=max(0, scheduled_patients - decay_feasible_completed_patients),
+        patients_completed=effective_completed_patients,
+        patients_incomplete=max(0, scheduled_patients - effective_completed_patients),
         completion_percentage=effective_completion_percentage,
         production_elapsed_minutes=production_result.production_schedule.total_elapsed_production_minutes,
         final_scan_completion_time_minutes=clinical_result.last_scan_completion_minute,
@@ -751,9 +772,104 @@ def _build_operational_result(
         bottleneck=bottleneck,
         mrt_carrier_fleet=mrt_carrier_fleet,
         decay_summary=decay_summary,
+        activity_capacity_warnings=activity_capacity_warnings,
         trace_id=operational_trace_id,
     )
     return production_result, operational
+
+
+def _asset_uses_catalog_strict_activity_basis(capability_provenance: str | None) -> bool:
+    if capability_provenance is None:
+        return False
+    marker = capability_provenance.strip()
+    if not marker:
+        return False
+    if marker.lower() == "test":
+        return False
+    return True
+
+
+def _apply_production_activity_capacity_guard(
+    *,
+    request: NativeDecisionPipelineScenario,
+    pathway: Pathway,
+    production_result: ProductionClinicalScheduleResult,
+    decay_summary: PathwayDecaySummary,
+) -> tuple[set[str], int, int, tuple[str, ...]]:
+    fleet = _resolved_cyclotron_fleet(request)
+    asset_by_id = {asset.cyclotron_id: asset for asset in fleet.assets}
+
+    decay_by_batch: dict[int, list[object]] = {}
+    for trace in decay_summary.patient_traces:
+        decay_by_batch.setdefault(trace.batch_id, []).append(trace)
+    for traces in decay_by_batch.values():
+        traces.sort(key=lambda item: (item.injection_start_minutes, item.patient_id))
+
+    remaining_daily_capacity_by_cyclotron: dict[str, float] = {}
+    for asset in fleet.assets:
+        if asset.capability.site_eob_capacity_mbq_per_day is not None:
+            remaining_daily_capacity_by_cyclotron[asset.cyclotron_id] = float(asset.capability.site_eob_capacity_mbq_per_day)
+
+    feasible_patient_ids: set[str] = set()
+    warnings: list[str] = []
+
+    ordered_mappings = sorted(
+        production_result.batch_release_mappings,
+        key=lambda item: (item.release_time_minutes, item.batch_id),
+    )
+    for mapping in ordered_mappings:
+        asset = asset_by_id[mapping.assigned_cyclotron_id]
+        capability = asset.capability
+        batch_traces = decay_by_batch.get(mapping.batch_id, [])
+        if not batch_traces:
+            continue
+
+        strict_catalog_mode = _asset_uses_catalog_strict_activity_basis(asset.capability_provenance)
+        site_daily_capacity = capability.site_eob_capacity_mbq_per_day
+        calibrated_map = capability.calibrated_eob_activity_mbq_by_radionuclide or {}
+        calibrated_batch_capacity = calibrated_map.get(mapping.radionuclide)
+
+        if strict_catalog_mode and site_daily_capacity is None and calibrated_batch_capacity is None:
+            warnings.append(
+                f"{pathway} {mapping.assigned_cyclotron_id} lacks calibrated EOB activity for {mapping.radionuclide}; production remains not_calibrated for this batch."
+            )
+            continue
+
+        batch_used_eob_mbq = 0.0
+        for trace in batch_traces:
+            if not trace.decay_feasible:
+                continue
+            required_eob = float(trace.required_upstream_activity_for_prescribed_mbq)
+            if not math.isfinite(required_eob) or required_eob <= 0.0:
+                continue
+
+            if site_daily_capacity is not None:
+                remaining = remaining_daily_capacity_by_cyclotron.get(mapping.assigned_cyclotron_id, float(site_daily_capacity))
+                if required_eob > remaining + 1e-9:
+                    continue
+                remaining_daily_capacity_by_cyclotron[mapping.assigned_cyclotron_id] = max(0.0, remaining - required_eob)
+                feasible_patient_ids.add(trace.patient_id)
+                continue
+
+            if calibrated_batch_capacity is None:
+                feasible_patient_ids.add(trace.patient_id)
+                continue
+
+            if batch_used_eob_mbq + required_eob <= float(calibrated_batch_capacity) + 1e-9:
+                batch_used_eob_mbq += required_eob
+                feasible_patient_ids.add(trace.patient_id)
+
+    scheduled_decay_feasible = [trace for trace in decay_summary.patient_traces if trace.decay_feasible]
+    completed_decay_feasible = [trace for trace in scheduled_decay_feasible if trace.completed_within_operating_day]
+    scheduled_final = [trace for trace in scheduled_decay_feasible if trace.patient_id in feasible_patient_ids]
+    completed_final = [trace for trace in completed_decay_feasible if trace.patient_id in feasible_patient_ids]
+
+    return (
+        feasible_patient_ids,
+        len(scheduled_final),
+        len(completed_final),
+        tuple(dict.fromkeys(warnings)),
+    )
 
 
 def _limitations() -> tuple[str, ...]:
@@ -810,7 +926,7 @@ def _build_pathway_result(
     capex_result = calculate_infrastructure_capex(capex_inputs)
     opex_result = calculate_infrastructure_opex(opex_inputs)
 
-    completed_per_day = float(operational_result.decay_feasible_completed_patients)
+    completed_per_day = float(operational_result.patients_completed)
     lifecycle_result = evaluate_lifecycle_economics(
         initial_capex=capex_result.total_capex,
         installed_capacity_per_day=completed_per_day,
@@ -849,6 +965,7 @@ def _build_pathway_result(
         decay_summary=operational_result.decay_summary,
         trace_id=pathway_trace_id,
         warnings=_warnings(request, pathway_config)
+        + operational_result.activity_capacity_warnings
         + ((
             f"{pathway_config.pathway} pathway potential dose-insufficient patients without upstream activity adjustment: "
             f"{operational_result.decay_summary.dose_insufficient_patient_count_if_no_upstream_adjustment}"

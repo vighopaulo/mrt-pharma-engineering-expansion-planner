@@ -1,0 +1,1261 @@
+{
+  "schema_version": "1.1",
+  "models": [
+    {
+      "catalog_model_id": "GE_PETTRACE_840",
+      "manufacturer": "GE HealthCare",
+      "model": "PETtrace 840",
+      "family": "PETtrace 800 series",
+      "commercial_status": "current",
+      "new_purchase_candidate": true,
+      "installed_equipment_selectable": true,
+      "customer_selectable": true,
+      "classification": "high_throughput_clinical",
+      "supported_radionuclides": ["F-18"],
+      "production_cycle_minutes_by_radionuclide": {
+        "F-18": 120.0
+      },
+      "max_simultaneous_production_streams": 1,
+      "field_provenance": {
+        "identity": {
+          "value": "GE HealthCare PETtrace 840",
+          "unit": null,
+          "source": "Authoritative GE PETtrace series documentation already provided to project",
+          "evidence_type": "manufacturer_specification",
+          "confidence": "high",
+          "calibration_status": "manufacturer_calibrated",
+          "source_revision_or_date": "2026-08",
+          "notes": null
+        },
+        "proton_energy_mev": {
+          "value": 16.5,
+          "unit": "MeV",
+          "source": "Authoritative GE PETtrace series documentation already provided to project",
+          "evidence_type": "manufacturer_specification",
+          "confidence": "high",
+          "calibration_status": "manufacturer_calibrated",
+          "source_revision_or_date": "2026-08",
+          "notes": "Calculation role: physical_constraint"
+        },
+        "proton_current_ua": {
+          "value": 60.0,
+          "unit": "uA",
+          "source": "Authoritative GE PETtrace series documentation already provided to project",
+          "evidence_type": "manufacturer_specification",
+          "confidence": "high",
+          "calibration_status": "manufacturer_calibrated",
+          "source_revision_or_date": "2026-08",
+          "notes": "Calculation role: calculation_input"
+        }
+      },
+      "production_performance_records": [
+        {
+          "manufacturer": "GE HealthCare",
+          "model": "PETtrace 840",
+          "radionuclide": "F-18",
+          "particle": "proton",
+          "target_system": "F-18 target system",
+          "beam_energy_mev": 16.5,
+          "beam_current_ua": 60.0,
+          "irradiation_time_minutes": 120.0,
+          "single_or_dual_irradiation": "single",
+          "number_of_targets": 1,
+          "reported_eob_activity": 240.0,
+          "reported_eob_activity_unit": "GBq",
+          "normalized_eob_activity_mbq": 240000.0,
+          "production_conditions": "Published GE PETtrace 840 F-18 calibration condition",
+          "source": "Authoritative GE PETtrace series documentation already provided to project",
+          "source_revision": "2026-08",
+          "evidence_type": "manufacturer_performance_data",
+          "confidence": "high",
+          "calibration_status": "manufacturer_calibrated",
+          "notes": "Calibration input only; not unconditional facility MBq/day capacity."
+        }
+      ]
+    },
+    {
+      "catalog_model_id": "GE_PETTRACE_860",
+      "manufacturer": "GE HealthCare",
+      "model": "PETtrace 860",
+      "family": "PETtrace 800 series",
+      "commercial_status": "current",
+      "new_purchase_candidate": true,
+      "installed_equipment_selectable": true,
+      "customer_selectable": true,
+      "classification": "high_throughput_clinical",
+      "supported_radionuclides": ["F-18"],
+      "production_cycle_minutes_by_radionuclide": {
+        "F-18": 120.0
+      },
+      "max_simultaneous_production_streams": 1,
+      "field_provenance": {
+        "identity": {
+          "value": "GE HealthCare PETtrace 860",
+          "unit": null,
+          "source": "Authoritative GE PETtrace series documentation already provided to project",
+          "evidence_type": "manufacturer_specification",
+          "confidence": "high",
+          "calibration_status": "manufacturer_calibrated",
+          "source_revision_or_date": "2026-08",
+          "notes": null
+        },
+        "proton_energy_mev": {
+          "value": 16.5,
+          "unit": "MeV",
+          "source": "Authoritative GE PETtrace series documentation already provided to project",
+          "evidence_type": "manufacturer_specification",
+          "confidence": "high",
+          "calibration_status": "manufacturer_calibrated",
+          "source_revision_or_date": "2026-08",
+          "notes": "Calculation role: physical_constraint"
+        },
+        "proton_current_ua": {
+          "value": 100.0,
+          "unit": "uA",
+          "source": "Authoritative GE PETtrace series documentation already provided to project",
+          "evidence_type": "manufacturer_specification",
+          "confidence": "high",
+          "calibration_status": "manufacturer_calibrated",
+          "source_revision_or_date": "2026-08",
+          "notes": "Calculation role: calculation_input"
+        }
+      },
+      "production_performance_records": [
+        {
+          "manufacturer": "GE HealthCare",
+          "model": "PETtrace 860",
+          "radionuclide": "F-18",
+          "particle": "proton",
+          "target_system": "F-18 target system",
+          "beam_energy_mev": 16.5,
+          "beam_current_ua": 100.0,
+          "irradiation_time_minutes": 120.0,
+          "single_or_dual_irradiation": "single",
+          "number_of_targets": 1,
+          "reported_eob_activity": 403.0,
+          "reported_eob_activity_unit": "GBq",
+          "normalized_eob_activity_mbq": 403000.0,
+          "production_conditions": "Published GE PETtrace 860 F-18 calibration condition",
+          "source": "Authoritative GE PETtrace series documentation already provided to project",
+          "source_revision": "2026-08",
+          "evidence_type": "manufacturer_performance_data",
+          "confidence": "high",
+          "calibration_status": "manufacturer_calibrated",
+          "notes": "Calibration input only; not unconditional facility MBq/day capacity."
+        }
+      ]
+    },
+    {
+      "catalog_model_id": "GE_PETTRACE_880",
+      "manufacturer": "GE HealthCare",
+      "model": "PETtrace 880",
+      "family": "PETtrace 800 series",
+      "commercial_status": "current",
+      "new_purchase_candidate": true,
+      "installed_equipment_selectable": true,
+      "customer_selectable": true,
+      "classification": "high_throughput_clinical",
+      "supported_radionuclides": ["F-18"],
+      "production_cycle_minutes_by_radionuclide": {
+        "F-18": 120.0
+      },
+      "max_simultaneous_production_streams": 1,
+      "field_provenance": {
+        "identity": {
+          "value": "GE HealthCare PETtrace 880",
+          "unit": null,
+          "source": "Authoritative GE PETtrace series documentation already provided to project",
+          "evidence_type": "manufacturer_specification",
+          "confidence": "high",
+          "calibration_status": "manufacturer_calibrated",
+          "source_revision_or_date": "2026-08",
+          "notes": null
+        },
+        "proton_energy_mev": {
+          "value": 16.5,
+          "unit": "MeV",
+          "source": "Authoritative GE PETtrace series documentation already provided to project",
+          "evidence_type": "manufacturer_specification",
+          "confidence": "high",
+          "calibration_status": "manufacturer_calibrated",
+          "source_revision_or_date": "2026-08",
+          "notes": "Calculation role: physical_constraint"
+        },
+        "proton_current_ua": {
+          "value": 130.0,
+          "unit": "uA",
+          "source": "Authoritative GE PETtrace series documentation already provided to project",
+          "evidence_type": "manufacturer_specification",
+          "confidence": "high",
+          "calibration_status": "manufacturer_calibrated",
+          "source_revision_or_date": "2026-08",
+          "notes": "Calculation role: calculation_input"
+        }
+      },
+      "production_performance_records": [
+        {
+          "manufacturer": "GE HealthCare",
+          "model": "PETtrace 880",
+          "radionuclide": "F-18",
+          "particle": "proton",
+          "target_system": "F-18 target system",
+          "beam_energy_mev": 16.5,
+          "beam_current_ua": 130.0,
+          "irradiation_time_minutes": 120.0,
+          "single_or_dual_irradiation": "single",
+          "number_of_targets": 1,
+          "reported_eob_activity": 524.0,
+          "reported_eob_activity_unit": "GBq",
+          "normalized_eob_activity_mbq": 524000.0,
+          "production_conditions": "Published GE PETtrace 880 F-18 calibration condition",
+          "source": "Authoritative GE PETtrace series documentation already provided to project",
+          "source_revision": "2026-08",
+          "evidence_type": "manufacturer_performance_data",
+          "confidence": "high",
+          "calibration_status": "manufacturer_calibrated",
+          "notes": "Calibration input only; not unconditional facility MBq/day capacity."
+        }
+      ]
+    },
+    {
+      "catalog_model_id": "GE_PETTRACE_890",
+      "manufacturer": "GE HealthCare",
+      "model": "PETtrace 890",
+      "family": "PETtrace 800 series",
+      "commercial_status": "current",
+      "new_purchase_candidate": true,
+      "installed_equipment_selectable": true,
+      "customer_selectable": true,
+      "classification": "high_throughput_clinical",
+      "supported_radionuclides": ["F-18"],
+      "production_cycle_minutes_by_radionuclide": {
+        "F-18": 120.0
+      },
+      "max_simultaneous_production_streams": 1,
+      "field_provenance": {
+        "identity": {
+          "value": "GE HealthCare PETtrace 890",
+          "unit": null,
+          "source": "Authoritative GE PETtrace series documentation already provided to project",
+          "evidence_type": "manufacturer_specification",
+          "confidence": "high",
+          "calibration_status": "manufacturer_calibrated",
+          "source_revision_or_date": "2026-08",
+          "notes": null
+        },
+        "proton_energy_mev": {
+          "value": 16.5,
+          "unit": "MeV",
+          "source": "Authoritative GE PETtrace series documentation already provided to project",
+          "evidence_type": "manufacturer_specification",
+          "confidence": "high",
+          "calibration_status": "manufacturer_calibrated",
+          "source_revision_or_date": "2026-08",
+          "notes": "Calculation role: physical_constraint"
+        },
+        "proton_current_ua": {
+          "value": 160.0,
+          "unit": "uA",
+          "source": "Authoritative GE PETtrace series documentation already provided to project",
+          "evidence_type": "manufacturer_specification",
+          "confidence": "high",
+          "calibration_status": "manufacturer_calibrated",
+          "source_revision_or_date": "2026-08",
+          "notes": "Calculation role: calculation_input"
+        }
+      },
+      "production_performance_records": [
+        {
+          "manufacturer": "GE HealthCare",
+          "model": "PETtrace 890",
+          "radionuclide": "F-18",
+          "particle": "proton",
+          "target_system": "F-18 target system",
+          "beam_energy_mev": 16.5,
+          "beam_current_ua": 160.0,
+          "irradiation_time_minutes": 120.0,
+          "single_or_dual_irradiation": "single",
+          "number_of_targets": 1,
+          "reported_eob_activity": 648.0,
+          "reported_eob_activity_unit": "GBq",
+          "normalized_eob_activity_mbq": 648000.0,
+          "production_conditions": "Published GE PETtrace 890 F-18 calibration condition",
+          "source": "Authoritative GE PETtrace series documentation already provided to project",
+          "source_revision": "2026-08",
+          "evidence_type": "manufacturer_performance_data",
+          "confidence": "high",
+          "calibration_status": "manufacturer_calibrated",
+          "notes": "Calibration input only; not unconditional facility MBq/day capacity."
+        }
+      ]
+    },
+    {
+      "catalog_model_id": "GE_PETTRACE_800",
+      "manufacturer": "GE HealthCare",
+      "model": "PETtrace 800",
+      "family": "PETtrace 800 series",
+      "commercial_status": "legacy",
+      "new_purchase_candidate": false,
+      "installed_equipment_selectable": true,
+      "customer_selectable": true,
+      "classification": "legacy_installed",
+      "supported_radionuclides": ["F-18", "C-11", "N-13", "O-15", "Ga-68"],
+      "production_cycle_minutes_by_radionuclide": {
+        "F-18": 50.0,
+        "C-11": 20.0,
+        "N-13": 15.0,
+        "O-15": 8.0,
+        "Ga-68": 45.0
+      },
+      "max_simultaneous_production_streams": 1,
+      "field_provenance": {
+        "supported_radionuclides": {
+          "value": ["F-18", "C-11", "N-13", "O-15", "Ga-68"],
+          "unit": null,
+          "source": "Uploaded GE HealthCare PETtrace 800 manufacturer sheets",
+          "evidence_type": "manufacturer_performance_data",
+          "confidence": "high",
+          "calibration_status": "manufacturer_calibrated",
+          "source_revision_or_date": null,
+          "notes": "Target-system evidence available in repository for these isotopes."
+        },
+        "production_cycle_minutes_by_radionuclide": {
+          "value": "Scheduling defaults only",
+          "unit": "minutes",
+          "source": "Current planning model defaults",
+          "evidence_type": "modeled",
+          "confidence": "low",
+          "calibration_status": "modeled",
+          "source_revision_or_date": "2026-08",
+          "notes": "Not interpreted as manufacturer yield calibration."
+        }
+      },
+      "production_performance_records": [
+        {
+          "manufacturer": "GE HealthCare",
+          "model": "PETtrace 800",
+          "radionuclide": "F-18",
+          "particle": "proton",
+          "target_system": "F-18 target systems",
+          "beam_energy_mev": null,
+          "beam_current_ua": null,
+          "irradiation_time_minutes": null,
+          "single_or_dual_irradiation": null,
+          "number_of_targets": null,
+          "reported_eob_activity": null,
+          "reported_eob_activity_unit": null,
+          "normalized_eob_activity_mbq": null,
+          "production_conditions": "Manufacturer target-system reference present; numeric yield not provided in repository",
+          "source": "Uploaded GE HealthCare PETtrace 800 manufacturer sheets",
+          "source_revision": null,
+          "evidence_type": "manufacturer_performance_data",
+          "confidence": "high",
+          "calibration_status": "not_calibrated",
+          "notes": "Numeric production value intentionally left unknown."
+        },
+        {
+          "manufacturer": "GE HealthCare",
+          "model": "PETtrace 800",
+          "radionuclide": "C-11",
+          "particle": "proton",
+          "target_system": "C-11 target/process systems",
+          "beam_energy_mev": null,
+          "beam_current_ua": null,
+          "irradiation_time_minutes": null,
+          "single_or_dual_irradiation": null,
+          "number_of_targets": null,
+          "reported_eob_activity": null,
+          "reported_eob_activity_unit": null,
+          "normalized_eob_activity_mbq": null,
+          "production_conditions": "Manufacturer target-system reference present; numeric yield not provided in repository",
+          "source": "Uploaded GE HealthCare PETtrace 800 manufacturer sheets",
+          "source_revision": null,
+          "evidence_type": "manufacturer_performance_data",
+          "confidence": "high",
+          "calibration_status": "not_calibrated",
+          "notes": "Numeric production value intentionally left unknown."
+        },
+        {
+          "manufacturer": "GE HealthCare",
+          "model": "PETtrace 800",
+          "radionuclide": "N-13",
+          "particle": "proton",
+          "target_system": "N-13 ammonia target system",
+          "beam_energy_mev": null,
+          "beam_current_ua": null,
+          "irradiation_time_minutes": null,
+          "single_or_dual_irradiation": null,
+          "number_of_targets": null,
+          "reported_eob_activity": null,
+          "reported_eob_activity_unit": null,
+          "normalized_eob_activity_mbq": null,
+          "production_conditions": "Manufacturer target-system reference present; numeric yield not provided in repository",
+          "source": "Uploaded GE HealthCare PETtrace 800 manufacturer sheets",
+          "source_revision": null,
+          "evidence_type": "manufacturer_performance_data",
+          "confidence": "high",
+          "calibration_status": "not_calibrated",
+          "notes": "Numeric production value intentionally left unknown."
+        },
+        {
+          "manufacturer": "GE HealthCare",
+          "model": "PETtrace 800",
+          "radionuclide": "O-15",
+          "particle": "proton",
+          "target_system": "O-15 target/process system",
+          "beam_energy_mev": null,
+          "beam_current_ua": null,
+          "irradiation_time_minutes": null,
+          "single_or_dual_irradiation": null,
+          "number_of_targets": null,
+          "reported_eob_activity": null,
+          "reported_eob_activity_unit": null,
+          "normalized_eob_activity_mbq": null,
+          "production_conditions": "Manufacturer target-system reference present; numeric yield not provided in repository",
+          "source": "Uploaded GE HealthCare PETtrace 800 manufacturer sheets",
+          "source_revision": null,
+          "evidence_type": "manufacturer_performance_data",
+          "confidence": "high",
+          "calibration_status": "not_calibrated",
+          "notes": "Numeric production value intentionally left unknown."
+        },
+        {
+          "manufacturer": "GE HealthCare",
+          "model": "PETtrace 800",
+          "radionuclide": "Ga-68",
+          "particle": "proton",
+          "target_system": "Ga-68 liquid target system",
+          "beam_energy_mev": null,
+          "beam_current_ua": null,
+          "irradiation_time_minutes": null,
+          "single_or_dual_irradiation": null,
+          "number_of_targets": null,
+          "reported_eob_activity": null,
+          "reported_eob_activity_unit": null,
+          "normalized_eob_activity_mbq": null,
+          "production_conditions": "Manufacturer target-system reference present; numeric yield not provided in repository",
+          "source": "Uploaded GE HealthCare PETtrace 800 manufacturer sheets",
+          "source_revision": null,
+          "evidence_type": "manufacturer_performance_data",
+          "confidence": "high",
+          "calibration_status": "not_calibrated",
+          "notes": "Numeric production value intentionally left unknown."
+        }
+      ]
+    },
+    {
+      "catalog_model_id": "IBA_CYCLONE_KEY",
+      "manufacturer": "IBA",
+      "model": "Cyclone KEY",
+      "family": "Cyclone",
+      "commercial_status": "current",
+      "new_purchase_candidate": true,
+      "installed_equipment_selectable": true,
+      "customer_selectable": true,
+      "classification": "compact_clinical",
+      "supported_radionuclides": ["F-18", "N-13", "C-11"],
+      "production_cycle_minutes_by_radionuclide": {
+        "F-18": 120.0
+      },
+      "max_simultaneous_production_streams": 1,
+      "field_provenance": {
+        "proton_energy_mev": {
+          "value": 9.2,
+          "unit": "MeV",
+          "source": "IBA Cyclone KEY manufacturer information (project source set)",
+          "evidence_type": "manufacturer_specification",
+          "confidence": "high",
+          "calibration_status": "manufacturer_calibrated",
+          "source_revision_or_date": "2026-08",
+          "notes": null
+        },
+        "maximum_beam_current_ua": {
+          "value": 100.0,
+          "unit": "uA",
+          "source": "IBA Cyclone KEY manufacturer information (project source set)",
+          "evidence_type": "manufacturer_specification",
+          "confidence": "high",
+          "calibration_status": "manufacturer_calibrated",
+          "source_revision_or_date": "2026-08",
+          "notes": null
+        },
+        "number_of_exits": {
+          "value": 1,
+          "unit": "count",
+          "source": "IBA Cyclone KEY manufacturer information (project source set)",
+          "evidence_type": "manufacturer_specification",
+          "confidence": "high",
+          "calibration_status": "manufacturer_calibrated",
+          "source_revision_or_date": "2026-08",
+          "notes": null
+        },
+        "maximum_targets": {
+          "value": 3,
+          "unit": "count",
+          "source": "IBA Cyclone KEY manufacturer information (project source set)",
+          "evidence_type": "manufacturer_specification",
+          "confidence": "high",
+          "calibration_status": "manufacturer_calibrated",
+          "source_revision_or_date": "2026-08",
+          "notes": null
+        },
+        "length_m": {
+          "value": 1.5,
+          "unit": "m",
+          "source": "IBA Cyclone KEY manufacturer information (project source set)",
+          "evidence_type": "manufacturer_specification",
+          "confidence": "high",
+          "calibration_status": "manufacturer_calibrated",
+          "source_revision_or_date": "2026-08",
+          "notes": null
+        },
+        "width_m": {
+          "value": 1.4,
+          "unit": "m",
+          "source": "IBA Cyclone KEY manufacturer information (project source set)",
+          "evidence_type": "manufacturer_specification",
+          "confidence": "high",
+          "calibration_status": "manufacturer_calibrated",
+          "source_revision_or_date": "2026-08",
+          "notes": null
+        },
+        "height_m": {
+          "value": 1.35,
+          "unit": "m",
+          "source": "IBA Cyclone KEY manufacturer information (project source set)",
+          "evidence_type": "manufacturer_specification",
+          "confidence": "high",
+          "calibration_status": "manufacturer_calibrated",
+          "source_revision_or_date": "2026-08",
+          "notes": null
+        }
+      },
+      "production_performance_records": [
+        {
+          "manufacturer": "IBA",
+          "model": "Cyclone KEY",
+          "radionuclide": "F-18",
+          "particle": "proton",
+          "target_system": "F-18 target",
+          "beam_energy_mev": 9.2,
+          "beam_current_ua": 100.0,
+          "irradiation_time_minutes": 120.0,
+          "single_or_dual_irradiation": "single",
+          "number_of_targets": 1,
+          "reported_eob_activity": 111.0,
+          "reported_eob_activity_unit": "GBq",
+          "normalized_eob_activity_mbq": 111000.0,
+          "production_conditions": "Published IBA Cyclone KEY F-18 calibration condition",
+          "source": "IBA Cyclone KEY manufacturer performance data (project source set)",
+          "source_revision": "2026-08",
+          "evidence_type": "manufacturer_performance_data",
+          "confidence": "high",
+          "calibration_status": "manufacturer_calibrated",
+          "notes": "Calibration input only; not unconditional facility MBq/day capacity."
+        }
+      ]
+    },
+    {
+      "catalog_model_id": "IBA_CYCLONE_KIUBE",
+      "manufacturer": "IBA",
+      "model": "Cyclone KIUBE",
+      "family": "Cyclone",
+      "commercial_status": "current",
+      "new_purchase_candidate": true,
+      "installed_equipment_selectable": true,
+      "customer_selectable": true,
+      "classification": "high_throughput_clinical",
+      "supported_radionuclides": ["F-18", "Ga-68", "Zr-89", "Cu-64", "N-13", "C-11", "O-15", "I-123", "I-124"],
+      "production_cycle_minutes_by_radionuclide": {
+        "F-18": 120.0
+      },
+      "max_simultaneous_production_streams": 2,
+      "field_provenance": {
+        "proton_energy_mev": {
+          "value": 18.0,
+          "unit": "MeV",
+          "source": "IBA Cyclone KIUBE manufacturer documentation (project source set)",
+          "evidence_type": "manufacturer_specification",
+          "confidence": "high",
+          "calibration_status": "manufacturer_calibrated",
+          "source_revision_or_date": "2026-08",
+          "notes": null
+        },
+        "supported_current_upgrade_levels_ua": {
+          "value": [100, 150, 180, 300],
+          "unit": "uA",
+          "source": "IBA Cyclone KIUBE manufacturer documentation (project source set)",
+          "evidence_type": "manufacturer_specification",
+          "confidence": "high",
+          "calibration_status": "manufacturer_calibrated",
+          "source_revision_or_date": "2026-08",
+          "notes": "Supported upgrade states; not simultaneously installed capability."
+        },
+        "maximum_exits": {
+          "value": 8,
+          "unit": "count",
+          "source": "IBA Cyclone KIUBE manufacturer documentation (project source set)",
+          "evidence_type": "manufacturer_specification",
+          "confidence": "high",
+          "calibration_status": "manufacturer_calibrated",
+          "source_revision_or_date": "2026-08",
+          "notes": null
+        },
+        "maximum_beam_lines": {
+          "value": 2,
+          "unit": "count",
+          "source": "IBA Cyclone KIUBE manufacturer documentation (project source set)",
+          "evidence_type": "manufacturer_specification",
+          "confidence": "high",
+          "calibration_status": "manufacturer_calibrated",
+          "source_revision_or_date": "2026-08",
+          "notes": null
+        },
+        "target_capability": {
+          "value": ["solid", "liquid", "gas"],
+          "unit": null,
+          "source": "IBA Cyclone KIUBE manufacturer documentation (project source set)",
+          "evidence_type": "manufacturer_specification",
+          "confidence": "high",
+          "calibration_status": "manufacturer_calibrated",
+          "source_revision_or_date": "2026-08",
+          "notes": null
+        },
+        "length_m": {
+          "value": 1.9,
+          "unit": "m",
+          "source": "IBA Cyclone KIUBE manufacturer documentation (project source set)",
+          "evidence_type": "manufacturer_specification",
+          "confidence": "high",
+          "calibration_status": "manufacturer_calibrated",
+          "source_revision_or_date": "2026-08",
+          "notes": null
+        },
+        "width_m": {
+          "value": 1.9,
+          "unit": "m",
+          "source": "IBA Cyclone KIUBE manufacturer documentation (project source set)",
+          "evidence_type": "manufacturer_specification",
+          "confidence": "high",
+          "calibration_status": "manufacturer_calibrated",
+          "source_revision_or_date": "2026-08",
+          "notes": null
+        },
+        "height_m": {
+          "value": 1.8,
+          "unit": "m",
+          "source": "IBA Cyclone KIUBE manufacturer documentation (project source set)",
+          "evidence_type": "manufacturer_specification",
+          "confidence": "high",
+          "calibration_status": "manufacturer_calibrated",
+          "source_revision_or_date": "2026-08",
+          "notes": null
+        }
+      },
+      "production_performance_records": [
+        {
+          "manufacturer": "IBA",
+          "model": "Cyclone KIUBE",
+          "radionuclide": "F-18",
+          "particle": "proton",
+          "target_system": "F-18 target",
+          "beam_energy_mev": 18.0,
+          "beam_current_ua": null,
+          "irradiation_time_minutes": 120.0,
+          "single_or_dual_irradiation": "published dual-beam configuration specific",
+          "number_of_targets": null,
+          "reported_eob_activity": 38.0,
+          "reported_eob_activity_unit": "Ci",
+          "normalized_eob_activity_mbq": 1406000.0,
+          "production_conditions": "Source-published KIUBE F-18 condition; not a universal single-target capacity",
+          "source": "IBA Cyclone KIUBE manufacturer performance data (project source set)",
+          "source_revision": "2026-08",
+          "evidence_type": "manufacturer_performance_data",
+          "confidence": "high",
+          "calibration_status": "manufacturer_calibrated",
+          "notes": "38 Ci converted using 1 Ci = 37000 MBq."
+        }
+      ]
+    },
+    {
+      "catalog_model_id": "IBA_CYCLONE_IKON",
+      "manufacturer": "IBA",
+      "model": "Cyclone IKON",
+      "family": "Cyclone",
+      "commercial_status": "current",
+      "new_purchase_candidate": true,
+      "installed_equipment_selectable": true,
+      "customer_selectable": true,
+      "classification": "research_multi_isotope",
+      "supported_radionuclides": ["Cu-64", "Ge-68", "I-123", "Tl-201", "Zr-89", "F-18", "Ga-68", "I-124"],
+      "production_cycle_minutes_by_radionuclide": {},
+      "max_simultaneous_production_streams": 2,
+      "field_provenance": {
+        "proton_energy_min_mev": {
+          "value": 13.0,
+          "unit": "MeV",
+          "source": "IBA Cyclone IKON manufacturer specification (project source set)",
+          "evidence_type": "manufacturer_specification",
+          "confidence": "high",
+          "calibration_status": "manufacturer_calibrated",
+          "source_revision_or_date": "2026-08",
+          "notes": null
+        },
+        "proton_energy_max_mev": {
+          "value": 30.0,
+          "unit": "MeV",
+          "source": "IBA Cyclone IKON manufacturer specification (project source set)",
+          "evidence_type": "manufacturer_specification",
+          "confidence": "high",
+          "calibration_status": "manufacturer_calibrated",
+          "source_revision_or_date": "2026-08",
+          "notes": null
+        },
+        "maximum_extracted_current_ua": {
+          "value": 1500.0,
+          "unit": "uA",
+          "source": "IBA Cyclone IKON manufacturer specification (project source set)",
+          "evidence_type": "manufacturer_specification",
+          "confidence": "high",
+          "calibration_status": "manufacturer_calibrated",
+          "source_revision_or_date": "2026-08",
+          "notes": null
+        },
+        "energy_mode": {
+          "value": "variable",
+          "unit": null,
+          "source": "IBA Cyclone IKON manufacturer specification (project source set)",
+          "evidence_type": "manufacturer_specification",
+          "confidence": "high",
+          "calibration_status": "manufacturer_calibrated",
+          "source_revision_or_date": "2026-08",
+          "notes": null
+        }
+      },
+      "production_performance_records": []
+    },
+    {
+      "catalog_model_id": "IBA_CYCLONE_30XP",
+      "manufacturer": "IBA",
+      "model": "Cyclone 30XP",
+      "family": "Cyclone",
+      "commercial_status": "current",
+      "new_purchase_candidate": true,
+      "installed_equipment_selectable": true,
+      "customer_selectable": true,
+      "classification": "research_multi_isotope",
+      "supported_radionuclides": ["F-18", "Cu-64", "Zr-89", "Ge-68", "I-123", "In-111", "Tl-201", "At-211"],
+      "production_cycle_minutes_by_radionuclide": {},
+      "max_simultaneous_production_streams": 2,
+      "field_provenance": {
+        "proton_energy_min_mev": {
+          "value": 15.0,
+          "unit": "MeV",
+          "source": "IBA Cyclone 30XP manufacturer specification (project source set)",
+          "evidence_type": "manufacturer_specification",
+          "confidence": "high",
+          "calibration_status": "manufacturer_calibrated",
+          "source_revision_or_date": "2026-08",
+          "notes": null
+        },
+        "proton_energy_max_mev": {
+          "value": 30.0,
+          "unit": "MeV",
+          "source": "IBA Cyclone 30XP manufacturer specification (project source set)",
+          "evidence_type": "manufacturer_specification",
+          "confidence": "high",
+          "calibration_status": "manufacturer_calibrated",
+          "source_revision_or_date": "2026-08",
+          "notes": null
+        },
+        "proton_maximum_current_ua": {
+          "value": 400.0,
+          "unit": "uA",
+          "source": "IBA Cyclone 30XP manufacturer specification (project source set)",
+          "evidence_type": "manufacturer_specification",
+          "confidence": "high",
+          "calibration_status": "manufacturer_calibrated",
+          "source_revision_or_date": "2026-08",
+          "notes": null
+        },
+        "deuteron_energy_min_mev": {
+          "value": 8.0,
+          "unit": "MeV",
+          "source": "IBA Cyclone 30XP manufacturer specification (project source set)",
+          "evidence_type": "manufacturer_specification",
+          "confidence": "high",
+          "calibration_status": "manufacturer_calibrated",
+          "source_revision_or_date": "2026-08",
+          "notes": null
+        },
+        "deuteron_energy_max_mev": {
+          "value": 15.0,
+          "unit": "MeV",
+          "source": "IBA Cyclone 30XP manufacturer specification (project source set)",
+          "evidence_type": "manufacturer_specification",
+          "confidence": "high",
+          "calibration_status": "manufacturer_calibrated",
+          "source_revision_or_date": "2026-08",
+          "notes": null
+        },
+        "deuteron_maximum_current_ua": {
+          "value": 50.0,
+          "unit": "uA",
+          "source": "IBA Cyclone 30XP manufacturer specification (project source set)",
+          "evidence_type": "manufacturer_specification",
+          "confidence": "high",
+          "calibration_status": "manufacturer_calibrated",
+          "source_revision_or_date": "2026-08",
+          "notes": null
+        },
+        "alpha_energy_mev": {
+          "value": 30.0,
+          "unit": "MeV",
+          "source": "IBA Cyclone 30XP manufacturer specification (project source set)",
+          "evidence_type": "manufacturer_specification",
+          "confidence": "high",
+          "calibration_status": "manufacturer_calibrated",
+          "source_revision_or_date": "2026-08",
+          "notes": null
+        },
+        "alpha_maximum_current_ua": {
+          "value": 50.0,
+          "unit": "uA",
+          "source": "IBA Cyclone 30XP manufacturer specification (project source set)",
+          "evidence_type": "manufacturer_specification",
+          "confidence": "high",
+          "calibration_status": "manufacturer_calibrated",
+          "source_revision_or_date": "2026-08",
+          "notes": null
+        }
+      },
+      "production_performance_records": []
+    },
+    {
+      "catalog_model_id": "SUMITOMO_CYPRIS_HM_12",
+      "manufacturer": "Sumitomo Heavy Industries",
+      "model": "CYPRIS HM-12",
+      "family": "CYPRIS",
+      "commercial_status": "current",
+      "new_purchase_candidate": true,
+      "installed_equipment_selectable": true,
+      "customer_selectable": true,
+      "classification": "compact_clinical",
+      "supported_radionuclides": ["F-18", "C-11", "N-13", "O-15", "Ga-68", "Cu-64", "Zr-89", "I-123", "I-124"],
+      "production_cycle_minutes_by_radionuclide": {},
+      "max_simultaneous_production_streams": 2,
+      "field_provenance": {
+        "proton_energy_mev": {
+          "value": 12.0,
+          "unit": "MeV",
+          "source": "Sumitomo CYPRIS HM-12 manufacturer documentation (project source set)",
+          "evidence_type": "manufacturer_specification",
+          "confidence": "high",
+          "calibration_status": "manufacturer_calibrated",
+          "source_revision_or_date": "2026-08",
+          "notes": null
+        },
+        "deuteron_energy_mev": {
+          "value": 6.0,
+          "unit": "MeV",
+          "source": "Sumitomo CYPRIS HM-12 manufacturer documentation (project source set)",
+          "evidence_type": "manufacturer_specification",
+          "confidence": "high",
+          "calibration_status": "manufacturer_calibrated",
+          "source_revision_or_date": "2026-08",
+          "notes": null
+        },
+        "beam_ports": {
+          "value": 2,
+          "unit": "count",
+          "source": "Sumitomo CYPRIS HM-12 manufacturer documentation (project source set)",
+          "evidence_type": "manufacturer_specification",
+          "confidence": "high",
+          "calibration_status": "manufacturer_calibrated",
+          "source_revision_or_date": "2026-08",
+          "notes": null
+        },
+        "maximum_targets": {
+          "value": 8,
+          "unit": "count",
+          "source": "Sumitomo CYPRIS HM-12 manufacturer documentation (project source set)",
+          "evidence_type": "manufacturer_specification",
+          "confidence": "high",
+          "calibration_status": "manufacturer_calibrated",
+          "source_revision_or_date": "2026-08",
+          "notes": null
+        },
+        "simultaneous_irradiation": {
+          "value": true,
+          "unit": null,
+          "source": "Sumitomo CYPRIS HM-12 manufacturer documentation (project source set)",
+          "evidence_type": "manufacturer_specification",
+          "confidence": "high",
+          "calibration_status": "manufacturer_calibrated",
+          "source_revision_or_date": "2026-08",
+          "notes": null
+        },
+        "self_shielding_option": {
+          "value": true,
+          "unit": null,
+          "source": "Sumitomo CYPRIS HM-12 manufacturer documentation (project source set)",
+          "evidence_type": "manufacturer_specification",
+          "confidence": "medium",
+          "calibration_status": "manufacturer_calibrated",
+          "source_revision_or_date": "2026-08",
+          "notes": "Optional configuration; not universal across all installations."
+        }
+      },
+      "production_performance_records": []
+    },
+    {
+      "catalog_model_id": "SUMITOMO_CYPRIS_HM_20",
+      "manufacturer": "Sumitomo Heavy Industries",
+      "model": "CYPRIS HM-20",
+      "family": "CYPRIS",
+      "commercial_status": "current",
+      "new_purchase_candidate": true,
+      "installed_equipment_selectable": true,
+      "customer_selectable": true,
+      "classification": "high_throughput_clinical",
+      "supported_radionuclides": ["F-18", "C-11", "N-13", "O-15", "Ga-68", "Cu-64", "Zr-89", "I-123", "I-124"],
+      "production_cycle_minutes_by_radionuclide": {},
+      "max_simultaneous_production_streams": 2,
+      "field_provenance": {
+        "proton_energy_mev": {
+          "value": 20.0,
+          "unit": "MeV",
+          "source": "Sumitomo CYPRIS HM-20 manufacturer documentation (project source set)",
+          "evidence_type": "manufacturer_specification",
+          "confidence": "high",
+          "calibration_status": "manufacturer_calibrated",
+          "source_revision_or_date": "2026-08",
+          "notes": null
+        },
+        "deuteron_energy_mev": {
+          "value": 10.0,
+          "unit": "MeV",
+          "source": "Sumitomo CYPRIS HM-20 manufacturer documentation (project source set)",
+          "evidence_type": "manufacturer_specification",
+          "confidence": "high",
+          "calibration_status": "manufacturer_calibrated",
+          "source_revision_or_date": "2026-08",
+          "notes": null
+        }
+      },
+      "production_performance_records": []
+    },
+    {
+      "catalog_model_id": "SUMITOMO_CYPRIS_MP_30",
+      "manufacturer": "Sumitomo Heavy Industries",
+      "model": "CYPRIS MP-30",
+      "family": "CYPRIS",
+      "commercial_status": "current",
+      "new_purchase_candidate": true,
+      "installed_equipment_selectable": true,
+      "customer_selectable": true,
+      "classification": "research_multi_isotope",
+      "supported_radionuclides": ["F-18", "Cu-64", "Zr-89", "I-123", "I-124", "Ga-68"],
+      "production_cycle_minutes_by_radionuclide": {},
+      "max_simultaneous_production_streams": 2,
+      "field_provenance": {
+        "operating_character": {
+          "value": "variable high-energy multi-particle class",
+          "unit": null,
+          "source": "Sumitomo CYPRIS MP-30 documentation set in project references",
+          "evidence_type": "technical_literature",
+          "confidence": "medium",
+          "calibration_status": "literature_calibrated",
+          "source_revision_or_date": "2026-08",
+          "notes": "Exact numerical particle-energy-current values require authoritative reconciliation across conflicting references."
+        }
+      },
+      "production_performance_records": []
+    },
+    {
+      "catalog_model_id": "SIEMENS_CTI_ECLIPSE_HP",
+      "manufacturer": "Siemens/CTI",
+      "model": "Eclipse HP",
+      "family": "Eclipse",
+      "commercial_status": "legacy",
+      "new_purchase_candidate": false,
+      "installed_equipment_selectable": true,
+      "customer_selectable": true,
+      "classification": "legacy_installed",
+      "supported_radionuclides": ["F-18", "C-11", "N-13", "O-15"],
+      "production_cycle_minutes_by_radionuclide": {},
+      "max_simultaneous_production_streams": 1,
+      "field_provenance": {
+        "proton_energy_mev": {
+          "value": 11.0,
+          "unit": "MeV",
+          "source": "Legacy technical/operational literature in project references",
+          "evidence_type": "technical_literature",
+          "confidence": "medium",
+          "calibration_status": "literature_calibrated",
+          "source_revision_or_date": null,
+          "notes": "Approximate 11 MeV class from technical literature; not tagged as manufacturer-calibrated."
+        },
+        "beam_current_ua": {
+          "value": 60.0,
+          "unit": "uA",
+          "source": "Legacy technical/operational literature in project references",
+          "evidence_type": "technical_literature",
+          "confidence": "medium",
+          "calibration_status": "literature_calibrated",
+          "source_revision_or_date": null,
+          "notes": "Approximate value from literature/operations context."
+        }
+      },
+      "production_performance_records": []
+    },
+    {
+      "catalog_model_id": "SIEMENS_CTI_RDS_111",
+      "manufacturer": "Siemens/CTI",
+      "model": "RDS-111",
+      "family": "RDS",
+      "commercial_status": "legacy",
+      "new_purchase_candidate": false,
+      "installed_equipment_selectable": true,
+      "customer_selectable": true,
+      "classification": "legacy_installed",
+      "supported_radionuclides": ["F-18", "C-11", "N-13", "O-15"],
+      "production_cycle_minutes_by_radionuclide": {},
+      "max_simultaneous_production_streams": 1,
+      "field_provenance": {
+        "proton_energy_mev": {
+          "value": 11.0,
+          "unit": "MeV",
+          "source": "Legacy technical/operational literature in project references",
+          "evidence_type": "technical_literature",
+          "confidence": "medium",
+          "calibration_status": "literature_calibrated",
+          "source_revision_or_date": null,
+          "notes": "Approximate 11 MeV class from technical literature; not tagged as manufacturer-calibrated."
+        },
+        "beam_current_ua": {
+          "value": 60.0,
+          "unit": "uA",
+          "source": "Legacy technical/operational literature in project references",
+          "evidence_type": "technical_literature",
+          "confidence": "medium",
+          "calibration_status": "literature_calibrated",
+          "source_revision_or_date": null,
+          "notes": "Approximate value from literature/operations context."
+        }
+      },
+      "production_performance_records": []
+    },
+    {
+      "catalog_model_id": "ACSI_TR_19",
+      "manufacturer": "ACSI",
+      "model": "TR-19",
+      "family": "TR",
+      "commercial_status": "current",
+      "new_purchase_candidate": true,
+      "installed_equipment_selectable": true,
+      "customer_selectable": true,
+      "classification": "high_throughput_clinical",
+      "supported_radionuclides": ["F-18", "C-11", "N-13", "O-15", "Cu-64", "Zr-89", "I-124"],
+      "production_cycle_minutes_by_radionuclide": {},
+      "max_simultaneous_production_streams": 2,
+      "field_provenance": {
+        "proton_energy_min_mev": {
+          "value": 14.0,
+          "unit": "MeV",
+          "source": "ACSI TR-19 technical/operational evidence in project references",
+          "evidence_type": "technical_literature",
+          "confidence": "medium",
+          "calibration_status": "literature_calibrated",
+          "source_revision_or_date": null,
+          "notes": null
+        },
+        "proton_energy_max_mev": {
+          "value": 19.0,
+          "unit": "MeV",
+          "source": "ACSI TR-19 technical/operational evidence in project references",
+          "evidence_type": "technical_literature",
+          "confidence": "medium",
+          "calibration_status": "literature_calibrated",
+          "source_revision_or_date": null,
+          "notes": null
+        },
+        "energy_mode": {
+          "value": "variable",
+          "unit": null,
+          "source": "ACSI TR-19 technical/operational evidence in project references",
+          "evidence_type": "technical_literature",
+          "confidence": "medium",
+          "calibration_status": "literature_calibrated",
+          "source_revision_or_date": null,
+          "notes": null
+        },
+        "beam_current_total_ua": {
+          "value": 300.0,
+          "unit": "uA",
+          "source": "Documented installation/configuration in project references",
+          "evidence_type": "operational_installation",
+          "confidence": "medium",
+          "calibration_status": "site_calibrated",
+          "source_revision_or_date": null,
+          "notes": "Installation-specific context; not universal to every TR-19 site."
+        },
+        "dual_simultaneous_extraction": {
+          "value": true,
+          "unit": null,
+          "source": "Documented installation/configuration in project references",
+          "evidence_type": "operational_installation",
+          "confidence": "medium",
+          "calibration_status": "site_calibrated",
+          "source_revision_or_date": null,
+          "notes": "Installation-specific capability."
+        }
+      },
+      "production_performance_records": []
+    },
+    {
+      "catalog_model_id": "ACSI_TR_24",
+      "manufacturer": "ACSI",
+      "model": "TR-24",
+      "family": "TR",
+      "commercial_status": "current",
+      "new_purchase_candidate": true,
+      "installed_equipment_selectable": true,
+      "customer_selectable": true,
+      "classification": "high_throughput_clinical",
+      "supported_radionuclides": ["F-18", "C-11", "N-13", "O-15", "Cu-64", "Zr-89", "I-124"],
+      "production_cycle_minutes_by_radionuclide": {},
+      "max_simultaneous_production_streams": 2,
+      "field_provenance": {
+        "proton_energy_min_mev": {
+          "value": 18.0,
+          "unit": "MeV",
+          "source": "ACSI TR-24 technical evidence in project references",
+          "evidence_type": "technical_literature",
+          "confidence": "medium",
+          "calibration_status": "literature_calibrated",
+          "source_revision_or_date": null,
+          "notes": null
+        },
+        "proton_energy_max_mev": {
+          "value": 24.0,
+          "unit": "MeV",
+          "source": "ACSI TR-24 technical evidence in project references",
+          "evidence_type": "technical_literature",
+          "confidence": "medium",
+          "calibration_status": "literature_calibrated",
+          "source_revision_or_date": null,
+          "notes": null
+        },
+        "energy_mode": {
+          "value": "variable",
+          "unit": null,
+          "source": "ACSI TR-24 technical evidence in project references",
+          "evidence_type": "technical_literature",
+          "confidence": "medium",
+          "calibration_status": "literature_calibrated",
+          "source_revision_or_date": null,
+          "notes": null
+        },
+        "maximum_current_ua": {
+          "value": 300.0,
+          "unit": "uA",
+          "source": "ACSI TR-24 technical evidence in project references",
+          "evidence_type": "technical_literature",
+          "confidence": "medium",
+          "calibration_status": "literature_calibrated",
+          "source_revision_or_date": null,
+          "notes": null
+        },
+        "dual_simultaneous_beams": {
+          "value": true,
+          "unit": null,
+          "source": "ACSI TR-24 technical evidence in project references",
+          "evidence_type": "technical_literature",
+          "confidence": "medium",
+          "calibration_status": "literature_calibrated",
+          "source_revision_or_date": null,
+          "notes": null
+        },
+        "length_m": {
+          "value": 1.8,
+          "unit": "m",
+          "source": "Documented installed configuration in project references",
+          "evidence_type": "operational_installation",
+          "confidence": "medium",
+          "calibration_status": "site_calibrated",
+          "source_revision_or_date": null,
+          "notes": "Installation-specific, not universal manufacturer value."
+        },
+        "width_m": {
+          "value": 1.8,
+          "unit": "m",
+          "source": "Documented installed configuration in project references",
+          "evidence_type": "operational_installation",
+          "confidence": "medium",
+          "calibration_status": "site_calibrated",
+          "source_revision_or_date": null,
+          "notes": "Installation-specific, not universal manufacturer value."
+        },
+        "height_m": {
+          "value": 2.5,
+          "unit": "m",
+          "source": "Documented installed configuration in project references",
+          "evidence_type": "operational_installation",
+          "confidence": "medium",
+          "calibration_status": "site_calibrated",
+          "source_revision_or_date": null,
+          "notes": "Installation-specific, not universal manufacturer value."
+        },
+        "mass_tonnes": {
+          "value": 25.0,
+          "unit": "t",
+          "source": "Documented installed configuration in project references",
+          "evidence_type": "operational_installation",
+          "confidence": "medium",
+          "calibration_status": "site_calibrated",
+          "source_revision_or_date": null,
+          "notes": "Installation-specific, not universal manufacturer value."
+        },
+        "power_kw": {
+          "value": 180.0,
+          "unit": "kW",
+          "source": "Documented installed configuration in project references",
+          "evidence_type": "operational_installation",
+          "confidence": "medium",
+          "calibration_status": "site_calibrated",
+          "source_revision_or_date": null,
+          "notes": "Installation-specific; not universal operating consumption for all TR-24 deployments."
+        }
+      },
+      "production_performance_records": []
+    },
+    {
+      "catalog_model_id": "BEST_14P",
+      "manufacturer": "Best Cyclotron Systems",
+      "model": "Best 14p",
+      "family": "Best compact",
+      "commercial_status": "current",
+      "new_purchase_candidate": true,
+      "installed_equipment_selectable": true,
+      "customer_selectable": true,
+      "classification": "compact_clinical",
+      "supported_radionuclides": ["F-18"],
+      "production_cycle_minutes_by_radionuclide": {},
+      "max_simultaneous_production_streams": 1,
+      "field_provenance": {
+        "proton_energy_mev": {
+          "value": 14.0,
+          "unit": "MeV",
+          "source": "Best compact-family technical evidence in project references",
+          "evidence_type": "technical_literature",
+          "confidence": "medium",
+          "calibration_status": "literature_calibrated",
+          "source_revision_or_date": null,
+          "notes": "Proton-class level retained; current/yield/power/price remain not calibrated."
+        }
+      },
+      "production_performance_records": []
+    }
+  ]
+}

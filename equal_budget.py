@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 import math
 
+from cyclotron_production_windows import CyclotronFleet, resolve_fleet_eob_capacity_mbq_per_day
 from engineering import retention, room_capacity, scanner_capacity
 from finance import incremental_financials
 from models import ConventionalPlan, PlannerAssumptions, PlannerInputs
@@ -579,6 +580,37 @@ def _cyclotron_eob_capacity_mbq_per_day(
     return 0.0, "not_calibrated"
 
 
+def _selected_radionuclide(inputs: PlannerInputs) -> str:
+    if inputs.selected_cyclotron_radionuclide:
+        return str(inputs.selected_cyclotron_radionuclide)
+    if inputs.representative_radionuclide:
+        return str(inputs.representative_radionuclide)
+    return "F-18"
+
+
+def _resolve_physical_eob_capacity_mbq_per_day(
+    *,
+    inputs: PlannerInputs,
+    assumptions: PlannerAssumptions,
+    batches_per_day: int,
+) -> tuple[float | None, str]:
+    if inputs.current_cyclotron_eob_capacity_mbq_per_day is not None:
+        return float(inputs.current_cyclotron_eob_capacity_mbq_per_day), "input_current_cyclotron_eob_capacity_mbq_per_day"
+
+    if assumptions.cyclotron_eob_capacity_mbq_per_day is not None:
+        return float(assumptions.cyclotron_eob_capacity_mbq_per_day), "assumption_cyclotron_eob_capacity_mbq_per_day"
+
+    fleet = inputs.cyclotron_fleet
+    if isinstance(fleet, CyclotronFleet):
+        return resolve_fleet_eob_capacity_mbq_per_day(
+            fleet=fleet,
+            radionuclide=_selected_radionuclide(inputs),
+            production_batches_per_day=batches_per_day,
+        )
+
+    return None, "not_calibrated"
+
+
 def _candidate_tie(candidate: MultiBatchPathwayResult) -> tuple[float, float, float, float, int, int, int, int, int]:
     return (
         candidate.revenue_generating_throughput_per_day,
@@ -632,8 +664,19 @@ def maximize_conventional_capacity(
     retained = retention(inputs.current_average_transport_min, half_life_min)
     baseline_capacity = _conventional_baseline_capacity(inputs, assumptions, half_life_min)
 
+    prescribed_activity_mbq = _prescribed_activity_mbq_per_patient(assumptions)
+    synthesis_yield = _synthesis_yield_fraction(assumptions)
+    synthesis_retention = _synthesis_retention_fraction(assumptions, half_life_min)
+    synthesis_factor = max(synthesis_retention * synthesis_yield, 1e-12)
+    physical_eob_capacity_mbq_per_day, _ = _resolve_physical_eob_capacity_mbq_per_day(
+        inputs=inputs,
+        assumptions=assumptions,
+        batches_per_day=1,
+    )
+    use_physical_capacity = physical_eob_capacity_mbq_per_day is not None
+
     max_add_scanners = int(common_budget // assumptions.scanner_capex) + 2
-    max_prod_blocks = int(common_budget // assumptions.production_expansion_capex_per_10pct) + 2
+    max_prod_blocks = 0 if use_physical_capacity else int(common_budget // assumptions.production_expansion_capex_per_10pct) + 2
 
     max_scanner_capacity = scanner_capacity(
         inputs.current_scanners + max_add_scanners,
@@ -641,7 +684,11 @@ def maximize_conventional_capacity(
         assumptions.scanner_cycle_min,
         assumptions.scanner_availability_pct,
     )
-    max_production_capacity = inputs.current_usable_doses_per_day * (1.0 + 0.1 * max_prod_blocks) * retained
+    max_production_capacity = (
+        float(physical_eob_capacity_mbq_per_day) * synthesis_factor / max(prescribed_activity_mbq, 1e-12) * retained
+        if use_physical_capacity
+        else inputs.current_usable_doses_per_day * (1.0 + 0.1 * max_prod_blocks) * retained
+    )
     upper_room_target = min(max_scanner_capacity, max_production_capacity)
 
     required_injection_total = math.ceil(
@@ -681,9 +728,13 @@ def maximize_conventional_capacity(
                 )
 
                 for prod_blocks in range(0, max_prod_blocks + 1):
-                    production_expansion_pct = prod_blocks * 10.0
-                    production_cap = inputs.current_usable_doses_per_day * (1.0 + prod_blocks * 0.1) * retained
-                    cyclotron_needed = (not inputs.has_existing_cyclotron) and prod_blocks > 0
+                    production_expansion_pct = 0.0 if use_physical_capacity else prod_blocks * 10.0
+                    production_cap = (
+                        float(physical_eob_capacity_mbq_per_day) * synthesis_factor / max(prescribed_activity_mbq, 1e-12) * retained
+                        if use_physical_capacity
+                        else inputs.current_usable_doses_per_day * (1.0 + prod_blocks * 0.1) * retained
+                    )
+                    cyclotron_needed = (not inputs.has_existing_cyclotron) and (prod_blocks > 0) and (not use_physical_capacity)
 
                     capex = (
                         add_scanners * assumptions.scanner_capex
@@ -822,7 +873,21 @@ def maximize_mrt_capacity(
     baseline_capacity = _conventional_baseline_capacity(inputs, assumptions, half_life_min)
 
     retained_no_backbone = retention(inputs.current_average_transport_min, half_life_min)
-    baseline_production = inputs.current_usable_doses_per_day * retained_no_backbone
+    prescribed_activity_mbq = _prescribed_activity_mbq_per_patient(assumptions)
+    synthesis_yield = _synthesis_yield_fraction(assumptions)
+    synthesis_retention = _synthesis_retention_fraction(assumptions, half_life_min)
+    synthesis_factor = max(synthesis_retention * synthesis_yield, 1e-12)
+    physical_eob_capacity_mbq_per_day, _ = _resolve_physical_eob_capacity_mbq_per_day(
+        inputs=inputs,
+        assumptions=assumptions,
+        batches_per_day=1,
+    )
+    use_physical_capacity = physical_eob_capacity_mbq_per_day is not None
+    baseline_production = (
+        float(physical_eob_capacity_mbq_per_day) * synthesis_factor / max(prescribed_activity_mbq, 1e-12) * retained_no_backbone
+        if use_physical_capacity
+        else inputs.current_usable_doses_per_day * retained_no_backbone
+    )
     baseline_scanner = scanner_capacity(
         inputs.current_scanners,
         assumptions.operating_hours_per_day,
@@ -862,14 +927,18 @@ def maximize_mrt_capacity(
         mrt_transport_min = assumptions.mrt_transport_default_min if inputs.mrt_transport_min is None else inputs.mrt_transport_min
         retained = retention(mrt_transport_min, half_life_min)
         max_add_scanners = int(common_budget // assumptions.scanner_capex) + 2
-        max_prod_blocks = int(common_budget // assumptions.production_expansion_capex_per_10pct) + 2
+        max_prod_blocks = 0 if use_physical_capacity else int(common_budget // assumptions.production_expansion_capex_per_10pct) + 2
         max_new_rooms = int(common_budget // assumptions.additional_room_capex) + 2
 
         current_total_rooms = inputs.current_injection_rooms + inputs.current_uptake_rooms
 
         for prod_blocks in range(0, max_prod_blocks + 1):
-            production_cap = inputs.current_usable_doses_per_day * (1.0 + prod_blocks * 0.1) * retained
-            production_pct = prod_blocks * 10.0
+            production_cap = (
+                float(physical_eob_capacity_mbq_per_day) * synthesis_factor / max(prescribed_activity_mbq, 1e-12) * retained
+                if use_physical_capacity
+                else inputs.current_usable_doses_per_day * (1.0 + prod_blocks * 0.1) * retained
+            )
+            production_pct = 0.0 if use_physical_capacity else prod_blocks * 10.0
 
             for add_scanners in range(0, max_add_scanners + 1):
                 total_scanners = inputs.current_scanners + add_scanners
@@ -894,7 +963,7 @@ def maximize_mrt_capacity(
                         endpoints = 2 + connectable_rooms
                         guideway_cap = endpoints * (8.0 + 2.0 * infra_units)
 
-                        cyclotron_needed = (not inputs.has_existing_cyclotron) and prod_blocks > 0
+                        cyclotron_needed = (not inputs.has_existing_cyclotron) and prod_blocks > 0 and (not use_physical_capacity)
                         capex = (
                             assumptions.mrt_infrastructure_capex
                             + guideway_segments * assumptions.guideway_segment_capex
@@ -1301,12 +1370,23 @@ def _build_mrt_economic_candidate(
     infra_units: int,
 ) -> MultiBatchPathwayResult | None:
     retained = retention(transport_minutes, half_life_min)
-    gross_production_per_day = inputs.current_usable_doses_per_day * (1.0 + production_blocks * 0.1)
     prescribed_activity_mbq = _prescribed_activity_mbq_per_patient(assumptions)
     synthesis_yield = _synthesis_yield_fraction(assumptions)
     synthesis_retention = _synthesis_retention_fraction(assumptions, half_life_min)
     synthesis_factor = max(synthesis_retention * synthesis_yield, 1e-12)
-    production_block_multiplier = 1.0 + production_blocks * 0.1
+
+    available_eob_capacity, cyclotron_capacity_status = _resolve_physical_eob_capacity_mbq_per_day(
+        inputs=inputs,
+        assumptions=assumptions,
+        batches_per_day=batches_per_day,
+    )
+    capacity_is_calibrated = available_eob_capacity is not None
+
+    if capacity_is_calibrated:
+        gross_production_per_day = float(available_eob_capacity) * synthesis_factor / max(prescribed_activity_mbq, 1e-12)
+    else:
+        gross_production_per_day = inputs.current_usable_doses_per_day * (1.0 + production_blocks * 0.1)
+
     scanner_cap = scanner_capacity(
         inputs.current_scanners + add_scanners,
         assumptions.operating_hours_per_day,
@@ -1360,77 +1440,22 @@ def _build_mrt_economic_candidate(
     activity_required_at_release = 0.0 if administration_retention <= 0.0 else activity_required_at_admin / administration_retention
     activity_required_at_eob = activity_required_at_release / synthesis_factor
 
-    available_eob_capacity, cyclotron_capacity_status = _cyclotron_eob_capacity_mbq_per_day(
-        inputs=inputs,
-        assumptions=assumptions,
-        gross_release_doses_per_day_capacity=gross_production_per_day,
-        synthesis_retention_fraction=synthesis_retention,
-        synthesis_yield_fraction=synthesis_yield,
-        production_block_multiplier=production_block_multiplier,
-    )
-    baseline_eob_capacity, _ = _cyclotron_eob_capacity_mbq_per_day(
-        inputs=inputs,
-        assumptions=assumptions,
-        gross_release_doses_per_day_capacity=inputs.current_usable_doses_per_day,
-        synthesis_retention_fraction=synthesis_retention,
-        synthesis_yield_fraction=synthesis_yield,
-        production_block_multiplier=1.0,
-    )
-    capacity_is_calibrated = cyclotron_capacity_status != "not_calibrated"
-    production_upgrade_required = (
-        capacity_is_calibrated
-        and activity_required_at_eob > baseline_eob_capacity + 1e-9
-    )
-
-    effective_production_blocks = production_blocks
-    if production_upgrade_required and baseline_eob_capacity > 0.0:
-        required_growth_fraction = (
-            activity_required_at_eob / baseline_eob_capacity - 1.0
-        )
-        required_production_blocks = max(
-            1,
-            math.ceil(required_growth_fraction / 0.1),
-        )
-        effective_production_blocks = max(
-            production_blocks,
-            required_production_blocks,
-        )
-
-        available_eob_capacity, cyclotron_capacity_status = (
-            _cyclotron_eob_capacity_mbq_per_day(
-                inputs=inputs,
-                assumptions=assumptions,
-                gross_release_doses_per_day_capacity=gross_production_per_day,
-                synthesis_retention_fraction=synthesis_retention,
-                synthesis_yield_fraction=synthesis_yield,
-                production_block_multiplier=1.0
-                + effective_production_blocks * 0.1,
-            )
-        )
-
-    if (
-        capacity_is_calibrated
-        and activity_required_at_eob > available_eob_capacity + 1e-9
-    ):
+    if capacity_is_calibrated and available_eob_capacity is not None and activity_required_at_eob > float(available_eob_capacity) + 1e-9:
         return None
+
+    production_upgrade_required = False
 
     activity_decay_loss_post_release = max(0.0, activity_required_at_release - activity_required_at_admin)
 
     revenue_throughput = min(achieved, inputs.maximum_expected_demand_per_day)
-    charged_production_blocks = production_blocks if (production_upgrade_required or not capacity_is_calibrated) else 0
-    production_block_capex = charged_production_blocks * assumptions.production_expansion_capex_per_10pct
+    charged_production_blocks = 0
+    production_block_capex = 0.0
     capex = (
         (assumptions.mrt_infrastructure_capex if backbone_selected else 0.0)
         + guideway_segments * assumptions.guideway_segment_capex
         + endpoints * assumptions.endpoint_capex
         + add_scanners * assumptions.scanner_capex
         + connected_rooms * assumptions.additional_room_capex
-        + production_block_capex
-        + (
-            assumptions.cyclotron_purchase_capex + assumptions.cyclotron_installation_capex
-            if (not inputs.has_existing_cyclotron and charged_production_blocks > 0)
-            else 0.0
-        )
     )
     if capex > common_budget + 1e-9:
         return None
@@ -1805,6 +1830,15 @@ def _mrt_production_block_bound(
     common_budget: float,
     batches_per_day: int,
 ) -> int:
+    available_eob_capacity, _ = _resolve_physical_eob_capacity_mbq_per_day(
+        inputs=inputs,
+        assumptions=assumptions,
+        batches_per_day=batches_per_day,
+    )
+    if available_eob_capacity is not None:
+        # Physical capacity is explicit; legacy production blocks are compatibility-only.
+        return 0
+
     useful_throughput = max(inputs.target_patients_per_day, inputs.maximum_expected_demand_per_day)
     useful_throughput = max(useful_throughput, 1.0)
     # `current_usable_doses_per_day` is treated as the usable-dose baseline for
@@ -2446,28 +2480,40 @@ def _conventional_reference_summary(
     production_blocks = 0
     if isinstance(reference.ledger, dict):
         production_blocks = int(reference.ledger.get("production_expansion_blocks_10pct", 0))
-    gross_release_capacity = 0.0
-    if isinstance(reference.ledger, dict):
-        gross_release_capacity = float(reference.ledger.get("expanded_gross_production_capacity_per_day", 0.0))
-    if gross_release_capacity <= 0.0:
-        gross_release_capacity = inputs.current_usable_doses_per_day * (1.0 + 0.1 * production_blocks)
+    estimated_batches = max(1, int(math.ceil(max(reference.required_production_increase_pct, 0.0) / 10.0)))
+    resolved_eob_capacity, cyclotron_capacity_status = _resolve_physical_eob_capacity_mbq_per_day(
+        inputs=inputs,
+        assumptions=assumptions,
+        batches_per_day=estimated_batches,
+    )
 
-    available_eob_capacity, cyclotron_capacity_status = _cyclotron_eob_capacity_mbq_per_day(
-        inputs=inputs,
-        assumptions=assumptions,
-        gross_release_doses_per_day_capacity=gross_release_capacity,
-        synthesis_retention_fraction=synthesis_retention,
-        synthesis_yield_fraction=synthesis_yield,
-        production_block_multiplier=1.0 + 0.1 * production_blocks,
-    )
-    baseline_eob_capacity, _ = _cyclotron_eob_capacity_mbq_per_day(
-        inputs=inputs,
-        assumptions=assumptions,
-        gross_release_doses_per_day_capacity=inputs.current_usable_doses_per_day,
-        synthesis_retention_fraction=synthesis_retention,
-        synthesis_yield_fraction=synthesis_yield,
-        production_block_multiplier=1.0,
-    )
+    if resolved_eob_capacity is not None:
+        available_eob_capacity = float(resolved_eob_capacity)
+        baseline_eob_capacity = float(resolved_eob_capacity)
+    else:
+        gross_release_capacity = 0.0
+        if isinstance(reference.ledger, dict):
+            gross_release_capacity = float(reference.ledger.get("expanded_gross_production_capacity_per_day", 0.0))
+        if gross_release_capacity <= 0.0:
+            gross_release_capacity = inputs.current_usable_doses_per_day * (1.0 + 0.1 * production_blocks)
+
+        available_eob_capacity, cyclotron_capacity_status = _cyclotron_eob_capacity_mbq_per_day(
+            inputs=inputs,
+            assumptions=assumptions,
+            gross_release_doses_per_day_capacity=gross_release_capacity,
+            synthesis_retention_fraction=synthesis_retention,
+            synthesis_yield_fraction=synthesis_yield,
+            production_block_multiplier=1.0 + 0.1 * production_blocks,
+        )
+        baseline_eob_capacity, _ = _cyclotron_eob_capacity_mbq_per_day(
+            inputs=inputs,
+            assumptions=assumptions,
+            gross_release_doses_per_day_capacity=inputs.current_usable_doses_per_day,
+            synthesis_retention_fraction=synthesis_retention,
+            synthesis_yield_fraction=synthesis_yield,
+            production_block_multiplier=1.0,
+        )
+
     capacity_is_calibrated = cyclotron_capacity_status != "not_calibrated"
     cyclotron_utilization_pct = 0.0 if (not capacity_is_calibrated or available_eob_capacity <= 0.0) else 100.0 * activity_required_at_eob / available_eob_capacity
     cyclotron_headroom = 0.0 if not capacity_is_calibrated else (available_eob_capacity - activity_required_at_eob)

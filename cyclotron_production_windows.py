@@ -32,6 +32,8 @@ class CyclotronProductionCapability:
     production_cycle_minutes_by_radionuclide: Mapping[str, float]
     simultaneously_compatible_radionuclide_sets: tuple[frozenset[str], ...] = ()
     release_processing_minutes_by_radionuclide: Mapping[str, float] | None = None
+    calibrated_eob_activity_mbq_by_radionuclide: Mapping[str, float] | None = None
+    site_eob_capacity_mbq_per_day: float | None = None
 
     def __post_init__(self) -> None:
         cyclotron_id = self.cyclotron_id.strip() if isinstance(self.cyclotron_id, str) else ""
@@ -90,11 +92,31 @@ class CyclotronProductionCapability:
                     raise ValueError("release processing minutes must be non-negative")
                 normalized_release_processing[normalized] = value
 
+        normalized_calibrated_eob: dict[str, float] | None = None
+        if self.calibrated_eob_activity_mbq_by_radionuclide is not None:
+            normalized_calibrated_eob = {}
+            for radionuclide, eob_activity_mbq in self.calibrated_eob_activity_mbq_by_radionuclide.items():
+                normalized = _normalize_radionuclide_name(radionuclide)
+                if normalized not in normalized_supported:
+                    raise ValueError(f"calibrated EOB activity entry references unsupported radionuclide {normalized}")
+                value = float(eob_activity_mbq)
+                if value <= 0.0:
+                    raise ValueError("calibrated EOB activity must be positive when provided")
+                normalized_calibrated_eob[normalized] = value
+
+        site_eob_capacity = None
+        if self.site_eob_capacity_mbq_per_day is not None:
+            site_eob_capacity = float(self.site_eob_capacity_mbq_per_day)
+            if site_eob_capacity <= 0.0:
+                raise ValueError("site_eob_capacity_mbq_per_day must be positive when provided")
+
         object.__setattr__(self, "cyclotron_id", cyclotron_id)
         object.__setattr__(self, "supported_radionuclides", normalized_supported)
         object.__setattr__(self, "production_cycle_minutes_by_radionuclide", cycle_lookup)
         object.__setattr__(self, "simultaneously_compatible_radionuclide_sets", unique_compatibility)
         object.__setattr__(self, "release_processing_minutes_by_radionuclide", normalized_release_processing)
+        object.__setattr__(self, "calibrated_eob_activity_mbq_by_radionuclide", normalized_calibrated_eob)
+        object.__setattr__(self, "site_eob_capacity_mbq_per_day", site_eob_capacity)
 
 
 @dataclass(frozen=True)
@@ -464,3 +486,43 @@ def schedule_cyclotron_fleet_production_windows(
         all_batches_scheduled=all(schedule.all_batches_scheduled for schedule in per_cyclotron.values()),
         fits_within_production_horizon=all(schedule.fits_within_production_horizon for schedule in per_cyclotron.values()),
     )
+
+
+def resolve_fleet_eob_capacity_mbq_per_day(
+    *,
+    fleet: CyclotronFleet,
+    radionuclide: str,
+    production_batches_per_day: int,
+) -> tuple[float | None, str]:
+    if production_batches_per_day < 1:
+        raise ValueError("production_batches_per_day must be at least 1")
+
+    isotope = _normalize_radionuclide_name(radionuclide)
+    total_capacity_mbq = 0.0
+    capacity_found = False
+    unknown_assets = 0
+
+    for asset in fleet.assets:
+        capability = asset.capability
+        if isotope not in capability.supported_radionuclides:
+            continue
+
+        if capability.site_eob_capacity_mbq_per_day is not None:
+            total_capacity_mbq += float(capability.site_eob_capacity_mbq_per_day)
+            capacity_found = True
+            continue
+
+        calibrated_map = capability.calibrated_eob_activity_mbq_by_radionuclide or {}
+        calibrated_per_batch = calibrated_map.get(isotope)
+        if calibrated_per_batch is not None:
+            total_capacity_mbq += float(calibrated_per_batch) * float(production_batches_per_day)
+            capacity_found = True
+            continue
+
+        unknown_assets += 1
+
+    if not capacity_found:
+        return None, "not_calibrated"
+    if unknown_assets > 0:
+        return total_capacity_mbq, "partial_fleet_calibrated"
+    return total_capacity_mbq, "fleet_calibrated"

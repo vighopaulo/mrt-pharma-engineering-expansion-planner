@@ -844,3 +844,134 @@ def test_single_safe_error_banner_for_one_controlled_failure_and_state_preservat
     post_project = post_library.get_project(project_id)
     assert post_project.last_successful_result_ref == "RUN-001"
     assert post_project.run_status == "SUCCESS"
+
+
+def test_build3_pages_6_to_9_are_active_and_page_10_remains_placeholder() -> None:
+    for route, expected_title in [
+        ("demand_workflow_radionuclides", "Demand & Clinical Workflow"),
+        ("production_cyclotron_external_supply", "Production / Cyclotron / External Supply"),
+        ("geometry_floor_transport", "Geometry / Floor Plan / Transport"),
+        ("mrt_infrastructure", "MRT Infrastructure"),
+    ]:
+        at, _ = _seed(
+            route=route,
+            mode="GREENFIELD",
+            supply="ON_SITE_PRODUCTION",
+            draft_updates={
+                "project_mode_selection": "GREENFIELD",
+                "supply_architecture_selection": "ON_SITE_PRODUCTION",
+            },
+        )
+        at.run()
+        text = _all_text(at)
+        assert [node.value for node in at.title] == [expected_title]
+        assert "Build 1 placeholder" not in text
+
+    at, _ = _seed(
+        route="economics_assumptions",
+        mode="GREENFIELD",
+        supply="ON_SITE_PRODUCTION",
+        draft_updates={
+            "project_mode_selection": "GREENFIELD",
+            "supply_architecture_selection": "ON_SITE_PRODUCTION",
+        },
+    )
+    at.run()
+    assert [node.value for node in at.title] == ["Economics & Assumptions"]
+    assert "Build 1 placeholder" in _all_text(at)
+
+
+def test_build3_demand_uses_generated_mix_without_patient_isotope_picker() -> None:
+    at, _ = _seed(
+        route="demand_workflow_radionuclides",
+        mode="GREENFIELD",
+        supply="ON_SITE_PRODUCTION",
+        draft_updates={
+            "project_mode_selection": "GREENFIELD",
+            "supply_architecture_selection": "ON_SITE_PRODUCTION",
+            "build3::production::active_radionuclides": ("F-18", "Ga-68"),
+        },
+    )
+    at.run()
+    text = _all_text(at).lower()
+    assert "generated clinical demand mix" in text
+    assert "patient radionuclide assignment" in text
+    labels = [multiselect.label.lower() for multiselect in at.multiselect]
+    assert all("patient" not in label for label in labels)
+
+
+def test_build3_production_on_site_shows_fleet_model_controls() -> None:
+    at, _ = _seed(
+        route="production_cyclotron_external_supply",
+        mode="GREENFIELD",
+        supply="ON_SITE_PRODUCTION",
+        draft_updates={
+            "project_mode_selection": "GREENFIELD",
+            "supply_architecture_selection": "ON_SITE_PRODUCTION",
+            "build3::production::model_count::PETTRACE_800": 1,
+        },
+    )
+    at.run()
+    text = _all_text(at)
+    assert "On-site Cyclotron Fleet" in text
+    assert any(selectbox.label == "Select manufacturer" for selectbox in at.selectbox)
+    assert any(selectbox.label == "Select model" for selectbox in at.selectbox)
+    assert any(getattr(button, "label", None) == "Add Cyclotron" for button in at.button)
+    assert "Configured facility cyclotrons" in text
+    assert any(multiselect.label == "Radionuclides active for this project" for multiselect in at.multiselect)
+    assert "Airport-to-hospital transfer time (minutes)" not in [node.label for node in at.text_input]
+
+
+def test_build3_production_external_supply_shows_source_transport_controls() -> None:
+    at, _ = _seed(
+        route="production_cyclotron_external_supply",
+        mode="EXISTING_FACILITY_RETROFIT",
+        supply="EXTERNAL_SUPPLY_HUB_SPOKE",
+        draft_updates={
+            "project_mode_selection": "EXISTING_FACILITY_RETROFIT",
+            "supply_architecture_selection": "EXTERNAL_SUPPLY_HUB_SPOKE",
+            "facility_resource::cyclotron_units::status": "KNOWN",
+            "facility_resource::cyclotron_units::existing": "2",
+        },
+    )
+    at.run()
+    labels = [node.label for node in at.text_input]
+    text = _all_text(at)
+    assert "External Supply / Hub-and-Spoke" in text
+    assert "Airport-to-hospital transfer time (minutes)" in labels
+    assert not any(selectbox.label == "Select manufacturer" for selectbox in at.selectbox)
+    assert not any(getattr(button, "label", None) == "Add Cyclotron" for button in at.button)
+    assert "preserved: KNOWN (2)" in text
+
+
+def test_build3_mrt_page_reflects_greenfield_vs_retrofit_context() -> None:
+    retrofit, _ = _seed(
+        route="mrt_infrastructure",
+        mode="EXISTING_FACILITY_RETROFIT",
+        supply="ON_SITE_PRODUCTION",
+        draft_updates={
+            "project_mode_selection": "EXISTING_FACILITY_RETROFIT",
+            "supply_architecture_selection": "ON_SITE_PRODUCTION",
+            "facility_resource::mrt_endpoints::usable": "3",
+            "facility_resource::mrt_carriers::usable": "2",
+        },
+    )
+    retrofit.run()
+    retrofit_text = _all_text(retrofit)
+    assert "Inherited MRT endpoints (operational)" in retrofit_text
+    assert "Inherited MRT carriers (operational)" in retrofit_text
+    assert ": 3" in retrofit_text
+    assert ": 2" in retrofit_text
+
+    greenfield, _ = _seed(
+        route="mrt_infrastructure",
+        mode="GREENFIELD",
+        supply="ON_SITE_PRODUCTION",
+        draft_updates={
+            "project_mode_selection": "GREENFIELD",
+            "supply_architecture_selection": "ON_SITE_PRODUCTION",
+        },
+    )
+    greenfield.run()
+    greenfield_text = _all_text(greenfield)
+    assert "Greenfield: configure planned MRT infrastructure only" in greenfield_text

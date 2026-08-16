@@ -5,6 +5,18 @@ from typing import Any
 
 import streamlit as st
 
+from cyclotron_catalog import (
+    FacilityCyclotronInstance,
+    build_fleet_from_instances,
+    create_facility_cyclotron_instance,
+    list_models_grouped_by_manufacturer,
+    load_cyclotron_catalog,
+    migration_from_legacy_model_counts,
+)
+from diagnostics import load_radionuclide_half_lives
+from mrt_carrier_fleet import resolve_mrt_carrier_fleet
+from stochastic_design_day import ActivityDemandModel, DesignDayDemandScenario, generate_design_day_demand
+
 from ui_foundation import (
     FIELD_STATE_NON_EQUIVALENCE_RULES,
     FUTURE_PAGE_ROUTES,
@@ -482,9 +494,9 @@ def _workflow_cards() -> list[tuple[RouteId, str]]:
     return [
         ("project_definition", "Project Definition / Project Mode"),
         ("facility_resources", "Facility & Existing Resources"),
-        ("demand_workflow_radionuclides", "Demand / Clinical Workflow / Radionuclides"),
-        ("production_cyclotron_external_supply", "Production / Supply"),
-        ("geometry_floor_transport", "Geometry / Transport"),
+        ("demand_workflow_radionuclides", "Demand & Clinical Workflow"),
+        ("production_cyclotron_external_supply", "Production / Cyclotron / External Supply"),
+        ("geometry_floor_transport", "Geometry / Floor Plan / Transport"),
         ("mrt_infrastructure", "MRT Infrastructure"),
         ("economics_assumptions", "Economics"),
         ("review_run", "Review & Run"),
@@ -1335,6 +1347,532 @@ def _render_project_overview(library: ProjectLibrary, navigation: NavigationHist
             st.markdown("</div>", unsafe_allow_html=True)
 
 
+def _render_build3_context_summary(library: ProjectLibrary, navigation: NavigationHistory, project: ProjectRecord) -> None:
+    st.markdown("<div class='page-card'><div class='page-card-title'>Project Context</div>", unsafe_allow_html=True)
+    mode = _project_mode(project)
+    supply = _project_supply_architecture(project)
+    c1, c2, c3 = st.columns(3)
+    c1.markdown(f"**Project**\n\n{project.name}")
+    c2.markdown(f"**Project Mode**\n\n{PROJECT_MODE_LABELS[mode]}")
+    c3.markdown(f"**Supply Architecture**\n\n{SUPPLY_ARCHITECTURE_LABELS[supply]}")
+    n1, n2 = st.columns(2)
+    if n1.button("Edit Project Definition", key=f"build3_edit_definition_{project.project_id}", use_container_width=True):
+        _navigate_to(library, navigation, "project_definition", project.project_id)
+    if n2.button("Edit Facility Baseline", key=f"build3_edit_facility_{project.project_id}", use_container_width=True):
+        _navigate_to(library, navigation, "facility_resources", project.project_id)
+    st.markdown("</div>", unsafe_allow_html=True)
+
+
+def _parse_positive_float(value: str, *, label: str, allow_zero: bool = False) -> tuple[float | None, str | None]:
+    text = value.strip()
+    if not text:
+        return None, f"{label} is required."
+    try:
+        parsed = float(text)
+    except ValueError:
+        return None, f"{label} must be numeric."
+    if parsed < 0.0 or (not allow_zero and parsed == 0.0):
+        return None, f"{label} must be greater than zero."
+    return parsed, None
+
+
+def _default_activity_mbq(radionuclide: str) -> float:
+    return {
+        "F-18": 370.0,
+        "Ga-68": 185.0,
+        "C-11": 555.0,
+        "N-13": 740.0,
+        "O-15": 925.0,
+        "Tc-99m": 740.0,
+    }.get(radionuclide, 370.0)
+
+
+def _build3_cyclotron_instances(project: ProjectRecord) -> list[FacilityCyclotronInstance]:
+    raw = project.draft_state.get("build3::production::cyclotron_instances")
+    if isinstance(raw, list) and raw:
+        instances: list[FacilityCyclotronInstance] = []
+        for item in raw:
+            if isinstance(item, dict):
+                try:
+                    instances.append(FacilityCyclotronInstance.from_dict(item))
+                except Exception:
+                    continue
+        if instances:
+            return instances
+    return list(migration_from_legacy_model_counts(project.draft_state))
+
+
+def _build3_set_cyclotron_instances(project: ProjectRecord, instances: list[FacilityCyclotronInstance]) -> None:
+    project.set_draft_value("build3::production::cyclotron_instances", [instance.to_dict() for instance in instances])
+
+
+def _render_demand_workflow(library: ProjectLibrary, navigation: NavigationHistory, project: ProjectRecord | None) -> None:
+    st.title("Demand & Clinical Workflow")
+    if project is None:
+        st.warning("Open a project to continue.")
+        return
+    _render_build3_context_summary(library, navigation, project)
+
+    st.markdown("<div class='page-card'><div class='page-card-title'>Design Basis</div>", unsafe_allow_html=True)
+    st.caption("Use compact design-basis inputs. Patient radionuclide assignment is generated from project-active radionuclides.")
+
+    demand_key = f"build3_demand_expected_{project.project_id}"
+    hours_key = f"build3_demand_hours_{project.project_id}"
+    days_key = f"build3_demand_days_{project.project_id}"
+    seed_key = f"build3_demand_seed_{project.project_id}"
+    day_type_key = f"build3_demand_day_type_{project.project_id}"
+
+    st.session_state.setdefault(demand_key, str(project.draft_state.get("build3::demand::expected_patients_per_day", "180")))
+    st.session_state.setdefault(hours_key, str(project.draft_state.get("build3::demand::operating_hours_per_day", "12")))
+    st.session_state.setdefault(days_key, str(project.draft_state.get("build3::demand::operating_days_per_year", "300")))
+    st.session_state.setdefault(seed_key, str(project.draft_state.get("build3::demand::seed", "42")))
+    st.session_state.setdefault(day_type_key, str(project.draft_state.get("build3::demand::day_type", "typical")))
+
+    expected = st.text_input("Expected patient demand per day", key=demand_key, help="Default: 180")
+    hours = st.text_input("Operating hours per day", key=hours_key, help="Default: 12")
+    days = st.text_input("Operating days per year", key=days_key, help="Default: 300")
+    day_type = st.selectbox("Design day type", options=["typical", "peak"], key=day_type_key)
+    seed = st.text_input("Demand generation seed", key=seed_key, help="Default: 42")
+
+    errors: list[str] = []
+    expected_patients, issue = parse_non_negative_integer(expected)
+    if issue or expected_patients in (None, 0):
+        errors.append("Expected patient demand per day must be a whole number greater than zero.")
+    operating_hours, hours_issue = _parse_positive_float(hours, label="Operating hours per day")
+    if hours_issue:
+        errors.append(hours_issue)
+    operating_days, days_issue = parse_non_negative_integer(days)
+    if days_issue or operating_days in (None, 0):
+        errors.append("Operating days per year must be a whole number greater than zero.")
+    seed_value, seed_issue = parse_non_negative_integer(seed)
+    if seed_issue:
+        errors.append(f"Demand generation seed: {seed_issue}")
+
+    mode = _project_mode(project)
+    supply = _project_supply_architecture(project)
+    if mode == "UNSPECIFIED" or supply == "UNSPECIFIED":
+        st.error("Complete Project Definition before configuring demand.")
+        st.markdown("</div>", unsafe_allow_html=True)
+        return
+
+    if supply == "ON_SITE_PRODUCTION":
+        active_radionuclides = tuple(project.draft_state.get("build3::production::active_radionuclides", ()))
+    else:
+        active_radionuclides = tuple(project.draft_state.get("build3::external_supply::active_radionuclides", ()))
+    if not active_radionuclides:
+        active_radionuclides = ("F-18",)
+
+    st.write(f"**Project-active radionuclides**: {', '.join(active_radionuclides)}")
+    st.caption("Generated / Derived demand mix uses the active subset above. No manual patient-level radionuclide selection is required.")
+
+    if errors:
+        for error in errors:
+            st.error(error)
+        st.markdown("</div>", unsafe_allow_html=True)
+        return
+
+    mix = {radionuclide: 1.0 for radionuclide in active_radionuclides}
+    models = {
+        radionuclide: ActivityDemandModel(model_type="fixed", fixed_activity_mbq=_default_activity_mbq(radionuclide))
+        for radionuclide in active_radionuclides
+    }
+    scenario = DesignDayDemandScenario(
+        target_patients_per_day=int(expected_patients),
+        radionuclide_mix=mix,
+        activity_distribution_by_radionuclide=models,
+        day_type=day_type,
+        available_radionuclides=active_radionuclides,
+        unsupported_radionuclide_policy="reject",
+        seed=int(seed_value),
+    )
+    generated = generate_design_day_demand(scenario)
+
+    rows = []
+    for radionuclide in sorted(generated.patient_count_by_radionuclide):
+        rows.append(
+            {
+                "Radionuclide": radionuclide,
+                "Patients": int(generated.patient_count_by_radionuclide[radionuclide]),
+                "Total Activity (MBq/day)": round(float(generated.total_activity_by_radionuclide[radionuclide]), 2),
+            }
+        )
+    st.write("**Generated Clinical Demand Mix (Derived)**")
+    st.dataframe(rows, hide_index=True, use_container_width=True)
+
+    project.set_draft_value("build3::demand::expected_patients_per_day", str(expected_patients))
+    project.set_draft_value("build3::demand::operating_hours_per_day", str(operating_hours))
+    project.set_draft_value("build3::demand::operating_days_per_year", str(operating_days))
+    project.set_draft_value("build3::demand::seed", str(seed_value))
+    project.set_draft_value("build3::demand::day_type", day_type)
+    project.set_draft_value("build3::demand::generated_mix", rows)
+
+    if st.button("Save Demand Draft", key=f"save_build3_demand_{project.project_id}", use_container_width=True):
+        for key in (
+            "build3::demand::expected_patients_per_day",
+            "build3::demand::operating_hours_per_day",
+            "build3::demand::operating_days_per_year",
+            "build3::demand::seed",
+            "build3::demand::day_type",
+            "build3::demand::generated_mix",
+        ):
+            project.commit_draft_key(key)
+        _persist_state(library, navigation)
+        _append_status("Demand workflow draft saved.", "success")
+        st.rerun()
+    st.markdown("</div>", unsafe_allow_html=True)
+
+
+def _render_production_supply(library: ProjectLibrary, navigation: NavigationHistory, project: ProjectRecord | None) -> None:
+    st.title("Production / Cyclotron / External Supply")
+    if project is None:
+        st.warning("Open a project to continue.")
+        return
+    _render_build3_context_summary(library, navigation, project)
+
+    supply = _project_supply_architecture(project)
+    if supply == "UNSPECIFIED":
+        st.error("Select supply architecture in Project Definition first.")
+        return
+
+    if supply == "ON_SITE_PRODUCTION":
+        st.markdown("<div class='page-card'><div class='page-card-title'>On-site Cyclotron Fleet</div>", unsafe_allow_html=True)
+        st.caption("Add individual cyclotron instances from the catalog. Manufacturer/model definitions stay separate from facility instances.")
+
+        catalog = load_cyclotron_catalog()
+        grouped = list_models_grouped_by_manufacturer(catalog)
+        instances = _build3_cyclotron_instances(project)
+
+        selector_col1, selector_col2 = st.columns(2)
+        manufacturers = list(grouped.keys())
+        selected_manufacturer = selector_col1.selectbox(
+            "Select manufacturer",
+            options=manufacturers,
+            key=f"build3_catalog_manufacturer_{project.project_id}",
+        )
+        model_options = grouped.get(selected_manufacturer, ())
+        selected_model = selector_col2.selectbox(
+            "Select model",
+            options=[model.catalog_model_id for model in model_options],
+            format_func=lambda model_id: next((model.model for model in model_options if model.catalog_model_id == model_id), model_id),
+            key=f"build3_catalog_model_{project.project_id}",
+        )
+        if st.button("Add Cyclotron", key=f"build3_add_cyclotron_{project.project_id}", use_container_width=False):
+            instances.append(
+                create_facility_cyclotron_instance(
+                    catalog_model_id=selected_model,
+                    existing_instances=instances,
+                )
+            )
+            _build3_set_cyclotron_instances(project, instances)
+            _persist_state(library, navigation)
+            st.rerun()
+
+        if instances:
+            st.write("**Configured facility cyclotrons**")
+            rows: list[dict[str, Any]] = []
+            for idx, instance in enumerate(instances):
+                model = catalog.by_id(instance.catalog_model_id)
+                rows.append(
+                    {
+                        "Instance ID": instance.instance_id,
+                        "Manufacturer": model.manufacturer,
+                        "Model": model.model,
+                        "Commercial Status": model.commercial_status,
+                        "State": instance.operating_state,
+                        "Capability Status": model.production_calibration_status,
+                    }
+                )
+                if st.button(
+                    f"Remove {instance.instance_id}",
+                    key=f"build3_remove_cyclotron_{project.project_id}_{idx}",
+                    use_container_width=False,
+                ):
+                    instances.pop(idx)
+                    _build3_set_cyclotron_instances(project, instances)
+                    _persist_state(library, navigation)
+                    st.rerun()
+            st.dataframe(rows, hide_index=True, use_container_width=True)
+
+        if not instances:
+            st.error("At least one cyclotron instance is required for On-site Production.")
+            st.markdown("</div>", unsafe_allow_html=True)
+            return
+
+        fleet, warnings = build_fleet_from_instances(catalog=catalog, instances=instances)
+        for warning in warnings:
+            st.warning(warning)
+
+        supported_union = tuple() if fleet is None else tuple(fleet.fleet_supported_radionuclides)
+        if not supported_union:
+            st.info("No calibrated radionuclide-cycle capability has been provided yet for selected cyclotrons.")
+        st.write(f"**Facility production capability (union)**: {', '.join(supported_union)}")
+
+        active_default = tuple(project.draft_state.get("build3::production::active_radionuclides", supported_union))
+        valid_active_default = tuple(item for item in active_default if item in supported_union)
+        if valid_active_default != active_default:
+            st.warning("Previously active radionuclides were revalidated after fleet changes and unsupported items were removed.")
+        if supported_union:
+            active_subset = st.multiselect(
+                "Radionuclides active for this project",
+                options=list(supported_union),
+                default=list(valid_active_default or supported_union),
+                key=f"build3_active_subset_{project.project_id}",
+                help="Active subset must be supported by the selected cyclotron fleet.",
+            )
+            if not active_subset:
+                st.error("Select at least one active radionuclide.")
+                st.markdown("</div>", unsafe_allow_html=True)
+                return
+        else:
+            active_subset = []
+
+        eob_key = f"build3_eob_capacity_{project.project_id}"
+        st.session_state.setdefault(eob_key, str(project.draft_state.get("build3::production::eob_capacity_mbq_day", "")))
+        eob_text = st.text_input(
+            "Confirmed calibrated EOB capacity (MBq/day) [optional]",
+            key=eob_key,
+            help="Leave blank if not calibrated.",
+        )
+        if eob_text.strip():
+            eob_value, eob_issue = _parse_positive_float(eob_text, label="EOB capacity", allow_zero=False)
+            if eob_issue:
+                st.error(eob_issue)
+            else:
+                st.success(f"Calibrated EOB capacity: {eob_value:.2f} MBq/day")
+        else:
+            st.info("Cyclotron capacity: Not calibrated")
+
+        st.caption("Selecting a smaller active radionuclide subset does not remove selected cyclotron equipment or its physical/economic consequences.")
+
+        _build3_set_cyclotron_instances(project, instances)
+        project.set_draft_value("build3::production::supported_union", supported_union)
+        project.set_draft_value("build3::production::fleet_asset_ids", tuple() if fleet is None else tuple(asset.cyclotron_id for asset in fleet.assets))
+        project.set_draft_value("build3::production::active_radionuclides", tuple(active_subset))
+        project.set_draft_value("build3::production::eob_capacity_mbq_day", eob_text.strip())
+        project.set_draft_value("build3::production::capacity_status", "CALIBRATED" if eob_text.strip() else "NOT_CALIBRATED")
+
+        if st.button("Save Production Draft", key=f"save_build3_production_{project.project_id}", use_container_width=True):
+            keys = [
+                "build3::production::cyclotron_instances",
+                "build3::production::supported_union",
+                "build3::production::fleet_asset_ids",
+                "build3::production::active_radionuclides",
+                "build3::production::eob_capacity_mbq_day",
+                "build3::production::capacity_status",
+            ]
+            for key in keys:
+                project.commit_draft_key(key)
+            _persist_state(library, navigation)
+            _append_status("Production draft saved.", "success")
+            st.rerun()
+        st.markdown("</div>", unsafe_allow_html=True)
+        return
+
+    st.markdown("<div class='page-card'><div class='page-card-title'>External Supply / Hub-and-Spoke</div>", unsafe_allow_html=True)
+    st.caption("Configure source capability and transport assumptions. On-site cyclotron selection is not required in external-supply mode.")
+    isotopes = list(load_radionuclide_half_lives().keys())
+    source_supported = st.multiselect(
+        "Source-supported radionuclides",
+        options=isotopes,
+        default=list(project.draft_state.get("build3::external_supply::source_supported_radionuclides", ("F-18",))),
+        key=f"build3_external_supported_{project.project_id}",
+    )
+    if not source_supported:
+        st.error("Select at least one source-supported radionuclide.")
+        st.markdown("</div>", unsafe_allow_html=True)
+        return
+
+    default_active = tuple(item for item in project.draft_state.get("build3::external_supply::active_radionuclides", source_supported) if item in source_supported)
+    active_subset = st.multiselect(
+        "Radionuclides active for this project",
+        options=source_supported,
+        default=list(default_active or tuple(source_supported)),
+        key=f"build3_external_active_{project.project_id}",
+    )
+    if not active_subset:
+        st.error("Select at least one active radionuclide.")
+        st.markdown("</div>", unsafe_allow_html=True)
+        return
+
+    last_mile_key = f"build3_external_last_mile_{project.project_id}"
+    st.session_state.setdefault(last_mile_key, str(project.draft_state.get("build3::external_supply::airport_to_hospital_minutes", "20")))
+    last_mile = st.text_input(
+        "Airport-to-hospital transfer time (minutes)",
+        key=last_mile_key,
+        help="This basis can be aligned across conventional and MRT pathways for controlled comparison.",
+    )
+    _, issue = _parse_positive_float(last_mile, label="Airport-to-hospital transfer time", allow_zero=False)
+    if issue:
+        st.error(issue)
+
+    existing_cyclotron_status = project.draft_state.get("facility_resource::cyclotron_units::status", "UNKNOWN")
+    existing_cyclotron_qty = project.draft_state.get("facility_resource::cyclotron_units::existing", "")
+    st.caption(f"Retrofit inherited on-site cyclotron context is preserved: {existing_cyclotron_status} ({existing_cyclotron_qty or 'unspecified'}).")
+
+    project.set_draft_value("build3::external_supply::source_supported_radionuclides", tuple(source_supported))
+    project.set_draft_value("build3::external_supply::active_radionuclides", tuple(active_subset))
+    project.set_draft_value("build3::external_supply::airport_to_hospital_minutes", last_mile.strip())
+
+    if st.button("Save External Supply Draft", key=f"save_build3_external_{project.project_id}", use_container_width=True):
+        for key in (
+            "build3::external_supply::source_supported_radionuclides",
+            "build3::external_supply::active_radionuclides",
+            "build3::external_supply::airport_to_hospital_minutes",
+        ):
+            project.commit_draft_key(key)
+        _persist_state(library, navigation)
+        _append_status("External supply draft saved.", "success")
+        st.rerun()
+    st.markdown("</div>", unsafe_allow_html=True)
+
+
+def _render_geometry_transport(library: ProjectLibrary, navigation: NavigationHistory, project: ProjectRecord | None) -> None:
+    st.title("Geometry / Floor Plan / Transport")
+    if project is None:
+        st.warning("Open a project to continue.")
+        return
+    _render_build3_context_summary(library, navigation, project)
+
+    st.markdown("<div class='page-card'><div class='page-card-title'>Geometry Input Method</div>", unsafe_allow_html=True)
+    methods = [
+        "Manual / Simplified Geometry (available)",
+        "Assisted Template (coming later)",
+        "CAD / BIM / PDF / Image Import (coming later)",
+        "Facility-System / API Integration (coming later)",
+        "Intelligent Reconstruction (coming later)",
+    ]
+    for method in methods:
+        st.write(f"- {method}")
+
+    st.caption("Current build activates bounded manual geometry inputs only.")
+    distance_key = f"build3_geometry_distance_{project.project_id}"
+    floors_key = f"build3_geometry_floors_{project.project_id}"
+    vertical_key = f"build3_geometry_vertical_{project.project_id}"
+    st.session_state.setdefault(distance_key, str(project.draft_state.get("build3::geometry::route_distance_m", "")))
+    st.session_state.setdefault(floors_key, str(project.draft_state.get("build3::geometry::floors", "1")))
+    st.session_state.setdefault(vertical_key, str(project.draft_state.get("build3::geometry::vertical_transfer_m", "0")))
+
+    route_distance = st.text_input("Total route distance (m)", key=distance_key, help="Required. Use meters.")
+    floors = st.text_input("Number of floors", key=floors_key, help="Required whole number.")
+    vertical_distance = st.text_input("Vertical transfer distance (m)", key=vertical_key, help="Set 0 if not applicable.")
+
+    errors: list[str] = []
+    _, d_issue = _parse_positive_float(route_distance, label="Total route distance", allow_zero=False)
+    if d_issue:
+        errors.append(d_issue)
+    floors_value, floors_issue = parse_non_negative_integer(floors)
+    if floors_issue or floors_value in (None, 0):
+        errors.append("Number of floors must be a whole number greater than zero.")
+    _, v_issue = _parse_positive_float(vertical_distance, label="Vertical transfer distance", allow_zero=True)
+    if v_issue:
+        errors.append(v_issue)
+
+    if errors:
+        for error in errors:
+            st.error(error)
+        st.markdown("</div>", unsafe_allow_html=True)
+        return
+
+    project.set_draft_value("build3::geometry::route_distance_m", route_distance.strip())
+    project.set_draft_value("build3::geometry::floors", str(floors_value))
+    project.set_draft_value("build3::geometry::vertical_transfer_m", vertical_distance.strip())
+
+    if st.button("Save Geometry Draft", key=f"save_build3_geometry_{project.project_id}", use_container_width=True):
+        for key in (
+            "build3::geometry::route_distance_m",
+            "build3::geometry::floors",
+            "build3::geometry::vertical_transfer_m",
+        ):
+            project.commit_draft_key(key)
+        _persist_state(library, navigation)
+        _append_status("Geometry draft saved.", "success")
+        st.rerun()
+    st.markdown("</div>", unsafe_allow_html=True)
+
+
+def _render_mrt_infrastructure(library: ProjectLibrary, navigation: NavigationHistory, project: ProjectRecord | None) -> None:
+    st.title("MRT Infrastructure")
+    if project is None:
+        st.warning("Open a project to continue.")
+        return
+    _render_build3_context_summary(library, navigation, project)
+
+    mode = _project_mode(project)
+    st.markdown("<div class='page-card'><div class='page-card-title'>MRT Engineering Inputs</div>", unsafe_allow_html=True)
+
+    if mode == "EXISTING_FACILITY_RETROFIT":
+        inherited_endpoints = project.draft_state.get("facility_resource::mrt_endpoints::usable", "0")
+        inherited_carriers = project.draft_state.get("facility_resource::mrt_carriers::usable", "0")
+        st.write(f"**Inherited MRT endpoints (operational)**: {inherited_endpoints}")
+        st.write(f"**Inherited MRT carriers (operational)**: {inherited_carriers}")
+    else:
+        st.info("Greenfield: configure planned MRT infrastructure only. Existing MRT baseline is not inherited.")
+
+    dist_key = f"build3_mrt_distribution_{project.project_id}"
+    st.session_state.setdefault(
+        dist_key,
+        str(project.draft_state.get("build3::mrt::distribution_concurrency", project.draft_state.get("facility_resource::distribution_concurrency::usable", "1") or "1")),
+    )
+    distribution_concurrency = st.text_input(
+        "Planned MRT distribution concurrency",
+        key=dist_key,
+        help="Used by native MRT carrier fleet contract.",
+    )
+    dist_value, dist_issue = parse_non_negative_integer(distribution_concurrency)
+    if dist_issue or dist_value in (None, 0):
+        st.error("Planned MRT distribution concurrency must be a whole number greater than zero.")
+        st.markdown("</div>", unsafe_allow_html=True)
+        return
+
+    carriers_result = resolve_mrt_carrier_fleet(distribution_concurrency=int(dist_value))
+    st.write(f"**MRT carriers (auto-derived)**: {carriers_result.installed_carriers}")
+    st.caption("Carrier quantity is derived from MRT distribution concurrency in the current native contract.")
+
+    endpoints_key = f"build3_mrt_endpoints_planned_{project.project_id}"
+    st.session_state.setdefault(endpoints_key, str(project.draft_state.get("build3::mrt::planned_endpoints", "")))
+    planned_endpoints = st.text_input(
+        "Planned MRT endpoints",
+        key=endpoints_key,
+        help="Bounded manual input. Auto-sizing for endpoints is not yet calibrated.",
+    )
+    endpoint_value, endpoint_issue = parse_non_negative_integer(planned_endpoints)
+    if endpoint_issue:
+        st.error(f"Planned MRT endpoints: {endpoint_issue}")
+        st.markdown("</div>", unsafe_allow_html=True)
+        return
+
+    guideway_key = f"build3_mrt_guideway_{project.project_id}"
+    st.session_state.setdefault(guideway_key, str(project.draft_state.get("build3::mrt::planned_guideway_length_m", "")))
+    guideway_length = st.text_input(
+        "Planned guideway length (m)",
+        key=guideway_key,
+        help="Bounded manual input. Spatial auto-derivation is not yet available.",
+    )
+    guideway_value, guideway_issue = _parse_positive_float(guideway_length, label="Planned guideway length", allow_zero=True)
+    if guideway_issue:
+        st.error(guideway_issue)
+        st.markdown("</div>", unsafe_allow_html=True)
+        return
+
+    project.set_draft_value("build3::mrt::distribution_concurrency", str(dist_value))
+    project.set_draft_value("build3::mrt::auto_carriers", carriers_result.installed_carriers)
+    project.set_draft_value("build3::mrt::planned_endpoints", str(endpoint_value))
+    project.set_draft_value("build3::mrt::planned_guideway_length_m", str(guideway_value))
+
+    if st.button("Save MRT Infrastructure Draft", key=f"save_build3_mrt_{project.project_id}", use_container_width=True):
+        for key in (
+            "build3::mrt::distribution_concurrency",
+            "build3::mrt::auto_carriers",
+            "build3::mrt::planned_endpoints",
+            "build3::mrt::planned_guideway_length_m",
+        ):
+            project.commit_draft_key(key)
+        _persist_state(library, navigation)
+        _append_status("MRT infrastructure draft saved.", "success")
+        st.rerun()
+    st.markdown("</div>", unsafe_allow_html=True)
+
+
 def _render_validation_block(messages: tuple[ValidationMessage, ...], title: str) -> None:
     if not messages:
         return
@@ -1424,6 +1962,14 @@ def _render_current_page(library: ProjectLibrary, navigation: NavigationHistory,
         _render_project_definition(library, navigation, project)
     elif route == "facility_resources":
         _render_facility_resources(library, navigation, project)
+    elif route == "demand_workflow_radionuclides":
+        _render_demand_workflow(library, navigation, project)
+    elif route == "production_cyclotron_external_supply":
+        _render_production_supply(library, navigation, project)
+    elif route == "geometry_floor_transport":
+        _render_geometry_transport(library, navigation, project)
+    elif route == "mrt_infrastructure":
+        _render_mrt_infrastructure(library, navigation, project)
     elif route in FUTURE_PAGE_ROUTES:
         _render_placeholder(library, navigation, route, project)
     else:

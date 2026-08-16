@@ -64,6 +64,8 @@ class PlannerInputs:
     representative_half_life_min: float | None
     conventional_transport_min: float | None = None
     current_cyclotron_eob_capacity_mbq_per_day: float | None = None
+    cyclotron_fleet: Any | None = None
+    selected_cyclotron_radionuclide: str | None = None
 
     def incremental_patients_per_day(self) -> float:
         return max(0.0, self.target_patients_per_day - self.current_patients_per_day)
