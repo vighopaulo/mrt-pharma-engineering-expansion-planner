@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import replace
 from datetime import datetime
 from typing import Any
 
@@ -12,6 +13,24 @@ from cyclotron_catalog import (
     list_models_grouped_by_manufacturer,
     load_cyclotron_catalog,
     migration_from_legacy_model_counts,
+)
+from facility_engineering_model import (
+    ALL_EQUIPMENT_CLASSES,
+    CoordinateSystem,
+    EquipmentClass,
+    FacilityEngineeringObjectModel,
+    ProjectSpatialMode,
+    SpatialCoordinate,
+    SpatialMaturity,
+    SpatialSourceType,
+    SubscriptionTier,
+    build_default_facility_engineering_object_model,
+    deserialize_facility_engineering_object_model,
+    migrate_legacy_geometry_state,
+    resolve_default_source_profile,
+    resolve_subscription_capability_profile,
+    serialize_facility_engineering_object_model,
+    validate_facility_engineering_object_model,
 )
 from diagnostics import load_radionuclide_half_lives
 from mrt_carrier_fleet import resolve_mrt_carrier_fleet
@@ -496,7 +515,7 @@ def _workflow_cards() -> list[tuple[RouteId, str]]:
         ("facility_resources", "Facility & Existing Resources"),
         ("demand_workflow_radionuclides", "Demand & Clinical Workflow"),
         ("production_cyclotron_external_supply", "Production / Cyclotron / External Supply"),
-        ("geometry_floor_transport", "Geometry / Floor Plan / Transport"),
+        ("geometry_floor_transport", "Spatial / Facility Engineering / Transport"),
         ("mrt_infrastructure", "MRT Infrastructure"),
         ("economics_assumptions", "Economics"),
         ("review_run", "Review & Run"),
@@ -1727,45 +1746,144 @@ def _render_production_supply(library: ProjectLibrary, navigation: NavigationHis
 
 
 def _render_geometry_transport(library: ProjectLibrary, navigation: NavigationHistory, project: ProjectRecord | None) -> None:
-    st.title("Geometry / Floor Plan / Transport")
+    st.title("Spatial / Facility Engineering / Transport")
     if project is None:
         st.warning("Open a project to continue.")
         return
     _render_build3_context_summary(library, navigation, project)
 
-    st.markdown("<div class='page-card'><div class='page-card-title'>Geometry Input Method</div>", unsafe_allow_html=True)
-    methods = [
-        "Manual / Simplified Geometry (available)",
-        "Assisted Template (coming later)",
-        "CAD / BIM / PDF / Image Import (coming later)",
-        "Facility-System / API Integration (coming later)",
-        "Intelligent Reconstruction (coming later)",
-    ]
-    for method in methods:
-        st.write(f"- {method}")
+    existing_model = migrate_legacy_geometry_state(project.draft_state)
+    if existing_model is None:
+        existing_model = build_default_facility_engineering_object_model(
+            facility_id=project.project_id,
+            facility_name=project.name,
+            project_spatial_mode="GREENFIELD" if _project_mode(project) == "GREENFIELD" else "RETROFIT",
+            source_type="MANUAL",
+            subscription_tier="BASIC",
+            coordinate_system=CoordinateSystem(coordinate_system_id="LOCAL-1", name="Local engineering coordinates", building="Building A", storey="Level 1", local_coordinate_system="LOCAL", source_coordinate_reference="manual facility definition", scale_m_per_unit=1.0),
+        )
 
-    st.caption("Current build activates bounded manual geometry inputs only.")
-    distance_key = f"build3_geometry_distance_{project.project_id}"
-    floors_key = f"build3_geometry_floors_{project.project_id}"
-    vertical_key = f"build3_geometry_vertical_{project.project_id}"
-    st.session_state.setdefault(distance_key, str(project.draft_state.get("build3::geometry::route_distance_m", "")))
+    source_key = f"build3_facility_source_{project.project_id}"
+    evidence_key = f"build3_facility_evidence_{project.project_id}"
+    maturity_key = f"build3_facility_maturity_{project.project_id}"
+    tier_key = f"build3_facility_tier_{project.project_id}"
+    mode_key = f"build3_facility_mode_{project.project_id}"
+    facility_name_key = f"build3_facility_name_{project.project_id}"
+    building_name_key = f"build3_facility_building_{project.project_id}"
+    storey_name_key = f"build3_facility_storey_{project.project_id}"
+    space_name_key = f"build3_facility_space_{project.project_id}"
+    equipment_class_key = f"build3_facility_equipment_class_{project.project_id}"
+    equipment_name_key = f"build3_facility_equipment_name_{project.project_id}"
+    instance_id_key = f"build3_facility_instance_id_{project.project_id}"
+    coord_id_key = f"build3_facility_coordinate_system_id_{project.project_id}"
+    coord_name_key = f"build3_facility_coordinate_system_name_{project.project_id}"
+    coord_building_key = f"build3_facility_coordinate_building_{project.project_id}"
+    coord_storey_key = f"build3_facility_coordinate_storey_{project.project_id}"
+    local_coord_key = f"build3_facility_local_coordinate_{project.project_id}"
+    source_coord_key = f"build3_facility_source_reference_{project.project_id}"
+    scale_key = f"build3_facility_scale_{project.project_id}"
+    x_key = f"build3_facility_x_{project.project_id}"
+    y_key = f"build3_facility_y_{project.project_id}"
+    z_key = f"build3_facility_z_{project.project_id}"
+    orientation_key = f"build3_facility_orientation_{project.project_id}"
+    route_distance_key = f"build3_facility_route_distance_{project.project_id}"
+    vertical_change_key = f"build3_facility_vertical_change_{project.project_id}"
+    floors_key = f"build3_facility_floors_{project.project_id}"
+
+    source_options_by_tier = {
+        "BASIC": ["MANUAL", "TEMPLATE", "BENCHMARK"],
+        "PROFESSIONAL": ["MANUAL", "TEMPLATE", "BENCHMARK", "PDF", "IMAGE", "DWG", "DXF"],
+        "ENTERPRISE": ["MANUAL", "TEMPLATE", "BENCHMARK", "PDF", "IMAGE", "DWG", "DXF", "IFC", "REVIT_BIM"],
+    }
+
+    st.markdown("<div class='page-card'><div class='page-card-title'>Evidence Spectrum</div>", unsafe_allow_html=True)
+    st.caption("Subscription level only changes which spatial evidence sources are available. It does not alter physics.")
+
+    st.session_state.setdefault(tier_key, str(existing_model.subscription_tier))
+    subscription_tier = st.selectbox("Subscription tier", options=["BASIC", "PROFESSIONAL", "ENTERPRISE"], key=tier_key)
+    allowed_sources = source_options_by_tier[subscription_tier]
+
+    default_source = existing_model.source_type if existing_model.source_type in allowed_sources else allowed_sources[0]
+    st.session_state.setdefault(source_key, str(default_source))
+    source_type = st.selectbox("Spatial input source", options=allowed_sources, key=source_key)
+    evidence_class_default, maturity_default, _ = resolve_default_source_profile(source_type)
+    st.session_state.setdefault(evidence_key, str(existing_model.evidence_class if existing_model.evidence_class else evidence_class_default))
+    st.session_state.setdefault(maturity_key, str(existing_model.maturity if existing_model.maturity else maturity_default))
+    evidence_class = st.selectbox(
+        "Evidence class",
+        options=["BIM_AUTHORITATIVE", "CAD_ENGINEERING", "PLAN_DERIVED", "USER_SUPPLIED", "TEMPLATE_DERIVED", "BENCHMARK_ASSUMED", "DERIVED_GEOMETRY"],
+        key=evidence_key,
+    )
+    maturity = st.selectbox("Spatial maturity", options=["CONCEPTUAL", "PRELIMINARY", "ENGINEERING", "BIM_VERIFIED"], key=maturity_key)
+    capability_profile = resolve_subscription_capability_profile(subscription_tier)
+    st.write(f"**Allowed source methods**: {', '.join(capability_profile.allowed_spatial_sources)}")
+    st.write(f"**Available analysis**: {', '.join(capability_profile.allowed_analysis_modes)}")
+
+    st.markdown("<div class='page-card'><div class='page-card-title'>Canonical Facility Object Model</div>", unsafe_allow_html=True)
+    st.caption("This page stores a canonical facility engineering object model; IFC, CAD, PDF, manual, template, and benchmark inputs all normalize into the same downstream structure.")
+
+    project_mode_default = "RETROFIT" if _project_mode(project) == "EXISTING_FACILITY_RETROFIT" else "GREENFIELD"
+    st.session_state.setdefault(mode_key, project_mode_default)
+    project_spatial_mode = st.selectbox("Spatial project mode", options=["RETROFIT", "GREENFIELD"], key=mode_key)
+
+    st.session_state.setdefault(facility_name_key, str(existing_model.facility_name or project.name))
+    st.session_state.setdefault(building_name_key, str(existing_model.coordinate_system.building or "Building A"))
+    st.session_state.setdefault(storey_name_key, str(existing_model.coordinate_system.storey or "Level 1"))
+    st.session_state.setdefault(space_name_key, str(existing_model.spaces[0].name if existing_model.spaces else "Primary Room"))
+    st.session_state.setdefault(equipment_class_key, str(existing_model.equipment[0].equipment_class if existing_model.equipment else "Cyclotron"))
+    st.session_state.setdefault(equipment_name_key, str(existing_model.equipment[0].name if existing_model.equipment else "Facility Equipment"))
+    st.session_state.setdefault(instance_id_key, str(existing_model.equipment[0].facility_instance_id if existing_model.equipment else ""))
+    st.session_state.setdefault(coord_id_key, str(existing_model.coordinate_system.coordinate_system_id))
+    st.session_state.setdefault(coord_name_key, str(existing_model.coordinate_system.name))
+    st.session_state.setdefault(coord_building_key, str(existing_model.coordinate_system.building or "Building A"))
+    st.session_state.setdefault(coord_storey_key, str(existing_model.coordinate_system.storey or "Level 1"))
+    st.session_state.setdefault(local_coord_key, str(existing_model.coordinate_system.local_coordinate_system or "LOCAL"))
+    st.session_state.setdefault(source_coord_key, str(existing_model.coordinate_system.source_coordinate_reference or source_type))
+    st.session_state.setdefault(scale_key, "1.0" if existing_model.coordinate_system.scale_m_per_unit is None else str(existing_model.coordinate_system.scale_m_per_unit))
+    st.session_state.setdefault(x_key, "" if existing_model.spaces[0].coordinate is None or existing_model.spaces[0].coordinate.x_m is None else str(existing_model.spaces[0].coordinate.x_m))
+    st.session_state.setdefault(y_key, "" if existing_model.spaces[0].coordinate is None or existing_model.spaces[0].coordinate.y_m is None else str(existing_model.spaces[0].coordinate.y_m))
+    st.session_state.setdefault(z_key, "" if existing_model.spaces[0].coordinate is None or existing_model.spaces[0].coordinate.z_m is None else str(existing_model.spaces[0].coordinate.z_m))
+    st.session_state.setdefault(orientation_key, "" if existing_model.spaces[0].coordinate is None or existing_model.spaces[0].coordinate.orientation_deg is None else str(existing_model.spaces[0].coordinate.orientation_deg))
+    st.session_state.setdefault(route_distance_key, str(project.draft_state.get("build3::geometry::route_distance_m", "")))
+    st.session_state.setdefault(vertical_change_key, str(project.draft_state.get("build3::geometry::vertical_transfer_m", "0")))
     st.session_state.setdefault(floors_key, str(project.draft_state.get("build3::geometry::floors", "1")))
-    st.session_state.setdefault(vertical_key, str(project.draft_state.get("build3::geometry::vertical_transfer_m", "0")))
 
-    route_distance = st.text_input("Total route distance (m)", key=distance_key, help="Required. Use meters.")
-    floors = st.text_input("Number of floors", key=floors_key, help="Required whole number.")
-    vertical_distance = st.text_input("Vertical transfer distance (m)", key=vertical_key, help="Set 0 if not applicable.")
+    facility_name = st.text_input("Facility name", key=facility_name_key)
+    building_name = st.text_input("Building name", key=building_name_key)
+    storey_name = st.text_input("Storey / floor name", key=storey_name_key)
+    space_name = st.text_input("Room / space name", key=space_name_key)
+    equipment_class = st.selectbox("Primary spatial equipment type", options=list(ALL_EQUIPMENT_CLASSES), key=equipment_class_key)
+    equipment_name = st.text_input("Primary spatial equipment label", key=equipment_name_key)
+    facility_instance_id = st.text_input("Equipment instance / catalog reference", key=instance_id_key, help="References the equipment instance catalog identity, not manufacturer physics.")
+
+    coord_id = st.text_input("Coordinate system ID", key=coord_id_key)
+    coord_name = st.text_input("Coordinate system name", key=coord_name_key)
+    coord_building = st.text_input("Coordinate system building", key=coord_building_key)
+    coord_storey = st.text_input("Coordinate system storey", key=coord_storey_key)
+    local_coordinate_system = st.text_input("Local coordinate system", key=local_coord_key)
+    source_coordinate_reference = st.text_input("Source coordinate reference", key=source_coord_key)
+    scale_text = st.text_input("Source scale (m per drawing unit)", key=scale_key)
+
+    c1, c2, c3, c4 = st.columns(4)
+    x_text = c1.text_input("x (m)", key=x_key)
+    y_text = c2.text_input("y (m)", key=y_key)
+    z_text = c3.text_input("z (m)", key=z_key)
+    orientation_text = c4.text_input("Orientation (deg)", key=orientation_key)
+
+    route_distance = st.text_input("Network route distance (m)", key=route_distance_key, help="Geometry only; carrier travel time is handled later.")
+    vertical_change = st.text_input("Vertical change (m)", key=vertical_change_key, help="Use 0 if the route is planar.")
+    floors = st.text_input("Number of storeys represented", key=floors_key, help="Whole number. Supports multi-storey facilities.")
 
     errors: list[str] = []
-    _, d_issue = _parse_positive_float(route_distance, label="Total route distance", allow_zero=False)
-    if d_issue:
-        errors.append(d_issue)
+    _, route_issue = _parse_positive_float(route_distance, label="Network route distance", allow_zero=False)
+    if route_issue:
+        errors.append(route_issue)
     floors_value, floors_issue = parse_non_negative_integer(floors)
     if floors_issue or floors_value in (None, 0):
-        errors.append("Number of floors must be a whole number greater than zero.")
-    _, v_issue = _parse_positive_float(vertical_distance, label="Vertical transfer distance", allow_zero=True)
-    if v_issue:
-        errors.append(v_issue)
+        errors.append("Number of storeys represented must be a whole number greater than zero.")
+    _, vertical_issue = _parse_positive_float(vertical_change, label="Vertical change", allow_zero=True)
+    if vertical_issue:
+        errors.append(vertical_issue)
 
     if errors:
         for error in errors:
@@ -1773,19 +1891,97 @@ def _render_geometry_transport(library: ProjectLibrary, navigation: NavigationHi
         st.markdown("</div>", unsafe_allow_html=True)
         return
 
-    project.set_draft_value("build3::geometry::route_distance_m", route_distance.strip())
-    project.set_draft_value("build3::geometry::floors", str(floors_value))
-    project.set_draft_value("build3::geometry::vertical_transfer_m", vertical_distance.strip())
+    coordinate = SpatialCoordinate(
+        x_m=_safe_float(x_text),
+        y_m=_safe_float(y_text),
+        z_m=_safe_float(z_text),
+        building=coord_building or None,
+        storey=coord_storey or None,
+        orientation_deg=_safe_float(orientation_text),
+        local_coordinate_system=local_coordinate_system or None,
+        source_coordinate_reference=source_coordinate_reference or None,
+        scale_m_per_unit=_safe_float(scale_text),
+    )
 
-    if st.button("Save Geometry Draft", key=f"save_build3_geometry_{project.project_id}", use_container_width=True):
+    model = build_default_facility_engineering_object_model(
+        facility_id=project.project_id,
+        facility_name=facility_name,
+        project_spatial_mode=project_spatial_mode,
+        source_type=source_type,
+        subscription_tier=subscription_tier,
+        coordinate_system=CoordinateSystem(
+            coordinate_system_id=coord_id,
+            name=coord_name,
+            building=coord_building or None,
+            storey=coord_storey or None,
+            local_coordinate_system=local_coordinate_system or None,
+            source_coordinate_reference=source_coordinate_reference or None,
+            scale_m_per_unit=_safe_float(scale_text),
+        ),
+        facility_instance_id=facility_instance_id or None,
+        building_name=building_name,
+        storey_name=storey_name,
+        space_name=space_name,
+        equipment_class=equipment_class,  # type: ignore[arg-type]
+        equipment_name=equipment_name or None,
+        route_distance_m=_safe_float(route_distance),
+        vertical_change_m=_safe_float(vertical_change),
+        room_coordinate=coordinate,
+        notes=(f"Spatial maturity: {maturity}", f"Storeys represented: {floors.strip() or '1'}"),
+    )
+    model = replace(model, evidence_class=evidence_class, maturity=maturity, subscription_tier=subscription_tier)
+    validation_issues = validate_facility_engineering_object_model(model)
+    if validation_issues:
+        st.markdown("**Spatial validation**")
+        for issue in validation_issues:
+            if issue.severity == "ERROR":
+                st.error(issue.message)
+            elif issue.severity == "WARNING":
+                st.warning(issue.message)
+            else:
+                st.info(issue.message)
+
+    st.write("**Canonical object summary**")
+    st.write(f"Facility: {model.facility_name}")
+    st.write(f"Evidence class: {model.evidence_class}")
+    st.write(f"Maturity: {model.maturity}")
+    st.write(f"Facility objects: {len(model.buildings) + len(model.storeys) + len(model.spaces) + len(model.equipment)}")
+    st.write(f"Spatial nodes: {len(model.nodes)}")
+    st.write(f"Spatial edges: {len(model.edges)}")
+
+    project.set_draft_value("build3::geometry::route_distance_m", route_distance.strip())
+    project.set_draft_value("build3::geometry::floors", floors.strip() or "1")
+    project.set_draft_value("build3::geometry::vertical_transfer_m", vertical_change.strip())
+    project.set_draft_value("build3::facility_engineering::model", serialize_facility_engineering_object_model(model))
+    project.set_draft_value("build3::facility_engineering::source_type", source_type)
+    project.set_draft_value("build3::facility_engineering::subscription_tier", subscription_tier)
+    project.set_draft_value("build3::facility_engineering::project_spatial_mode", project_spatial_mode)
+    project.set_draft_value("build3::facility_engineering::facility_name", facility_name)
+    project.set_draft_value("build3::facility_engineering::building_name", building_name)
+    project.set_draft_value("build3::facility_engineering::storey_name", storey_name)
+    project.set_draft_value("build3::facility_engineering::space_name", space_name)
+    project.set_draft_value("build3::facility_engineering::equipment_class", equipment_class)
+    project.set_draft_value("build3::facility_engineering::equipment_name", equipment_name)
+
+    if st.button("Save Spatial Draft", key=f"save_build3_geometry_{project.project_id}", use_container_width=True):
         for key in (
             "build3::geometry::route_distance_m",
             "build3::geometry::floors",
             "build3::geometry::vertical_transfer_m",
+            "build3::facility_engineering::model",
+            "build3::facility_engineering::source_type",
+            "build3::facility_engineering::subscription_tier",
+            "build3::facility_engineering::project_spatial_mode",
+            "build3::facility_engineering::facility_name",
+            "build3::facility_engineering::building_name",
+            "build3::facility_engineering::storey_name",
+            "build3::facility_engineering::space_name",
+            "build3::facility_engineering::equipment_class",
+            "build3::facility_engineering::equipment_name",
         ):
             project.commit_draft_key(key)
         _persist_state(library, navigation)
-        _append_status("Geometry draft saved.", "success")
+        _append_status("Spatial foundation draft saved.", "success")
         st.rerun()
     st.markdown("</div>", unsafe_allow_html=True)
 

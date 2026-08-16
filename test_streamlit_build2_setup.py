@@ -850,7 +850,7 @@ def test_build3_pages_6_to_9_are_active_and_page_10_remains_placeholder() -> Non
     for route, expected_title in [
         ("demand_workflow_radionuclides", "Demand & Clinical Workflow"),
         ("production_cyclotron_external_supply", "Production / Cyclotron / External Supply"),
-        ("geometry_floor_transport", "Geometry / Floor Plan / Transport"),
+        ("geometry_floor_transport", "Spatial / Facility Engineering / Transport"),
         ("mrt_infrastructure", "MRT Infrastructure"),
     ]:
         at, _ = _seed(

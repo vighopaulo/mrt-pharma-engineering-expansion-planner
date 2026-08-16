@@ -65,7 +65,7 @@ def test_project_overview_renders_workflow_entry_cards() -> None:
         "Facility & Existing Resources",
         "Demand & Clinical Workflow",
         "Production / Cyclotron / External Supply",
-        "Geometry / Floor Plan / Transport",
+        "Spatial / Facility Engineering / Transport",
         "MRT Infrastructure",
         "Economics",
         "Review & Run",

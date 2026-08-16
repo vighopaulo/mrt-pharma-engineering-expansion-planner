@@ -51,7 +51,7 @@ PAGE_LABELS: dict[RouteId, str] = {
     "facility_resources": "Facility & Existing Resources",
     "demand_workflow_radionuclides": "Demand & Clinical Workflow",
     "production_cyclotron_external_supply": "Production / Cyclotron / External Supply",
-    "geometry_floor_transport": "Geometry / Floor Plan / Transport",
+    "geometry_floor_transport": "Spatial / Facility Engineering / Transport",
     "mrt_infrastructure": "MRT Infrastructure",
     "economics_assumptions": "Economics & Assumptions",
     "review_run": "Review & Run",
