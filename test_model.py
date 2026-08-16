@@ -327,16 +327,23 @@ def test_validation_and_half_life_resolution():
     assert issues
 
 
-def test_friendly_workflow_labels_and_primary_action_text():
-    text = Path("app.py").read_text(encoding="utf-8")
-    labels = [
-        "1. Project",
-        "2. Current Facility",
-        "3. Expansion Goal",
-        "4. Compare Options",
-        "5. Results",
+def test_build1_shell_labels_and_primary_navigation_text():
+    app_text = Path("app.py").read_text(encoding="utf-8")
+    foundation_text = Path("ui_foundation.py").read_text(encoding="utf-8")
+    text = app_text + "\n" + foundation_text
+
+    expected_labels = [
+        "Home / Landing",
+        "Projects",
+        "Project Overview",
+        "Project Definition / Project Mode",
+        "Review & Run",
+        "Master Engineering Data / Reports / Evidence / Exports",
     ]
-    positions = [text.index(label) for label in labels]
-    assert positions == sorted(positions)
-    assert "Compare Expansion Options" in text
-    assert "Customize assumptions" in text
+    for label in expected_labels:
+        assert label in text
+
+    assert "Back" in app_text
+    assert "Forward" in app_text
+    assert "Create Project" in app_text
+    assert "Open Project" in app_text
