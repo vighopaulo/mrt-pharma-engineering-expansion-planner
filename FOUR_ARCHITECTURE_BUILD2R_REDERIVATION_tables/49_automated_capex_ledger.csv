@@ -1,0 +1,3 @@
+component,quantity,unit_cost,extended_cost,note
+AGV/AMR fleet (PROPOSED),1,150000.0,150000.0,"HYPOTHETICAL_ONCOLOGY_AUTOMATION_ADAPTATION for nuclear (proven infeasible, general-logistics only)"
+PTS network/stations (PROPOSED),1,120000.0,120000.0,"pts_new_study_capex, station count derived via pts_required_station_count"

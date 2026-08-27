@@ -1,6 +1,13 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from typing import Literal, Mapping
+
+ClinicalResourceMode = Literal["OUTPATIENT_SHARED", "INBOUND_CENTRALIZED", "INBOUND_INTEGRATED"]
+DEDICATED_ROOM_RESOURCE_INDEX = -1
+"""Sentinel for injection_resource_index/uptake_resource_index (section 16/17):
+the function was performed in the patient's dedicated inbound room, not a
+shared INJ-xxx/UP-xxx resource -- never a valid shared-resource array index."""
 
 
 @dataclass(frozen=True)
@@ -8,6 +15,18 @@ class BatchRelease:
     batch_id: int
     release_time_minutes: float
     patients_in_batch: int
+    release_unit_id: str | None = None
+    # Parallel arrays, one entry per patient in this batch (order matches the
+    # patient loop below). Empty tuple = every patient is OUTPATIENT_SHARED
+    # with no dedicated room (byte-for-byte existing behavior, section 33).
+    patient_clinical_modes: tuple[ClinicalResourceMode, ...] = ()
+    patient_inbound_room_ids: tuple[str | None, ...] = ()
+
+    def __post_init__(self) -> None:
+        if self.patient_clinical_modes and len(self.patient_clinical_modes) != self.patients_in_batch:
+            raise ValueError("patient_clinical_modes length must match patients_in_batch")
+        if self.patient_inbound_room_ids and len(self.patient_inbound_room_ids) != self.patients_in_batch:
+            raise ValueError("patient_inbound_room_ids length must match patients_in_batch")
 
 
 @dataclass(frozen=True)
@@ -22,12 +41,38 @@ class OperatingDayInputs:
     uptake_resources: int
     scanners: int
     distribution_concurrency: int
+    clinical_day_start_minute: float = 0.0
+    blocked_distribution_indices: frozenset[int] = frozenset()
+    blocked_injection_indices: frozenset[int] = frozenset()
+    blocked_uptake_indices: frozenset[int] = frozenset()
+    blocked_scanner_indices: frozenset[int] = frozenset()
+    """Rolling-reoptimization identity-sticky reservation (additive): indices in
+    these sets are seeded as busy for the entire operating day instead of free
+    at day-start, so they are never selected by `_allocate_earliest` -- WITHOUT
+    shrinking/renumbering the array. This keeps every OTHER index's persistent
+    resource identity stable across a rerun that only removes one resource
+    (e.g. index 0 blocked -- SCN-002/003/004 remain indices 1/2/3, exactly as
+    before). Empty (default) is byte-for-byte identical to prior behavior."""
+    distribution_reserved_until: Mapping[int, float] = field(default_factory=dict)
+    injection_reserved_until: Mapping[int, float] = field(default_factory=dict)
+    uptake_reserved_until: Mapping[int, float] = field(default_factory=dict)
+    scanner_reserved_until: Mapping[int, float] = field(default_factory=dict)
+    """Rolling-reoptimization affected-subset reoptimization (additive): index ->
+    the time that index becomes free, reflecting a PRESERVED (not rescheduled
+    in this call) patient's actual consumption of that physical resource. Lets
+    the day-engine schedule ONLY the directly-affected subset of patients into
+    the TRUE residual capacity around already-preserved assignments, without
+    re-deriving or disturbing those preserved assignments at all. Empty
+    (default) is byte-for-byte identical to prior behavior. Ignored for an
+    index also present in the corresponding `blocked_*_indices` set (blocking
+    for the whole day takes precedence)."""
 
 
 @dataclass(frozen=True)
 class PatientSchedule:
     patient_id: int
     batch_id: int
+    release_unit_id: str | None
     batch_release_time: float
     distribution_start: float
     distribution_end: float
@@ -38,6 +83,12 @@ class PatientSchedule:
     scan_start: float
     scan_end: float
     completed_within_operating_day: bool
+    distribution_resource_index: int = 0
+    injection_resource_index: int = 0
+    uptake_resource_index: int = 0
+    scanner_resource_index: int = 0
+    clinical_resource_mode: ClinicalResourceMode = "OUTPATIENT_SHARED"
+    inbound_room_id: str | None = None
 
 
 @dataclass(frozen=True)
@@ -74,13 +125,11 @@ def _validate_inputs(inputs: OperatingDayInputs) -> None:
     if inputs.distribution_concurrency <= 0:
         raise ValueError("distribution_concurrency must be at least 1")
     for batch in inputs.batch_releases:
-        if batch.release_time_minutes < 0.0:
-            raise ValueError("batch release_time_minutes must be non-negative")
         if batch.patients_in_batch < 0:
             raise ValueError("batch patients_in_batch must be non-negative")
 
 
-def _allocate_earliest(availability: list[float], earliest_start: float, duration: float) -> tuple[float, float]:
+def _allocate_earliest(availability: list[float], earliest_start: float, duration: float) -> tuple[int, float, float]:
     chosen_index = 0
     chosen_start = max(earliest_start, availability[0])
     for idx in range(1, len(availability)):
@@ -90,22 +139,42 @@ def _allocate_earliest(availability: list[float], earliest_start: float, duratio
             chosen_index = idx
     end_time = chosen_start + duration
     availability[chosen_index] = end_time
-    return chosen_start, end_time
+    return chosen_index, chosen_start, end_time
 
 
-def _occupied_minutes_within_day(start: float, end: float, operating_day_minutes: float) -> float:
-    overlap_start = max(0.0, min(start, operating_day_minutes))
-    overlap_end = max(0.0, min(end, operating_day_minutes))
+def _occupied_minutes_within_day(start: float, end: float, clinical_day_start_minute: float, operating_day_minutes: float) -> float:
+    clinical_day_end_minute = clinical_day_start_minute + operating_day_minutes
+    overlap_start = max(clinical_day_start_minute, min(start, clinical_day_end_minute))
+    overlap_end = max(clinical_day_start_minute, min(end, clinical_day_end_minute))
     return max(0.0, overlap_end - overlap_start)
 
 
 def schedule_operating_day(inputs: OperatingDayInputs) -> OperatingDayScheduleResult:
     _validate_inputs(inputs)
 
-    distribution_available_at = [0.0] * inputs.distribution_concurrency
-    injection_available_at = [0.0] * inputs.injection_resources
-    uptake_available_at = [0.0] * inputs.uptake_resources
-    scanner_available_at = [0.0] * inputs.scanners
+    clinical_day_end_minute = inputs.clinical_day_start_minute + inputs.operating_day_minutes
+
+    def _seed(index: int, blocked: frozenset[int], reserved_until: Mapping[int, float]) -> float:
+        if index in blocked:
+            return clinical_day_end_minute
+        return reserved_until.get(index, inputs.clinical_day_start_minute)
+
+    distribution_available_at = [
+        _seed(i, inputs.blocked_distribution_indices, inputs.distribution_reserved_until)
+        for i in range(inputs.distribution_concurrency)
+    ]
+    injection_available_at = [
+        _seed(i, inputs.blocked_injection_indices, inputs.injection_reserved_until)
+        for i in range(inputs.injection_resources)
+    ]
+    uptake_available_at = [
+        _seed(i, inputs.blocked_uptake_indices, inputs.uptake_reserved_until)
+        for i in range(inputs.uptake_resources)
+    ]
+    scanner_available_at = [
+        _seed(i, inputs.blocked_scanner_indices, inputs.scanner_reserved_until)
+        for i in range(inputs.scanners)
+    ]
 
     patient_schedules: list[PatientSchedule] = []
     patient_id = 0
@@ -115,53 +184,83 @@ def schedule_operating_day(inputs: OperatingDayInputs) -> OperatingDayScheduleRe
     uptake_occupied_minutes = 0.0
     distribution_occupied_minutes = 0.0
 
-    sorted_batches = sorted(inputs.batch_releases, key=lambda b: (b.release_time_minutes, b.batch_id))
+    sorted_batches = sorted(
+        inputs.batch_releases,
+        key=lambda b: (b.release_time_minutes, b.batch_id, b.release_unit_id or ""),
+    )
 
     for batch in sorted_batches:
-        for _ in range(batch.patients_in_batch):
+        for patient_index in range(batch.patients_in_batch):
             patient_id += 1
+            mode: ClinicalResourceMode = (
+                batch.patient_clinical_modes[patient_index] if batch.patient_clinical_modes else "OUTPATIENT_SHARED"
+            )
+            room_id = batch.patient_inbound_room_ids[patient_index] if batch.patient_inbound_room_ids else None
 
-            distribution_start, distribution_end = _allocate_earliest(
+            distribution_index, distribution_start, distribution_end = _allocate_earliest(
                 distribution_available_at,
                 batch.release_time_minutes,
                 inputs.transport_minutes,
             )
-            injection_start, injection_end = _allocate_earliest(
-                injection_available_at,
-                distribution_end,
-                inputs.injection_service_minutes,
-            )
-            uptake_start, uptake_end = _allocate_earliest(
-                uptake_available_at,
-                injection_end,
-                inputs.uptake_minutes,
-            )
-            scan_start, scan_end = _allocate_earliest(
+
+            if mode == "INBOUND_INTEGRATED":
+                # Section 16/21: injection performed in the dedicated inbound room --
+                # never queues for/occupies a shared INJ-xxx resource.
+                injection_index = DEDICATED_ROOM_RESOURCE_INDEX
+                injection_start = distribution_end
+                injection_end = injection_start + inputs.injection_service_minutes
+            else:
+                injection_index, injection_start, injection_end = _allocate_earliest(
+                    injection_available_at,
+                    distribution_end,
+                    inputs.injection_service_minutes,
+                )
+
+            if mode in ("INBOUND_INTEGRATED", "INBOUND_CENTRALIZED"):
+                # Section 17/22: dedicated-room uptake -- never queues for/occupies a
+                # shared UP-xxx resource, for both INTEGRATED and CENTRALIZED.
+                uptake_index = DEDICATED_ROOM_RESOURCE_INDEX
+                uptake_start = injection_end
+                uptake_end = uptake_start + inputs.uptake_minutes
+            else:
+                uptake_index, uptake_start, uptake_end = _allocate_earliest(
+                    uptake_available_at,
+                    injection_end,
+                    inputs.uptake_minutes,
+                )
+
+            scanner_index, scan_start, scan_end = _allocate_earliest(
                 scanner_available_at,
                 uptake_end,
                 inputs.scanner_service_minutes,
             )
 
-            completed = scan_end <= inputs.operating_day_minutes
+            completed = scan_end <= clinical_day_end_minute
 
             distribution_occupied_minutes += _occupied_minutes_within_day(
                 distribution_start,
                 distribution_end,
+                inputs.clinical_day_start_minute,
                 inputs.operating_day_minutes,
             )
-            injection_occupied_minutes += _occupied_minutes_within_day(
-                injection_start,
-                injection_end,
-                inputs.operating_day_minutes,
-            )
-            uptake_occupied_minutes += _occupied_minutes_within_day(
-                uptake_start,
-                uptake_end,
-                inputs.operating_day_minutes,
-            )
+            if injection_index != DEDICATED_ROOM_RESOURCE_INDEX:
+                injection_occupied_minutes += _occupied_minutes_within_day(
+                    injection_start,
+                    injection_end,
+                    inputs.clinical_day_start_minute,
+                    inputs.operating_day_minutes,
+                )
+            if uptake_index != DEDICATED_ROOM_RESOURCE_INDEX:
+                uptake_occupied_minutes += _occupied_minutes_within_day(
+                    uptake_start,
+                    uptake_end,
+                    inputs.clinical_day_start_minute,
+                    inputs.operating_day_minutes,
+                )
             scanner_occupied_minutes += _occupied_minutes_within_day(
                 scan_start,
                 scan_end,
+                inputs.clinical_day_start_minute,
                 inputs.operating_day_minutes,
             )
 
@@ -169,6 +268,7 @@ def schedule_operating_day(inputs: OperatingDayInputs) -> OperatingDayScheduleRe
                 PatientSchedule(
                     patient_id=patient_id,
                     batch_id=batch.batch_id,
+                    release_unit_id=batch.release_unit_id,
                     batch_release_time=batch.release_time_minutes,
                     distribution_start=distribution_start,
                     distribution_end=distribution_end,
@@ -179,6 +279,12 @@ def schedule_operating_day(inputs: OperatingDayInputs) -> OperatingDayScheduleRe
                     scan_start=scan_start,
                     scan_end=scan_end,
                     completed_within_operating_day=completed,
+                    distribution_resource_index=distribution_index,
+                    injection_resource_index=injection_index,
+                    uptake_resource_index=uptake_index,
+                    scanner_resource_index=scanner_index,
+                    clinical_resource_mode=mode,
+                    inbound_room_id=room_id,
                 )
             )
 

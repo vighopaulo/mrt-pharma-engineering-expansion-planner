@@ -1,0 +1,6 @@
+Metric,Before Translation,After Translation,Delta,Engineering Cause,Economic Consequence
+Building B global position,"(500.0, 0.0, 0.0)","(800.0, 0.0, 0.0)",+300.0,Direct translation of Building B's own Transform.position_x,-
+Inter-building distance (A<->B),500.0,800.0,+300.0,Euclidean distance between accumulated global positions,Feeds directly into campus_retrofit_benchmark.build_two_building_campus_geometry(campus_separation_m=...)
+Building B total CapEx,"45,040,000.00","54,090,000.00","9,050,000.00",Longer campus route -> more guideway length -> more guideway CapEx (real per-room accumulation via compute_inbound_room_guideway_extension),CapEx increases
+Building B annual OPEX,"6,580,955.00","6,854,705.00","273,750.00",Guideway maintenance OPEX scales with guideway length (PlannerAssumptions.mrt_guideway_maintenance_fraction_of_capex_per_year),OPEX increases
+Qualified lifecycle NPV,"200,676,772.70","189,789,887.92","-10,886,884.78",Higher CapEx+OPEX with unchanged revenue -> lower NPV,NPV decreases

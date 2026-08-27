@@ -44,6 +44,37 @@ class PlannerAssumptions:
     decay_feasibility_max_compensation_factor: float | None = None
     default_clinical_administration_cohorts_per_day: int = 6
     common_administration_wait_min: float = 71.0
+    manual_transport_speed_m_per_s: float = 1.2
+    manual_transport_pickup_minutes: float = 0.5
+    manual_transport_handoff_minutes: float = 0.5
+    manual_transport_elevator_wait_minutes: float = 1.0
+    manual_transport_elevator_loading_minutes: float = 0.5
+    manual_transport_elevator_speed_m_per_s: float = 1.0
+    mrt_horizontal_speed_m_per_s: float = 3.0
+    mrt_vertical_speed_m_per_s: float = 1.5
+    mrt_transition_time_seconds: float = 8.0
+    mrt_station_loading_time_seconds: float = 30.0
+    mrt_station_unloading_time_seconds: float = 30.0
+    mrt_carrier_capex_per_installed_unit: float = 10_000.0
+    mrt_carrier_allocated_electricity_opex_per_operated_unit_year: float = 250.0
+    mrt_carrier_maintenance_opex_per_installed_unit_year: float = 500.0
+    mrt_guideway_capex_per_m: float = 5_000.0
+    mrt_guideway_maintenance_fraction_of_capex_per_year: float = 0.03
+    # PROJECT DESIGN CRITERION (not an FDA/regulatory/universal clinical requirement):
+    # minimum fraction of administered activity that must remain from RELEASE (not EOB)
+    # to actual administration for a room/location to be spatial-retention-feasible.
+    minimum_release_to_administration_retention_fraction: float = 0.90
+    # Section 53: SPECT/generator economics remain explicitly NOT_CALIBRATED (None)
+    # until a legitimate value is supplied -- no invented CapEx/OPEX figures.
+    generator_purchase_capex: float | None = None
+    generator_installation_capex: float | None = None
+    generator_annual_maintenance_opex: float | None = None
+    spect_scanner_capex: float | None = None
+    spect_scanner_incremental_opex: float | None = None
+
+    def __post_init__(self) -> None:
+        if not (0.0 < self.minimum_release_to_administration_retention_fraction <= 1.0):
+            raise ValueError("minimum_release_to_administration_retention_fraction must be within (0, 1]")
 
 
 @dataclass(frozen=True)

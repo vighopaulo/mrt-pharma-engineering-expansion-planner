@@ -159,7 +159,16 @@ def _pipeline_template() -> NativeDecisionPipelineScenario:
     )
     return NativeDecisionPipelineScenario(
         project_name="Fleet Recommendation",
-        target_patients_per_day=220,
+        # OBSOLETE_EXPECTATION_FROM_SUPERSEDED_AUTHORITY: originally 220. The Clinical
+        # Bottleneck Authority / Retention-Qualified Throughput Authority phases (see
+        # test_clinical_bottleneck_authority.py, test_retention_qualified_throughput_authority.py)
+        # correctly tightened realistic scanner/clinical capacity ceilings; with this
+        # fixture's bounded scanner counts (Conventional 3-4, MRT 5-6) the physically
+        # achievable throughput is ~149-198 patients/day, so 220 became architecturally
+        # unreachable (measured_reliability == 0.0 for every candidate, independent of
+        # minimum_reliability). Lowered to a target achievable within these bounds so the
+        # fleet-recommendation SELECTION/OBJECTIVE logic under test can actually qualify.
+        target_patients_per_day=130,
         radionuclide_mix={"F-18": 0.45, "Ga-68": 0.25, "N-13": 0.15, "O-15": 0.10, "C-11": 0.05},
         activity_distribution_by_radionuclide=_activity_models(),
         cyclotron_capability=fleet.assets[0].capability,
@@ -185,7 +194,8 @@ def _request(
 ) -> CyclotronFleetRecommendationRequest:
     return CyclotronFleetRecommendationRequest(
         project_name="Fleet Recommendation Test",
-        target_patients_per_day=220,
+        # OBSOLETE_EXPECTATION_FROM_SUPERSEDED_AUTHORITY: see rationale in _pipeline_template().
+        target_patients_per_day=130,
         required_radionuclides=("F-18", "Ga-68", "N-13", "O-15"),
         optional_radionuclides=("C-11",),
         radionuclide_mix={"F-18": 0.45, "Ga-68": 0.25, "N-13": 0.15, "O-15": 0.10, "C-11": 0.05},
@@ -215,7 +225,7 @@ def _request(
         objective=objective,
         current_fleet=current_fleet,
         incremental_expansion_only=incremental_expansion_only,
-        throughputs_for_reliability=(220.0,),
+        throughputs_for_reliability=(130.0,),
     )
 
 

@@ -1,0 +1,11 @@
+component,quantity,unit_cost,extended_cost
+Scanners (common/shared),6,2500000.0,15000000.0
+Injection rooms (common/shared),6,25000.0,150000.0
+Uptake rooms (common/shared),12,25000.0,300000.0
+Cyclotron purchase+installation (common/shared),1,5000000.0,5000000.0
+MRT base infrastructure (architecture-specific),1,6000000.0,6000000.0
+MRT ordinary endpoints (architecture-specific),6,10000.0,60000.0
+MRT guideway H+V length (architecture-specific),222.0,5000.0,1110000.0
+MRT vertical transitions (architecture-specific),12,350000.0,4200000.0
+"MRT nuclear-shielded carriers, baseline (architecture-specific)",2,10000.0,20000.0
+"Cyclotron-linked MRT vestibules (architecture-specific, NEW)",1,30000.0,30000.0

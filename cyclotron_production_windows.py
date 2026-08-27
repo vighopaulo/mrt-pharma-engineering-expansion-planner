@@ -136,6 +136,9 @@ class CyclotronProductionSchedule:
     cyclotron_id: str
     windows: tuple[ProductionWindow, ...]
     total_batches: int
+    scheduled_batches: int
+    unscheduled_batches: int
+    unscheduled_batch_ids: tuple[int, ...]
     total_windows: int
     production_start_time_minutes: float
     production_end_time_minutes: float
@@ -218,6 +221,9 @@ class CyclotronFleetProductionSchedule:
     per_cyclotron_schedules: Mapping[str, CyclotronProductionSchedule]
     windows: tuple[ProductionWindow, ...]
     total_batches: int
+    scheduled_batches: int
+    unscheduled_batches: int
+    unscheduled_batch_ids: tuple[int, ...]
     total_windows: int
     production_start_time_minutes: float
     production_end_time_minutes: float
@@ -271,10 +277,8 @@ def schedule_cyclotron_production_windows(
     production_start_time_minutes: float = 0.0,
     production_horizon_minutes: float | None = None,
 ) -> CyclotronProductionSchedule:
-    if production_start_time_minutes < 0.0:
-        raise ValueError("production_start_time_minutes must be non-negative")
-    if production_horizon_minutes is not None and production_horizon_minutes < 0.0:
-        raise ValueError("production_horizon_minutes must be non-negative when provided")
+    if production_horizon_minutes is not None and production_horizon_minutes < production_start_time_minutes:
+        raise ValueError("production_horizon_minutes must be at least production_start_time_minutes when provided")
 
     ordered_batches = tuple(batch_demands)
     for batch in ordered_batches:
@@ -315,6 +319,9 @@ def schedule_cyclotron_production_windows(
         start_time = current_time
         end_time = start_time + window_duration
 
+        if production_horizon_minutes is not None and end_time > production_horizon_minutes:
+            break
+
         windows.append(
             ProductionWindow(
                 window_id=window_id,
@@ -334,25 +341,27 @@ def schedule_cyclotron_production_windows(
         current_time = end_time
         window_id += 1
 
+    unscheduled_batch_ids = tuple(batch.batch_id for batch in pending)
+
     production_end = current_time
     elapsed = production_end - production_start_time_minutes
     max_streams_used = max((window.simultaneous_stream_count for window in windows), default=0)
 
-    if production_horizon_minutes is None:
-        fits_within_horizon = True
-    else:
-        fits_within_horizon = production_end <= production_horizon_minutes
+    fits_within_horizon = not unscheduled_batch_ids
 
     return CyclotronProductionSchedule(
         cyclotron_id=capability.cyclotron_id,
         windows=tuple(windows),
         total_batches=len(ordered_batches),
+        scheduled_batches=len(ordered_batches) - len(unscheduled_batch_ids),
+        unscheduled_batches=len(unscheduled_batch_ids),
+        unscheduled_batch_ids=unscheduled_batch_ids,
         total_windows=len(windows),
         production_start_time_minutes=float(production_start_time_minutes),
         production_end_time_minutes=production_end,
         total_elapsed_production_minutes=elapsed,
         max_simultaneous_streams_used=max_streams_used,
-        all_batches_scheduled=(len(ordered_batches) == sum(len(window.batch_ids) for window in windows)),
+        all_batches_scheduled=(len(unscheduled_batch_ids) == 0),
         fits_within_production_horizon=fits_within_horizon,
     )
 
@@ -471,6 +480,12 @@ def schedule_cyclotron_fleet_production_windows(
     ordered_windows = tuple(sorted(flattened, key=lambda window: (window.start_time_minutes, window.end_time_minutes, window.assigned_cyclotron_id, window.window_id)))
     max_end = max((schedule.production_end_time_minutes for schedule in per_cyclotron.values()), default=production_start_time_minutes)
     min_start = min((schedule.production_start_time_minutes for schedule in per_cyclotron.values()), default=production_start_time_minutes)
+    unscheduled_batch_ids = tuple(
+        batch_id
+        for _, schedule in sorted(per_cyclotron.items())
+        for batch_id in schedule.unscheduled_batch_ids
+    )
+    scheduled_batches = sum(schedule.scheduled_batches for schedule in per_cyclotron.values())
 
     return CyclotronFleetProductionSchedule(
         fleet_id=fleet.fleet_id,
@@ -478,24 +493,27 @@ def schedule_cyclotron_fleet_production_windows(
         per_cyclotron_schedules=per_cyclotron,
         windows=ordered_windows,
         total_batches=len(tuple(batch_demands)),
+        scheduled_batches=scheduled_batches,
+        unscheduled_batches=len(unscheduled_batch_ids),
+        unscheduled_batch_ids=unscheduled_batch_ids,
         total_windows=len(ordered_windows),
         production_start_time_minutes=float(min_start),
         production_end_time_minutes=float(max_end),
         total_elapsed_production_minutes=float(max_end - min_start),
         max_simultaneous_streams_used=max((schedule.max_simultaneous_streams_used for schedule in per_cyclotron.values()), default=0),
-        all_batches_scheduled=all(schedule.all_batches_scheduled for schedule in per_cyclotron.values()),
-        fits_within_production_horizon=all(schedule.fits_within_production_horizon for schedule in per_cyclotron.values()),
+        all_batches_scheduled=(len(unscheduled_batch_ids) == 0),
+        fits_within_production_horizon=(len(unscheduled_batch_ids) == 0),
     )
 
 
-def resolve_fleet_eob_capacity_mbq_per_day(
+def resolve_fleet_schedule_derived_eob_capacity_mbq(
     *,
     fleet: CyclotronFleet,
     radionuclide: str,
-    production_batches_per_day: int,
+    feasible_scheduled_windows: int,
 ) -> tuple[float | None, str]:
-    if production_batches_per_day < 1:
-        raise ValueError("production_batches_per_day must be at least 1")
+    if feasible_scheduled_windows < 0:
+        raise ValueError("feasible_scheduled_windows must be non-negative")
 
     isotope = _normalize_radionuclide_name(radionuclide)
     total_capacity_mbq = 0.0
@@ -513,9 +531,9 @@ def resolve_fleet_eob_capacity_mbq_per_day(
             continue
 
         calibrated_map = capability.calibrated_eob_activity_mbq_by_radionuclide or {}
-        calibrated_per_batch = calibrated_map.get(isotope)
-        if calibrated_per_batch is not None:
-            total_capacity_mbq += float(calibrated_per_batch) * float(production_batches_per_day)
+        calibrated_per_cycle = calibrated_map.get(isotope)
+        if calibrated_per_cycle is not None:
+            total_capacity_mbq += float(calibrated_per_cycle) * float(feasible_scheduled_windows)
             capacity_found = True
             continue
 
@@ -523,6 +541,21 @@ def resolve_fleet_eob_capacity_mbq_per_day(
 
     if not capacity_found:
         return None, "not_calibrated"
+    if any(asset.capability.site_eob_capacity_mbq_per_day is not None for asset in fleet.assets if isotope in asset.capability.supported_radionuclides):
+        return total_capacity_mbq, "explicit_site_daily_capacity"
     if unknown_assets > 0:
-        return total_capacity_mbq, "partial_fleet_calibrated"
-    return total_capacity_mbq, "fleet_calibrated"
+        return total_capacity_mbq, "partial_schedule_derived_capacity"
+    return total_capacity_mbq, "schedule_derived_capacity"
+
+
+def resolve_fleet_eob_capacity_mbq_per_day(
+    *,
+    fleet: CyclotronFleet,
+    radionuclide: str,
+    production_batches_per_day: int,
+) -> tuple[float | None, str]:
+    return resolve_fleet_schedule_derived_eob_capacity_mbq(
+        fleet=fleet,
+        radionuclide=radionuclide,
+        feasible_scheduled_windows=production_batches_per_day,
+    )

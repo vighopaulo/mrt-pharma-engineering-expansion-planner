@@ -1,0 +1,2 @@
+component,quantity,unit_cost,extended_cost,note
+Hybrid (k_conv=1) new-study CapEx (Manual zone=floor1 $0 + MRT zone=floors2-8),1,31171000.0,31171000.0,"MRT-zone ledger reuses the SAME evaluate_hybrid_zone_candidate/heterogeneous-fleet/vestibule authority as MRT_DOMINANT, scoped to 7 floors instead of 8"

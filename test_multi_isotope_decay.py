@@ -22,6 +22,45 @@ from reliability_engine import run_native_reliability_engine
 from stochastic_design_day import ActivityDemandModel
 
 
+def _trace(
+    patient_id: str,
+    radionuclide: str,
+    release: float,
+    injection_start: float,
+    injection_end: float,
+    uptake_end: float,
+    scan_start: float,
+    scan_end: float,
+    *,
+    batch_id: int = 1,
+    scheduler_patient_id: int = 1,
+) -> ProductionClinicalPatientTrace:
+    return ProductionClinicalPatientTrace(
+        patient_id=patient_id,
+        radionuclide=radionuclide,
+        batch_id=batch_id,
+        assigned_cyclotron_id="CY-1",
+        production_window_id=1,
+        production_window_start_time_minutes=0.0,
+        production_window_end_time_minutes=30.0,
+        batch_release_time_minutes=release,
+        assigned_destination_object_id="CLINICAL_ENDPOINT",
+        payload_id=f"PAY-{batch_id:05d}",
+        delivery_job_id=batch_id,
+        transport_arrival_time_minutes=release,
+        scheduler_patient_id=scheduler_patient_id,
+        distribution_start=release,
+        distribution_end=max(release, injection_start),
+        injection_start=injection_start,
+        injection_end=injection_end,
+        uptake_start=injection_end,
+        uptake_end=uptake_end,
+        scan_start=scan_start,
+        scan_end=scan_end,
+        completed_within_operating_day=True,
+    )
+
+
 def _planner_assumptions() -> PlannerAssumptions:
     return PlannerAssumptions(
         analysis_years=10,
@@ -176,8 +215,8 @@ def test_patient_identity_preserved_and_aggregation_reconciles():
         PatientRadionuclideDemand("P2", "Ga-68", 150.0),
     ]
     traces = [
-        ProductionClinicalPatientTrace("P1", "F-18", 1, "CY-1", 1, 0.0, 30.0, 35.0, 1, 35.0, 40.0, 40.0, 50.0, 50.0, 95.0, 95.0, 115.0, True),
-        ProductionClinicalPatientTrace("P2", "Ga-68", 1, "CY-1", 1, 0.0, 30.0, 35.0, 2, 35.0, 42.0, 42.0, 52.0, 52.0, 97.0, 97.0, 117.0, True),
+        _trace("P1", "F-18", 35.0, 40.0, 50.0, 95.0, 95.0, 115.0, batch_id=1, scheduler_patient_id=1),
+        _trace("P2", "Ga-68", 35.0, 42.0, 52.0, 97.0, 97.0, 117.0, batch_id=1, scheduler_patient_id=2),
     ]
     summary = evaluate_pathway_decay(pathway="Conventional", generated_patients=patients, patient_traces=traces)
 
@@ -200,10 +239,10 @@ def test_patient_identity_preserved_and_aggregation_reconciles():
 def test_shorter_timing_has_higher_retention_with_all_else_equal():
     patient = [PatientRadionuclideDemand("P1", "F-18", 200.0)]
     slower = [
-        ProductionClinicalPatientTrace("P1", "F-18", 1, "CY-1", 1, 0.0, 30.0, 35.0, 1, 35.0, 40.0, 40.0, 80.0, 80.0, 125.0, 125.0, 145.0, True)
+        _trace("P1", "F-18", 35.0, 40.0, 80.0, 125.0, 125.0, 145.0, batch_id=1, scheduler_patient_id=1)
     ]
     faster = [
-        ProductionClinicalPatientTrace("P1", "F-18", 1, "CY-1", 1, 0.0, 30.0, 33.0, 1, 33.0, 36.0, 36.0, 45.0, 45.0, 75.0, 75.0, 95.0, True)
+        _trace("P1", "F-18", 33.0, 36.0, 45.0, 75.0, 75.0, 95.0, batch_id=1, scheduler_patient_id=1)
     ]
     slow_summary = evaluate_pathway_decay(pathway="Conventional", generated_patients=patient, patient_traces=slower)
     fast_summary = evaluate_pathway_decay(pathway="MRT", generated_patients=patient, patient_traces=faster)
@@ -215,10 +254,10 @@ def test_shorter_timing_has_higher_retention_with_all_else_equal():
 def test_pathways_deliver_same_prescribed_dose_but_different_upstream_requirement():
     patient = [PatientRadionuclideDemand("P1", "F-18", 200.0)]
     slower = [
-        ProductionClinicalPatientTrace("P1", "F-18", 1, "CY-1", 1, 0.0, 30.0, 35.0, 1, 35.0, 40.0, 40.0, 80.0, 80.0, 125.0, 125.0, 145.0, True)
+        _trace("P1", "F-18", 35.0, 40.0, 80.0, 125.0, 125.0, 145.0, batch_id=1, scheduler_patient_id=1)
     ]
     faster = [
-        ProductionClinicalPatientTrace("P1", "F-18", 1, "CY-1", 1, 0.0, 30.0, 33.0, 1, 33.0, 36.0, 36.0, 45.0, 45.0, 75.0, 75.0, 95.0, True)
+        _trace("P1", "F-18", 33.0, 36.0, 45.0, 75.0, 75.0, 95.0, batch_id=1, scheduler_patient_id=1)
     ]
 
     slow_summary = evaluate_pathway_decay(pathway="Conventional", generated_patients=patient, patient_traces=slower)
@@ -241,7 +280,7 @@ def test_supported_radionuclides_include_pettrace_minimum_scope():
 def test_missing_radionuclide_physics_fails_explicitly(monkeypatch):
     patient = [PatientRadionuclideDemand("P1", "F-18", 200.0)]
     traces = [
-        ProductionClinicalPatientTrace("P1", "F-18", 1, "CY-1", 1, 0.0, 30.0, 35.0, 1, 35.0, 40.0, 40.0, 45.0, 45.0, 90.0, 90.0, 110.0, True)
+        _trace("P1", "F-18", 35.0, 40.0, 45.0, 90.0, 90.0, 110.0, batch_id=1, scheduler_patient_id=1)
     ]
 
     monkeypatch.setattr("multi_isotope_decay._half_life_lookup", lambda: {"Ga-68": 67.7})
@@ -252,7 +291,7 @@ def test_missing_radionuclide_physics_fails_explicitly(monkeypatch):
 def test_decay_feasibility_guard_marks_infeasible_patient_without_astronomical_back_calculation():
     patient = [PatientRadionuclideDemand("P1", "O-15", 160.0)]
     traces = [
-        ProductionClinicalPatientTrace("P1", "O-15", 1, "CY-1", 1, 0.0, 10.0, 10.0, 1, 10.0, 12.0, 40.0, 90.0, 90.0, 120.0, 120.0, 140.0, True)
+        _trace("P1", "O-15", 10.0, 40.0, 90.0, 120.0, 120.0, 140.0, batch_id=1, scheduler_patient_id=1)
     ]
 
     summary = evaluate_pathway_decay(

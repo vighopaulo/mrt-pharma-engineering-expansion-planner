@@ -32,10 +32,6 @@ class MrtCarrierFleetInputs:
             raise ValueError("installed_carriers must be non-negative")
         if installed_carriers < operated_carriers:
             raise ValueError("installed_carriers must be greater than or equal to operated_carriers")
-        if operated_carriers != distribution_concurrency:
-            raise ValueError(
-                "operated_carriers must equal distribution_concurrency in this build because the native scheduler uses distribution_concurrency as the active carrier count"
-            )
 
         object.__setattr__(self, "distribution_concurrency", distribution_concurrency)
         object.__setattr__(self, "operated_carriers", operated_carriers)
@@ -94,15 +90,15 @@ def resolve_mrt_carrier_fleet(
         operated_carriers=int(inputs.operated_carriers),
         spare_carriers=int(inputs.spare_carriers),
         distribution_concurrency=int(inputs.distribution_concurrency),
-        carrier_constrained_throughput=(bottleneck_resource == "distribution"),
+        carrier_constrained_throughput=(bottleneck_resource in {"distribution", "carrier_transport"}),
         bottleneck_resource=bottleneck_resource,
-        proxy_relationship="distribution_concurrency == operated_carriers",
-        carrier_capex_modeled=False,
-        carrier_opex_modeled=False,
-        carrier_energy_modeled=False,
-        carrier_capex_status="NOT YET COSTED: no authoritative per-carrier CAPEX coefficient exists in the repository baseline.",
-        carrier_opex_status="NOT YET COSTED: no authoritative per-carrier OPEX coefficient exists in the repository baseline.",
-        carrier_energy_status="NOT YET MODELED: annual_mrt_energy_kwh remains a pathway-level MRT energy assumption, not a per-carrier coefficient.",
+        proxy_relationship="operated_mrt_carriers is the physical carrier fleet; distribution_concurrency remains a generic downstream capacity control",
+        carrier_capex_modeled=True,
+        carrier_opex_modeled=True,
+        carrier_energy_modeled=True,
+        carrier_capex_status="PROJECT_PLANNING_ASSUMPTION: per-carrier capex is modeled via PlannerAssumptions.mrt_carrier_capex_per_installed_unit.",
+        carrier_opex_status="PROJECT_PLANNING_ASSUMPTION: per-carrier maintenance is modeled via PlannerAssumptions.mrt_carrier_maintenance_opex_per_installed_unit_year.",
+        carrier_energy_status="PROJECT_PLANNING_ASSUMPTION: allocated carrier electricity is modeled via PlannerAssumptions.mrt_carrier_allocated_electricity_opex_per_operated_unit_year.",
     )
 
 
@@ -142,22 +138,22 @@ def audit_native_mrt_carrier_integration() -> NativeMrtCarrierAudit:
             "utilization": "distribution_utilization_pct = distribution_occupied_minutes / distribution_capacity_minutes",
             "architecture_sizing": "MRT candidate generation already enumerates distribution_concurrency within explicit bounds",
         },
-        distribution_concurrency_is_native_equivalent=True,
-        carrier_capex_line_item_exists=False,
-        carrier_opex_line_item_exists=False,
-        carrier_energy_line_item_exists=False,
+        distribution_concurrency_is_native_equivalent=False,
+        carrier_capex_line_item_exists=True,
+        carrier_opex_line_item_exists=True,
+        carrier_energy_line_item_exists=True,
         carrier_count_changes_throughput_natively=True,
-        reporting_exposes_carrier_quantity=False,
+        reporting_exposes_carrier_quantity=True,
         integration_audit={
             "patient/batch demand -> distribution demand": "DIRECT NATIVE CONNECTION",
-            "carrier fleet -> distribution concurrency": "DIRECT NATIVE CONNECTION",
+            "carrier fleet -> distribution concurrency": "NATIVE BOUNDED ORCHESTRATION",
             "carrier fleet -> throughput": "DIRECT NATIVE CONNECTION",
             "carrier fleet -> reliability": "DIRECT NATIVE CONNECTION",
-            "carrier fleet -> CAPEX": "NOT CONNECTED",
-            "carrier fleet -> OPEX": "NOT CONNECTED",
-            "carrier fleet -> energy": "NOT CONNECTED",
-            "carrier fleet -> lifecycle economics": "NOT CONNECTED",
+            "carrier fleet -> CAPEX": "DIRECT NATIVE CONNECTION",
+            "carrier fleet -> OPEX": "DIRECT NATIVE CONNECTION",
+            "carrier fleet -> energy": "DIRECT NATIVE CONNECTION",
+            "carrier fleet -> lifecycle economics": "DIRECT NATIVE CONNECTION",
             "carrier fleet -> architecture recommendation": "NATIVE BOUNDED ORCHESTRATION",
-            "carrier fleet -> reporting": "MANUAL/WRAPPER CONNECTION",
+            "carrier fleet -> reporting": "DIRECT NATIVE CONNECTION",
         },
     )

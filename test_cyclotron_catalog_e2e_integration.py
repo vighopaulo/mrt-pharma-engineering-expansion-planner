@@ -289,14 +289,23 @@ def test_heterogeneous_fleet_preserves_model_specific_capability_records() -> No
     }
     assert sorted(eob_by_machine.values()) == [111000.0, 648000.0]
 
+    # STALE_TEST_EXPECTATION correction: 160 patients/day at 12,000 MBq/patient
+    # never actually saturates CY-001's real 648,000 MBq/batch capacity (traced:
+    # the earliest-finish-eligible-cyclotron scheduler in
+    # cyclotron_production_windows.assign_batches_to_cyclotron_fleet correctly
+    # assigns ALL 5 batches to CY-001 alone -- a genuine greedy-optimal result,
+    # not a defect). 400 patients/day with proportionally scaled clinical
+    # resources genuinely saturates CY-001 and forces real overflow onto
+    # CY-002 (traced: 2 batches on CY-001, 6 on CY-002), proving the
+    # heterogeneous-fleet capability data flows through to actual scheduling.
     result = run_native_decision_pipeline(
         _scenario(
             fleet=fleet,
-            target_patients_per_day=160,
+            target_patients_per_day=400,
             activity_per_patient_mbq=12000.0,
-            scanners=20,
-            injection_resources=20,
-            uptake_resources=20,
+            scanners=40,
+            injection_resources=40,
+            uptake_resources=40,
         )
     )
     assignments = {

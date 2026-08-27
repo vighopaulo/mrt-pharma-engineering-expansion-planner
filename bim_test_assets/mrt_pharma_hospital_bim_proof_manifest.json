@@ -1,0 +1,197 @@
+{
+  "building": {
+    "building_id": "BLDG-HOSP-A",
+    "building_name": "MRT Pharma Hospital Proof Building",
+    "footprint_x_m": 30.0,
+    "footprint_y_m": 20.0
+  },
+  "coordinate_reference_system": "LOCAL_ENGINEERING_NON_GEOREFERENCED",
+  "equipment": [
+    {
+      "depth_m": 1.5,
+      "engineering_object_id": "CY-001",
+      "geometry_representation_expected": true,
+      "height_m": 1.5,
+      "name": "Cyclotron (test proxy)",
+      "object_class": "IFCBUILDINGELEMENTPROXY",
+      "room_id": "ROOM-CY-102",
+      "width_m": 1.5,
+      "x_m": 12.0,
+      "y_m": 15.0,
+      "z_m": 0.0
+    },
+    {
+      "depth_m": 1.5,
+      "engineering_object_id": "SCN-001",
+      "geometry_representation_expected": true,
+      "height_m": 1.5,
+      "name": "Scanner (test proxy)",
+      "object_class": "IFCBUILDINGELEMENTPROXY",
+      "room_id": "ROOM-SCN-202",
+      "width_m": 1.5,
+      "x_m": 24.0,
+      "y_m": 6.0,
+      "z_m": 4.0
+    },
+    {
+      "depth_m": 1.5,
+      "engineering_object_id": "RP-001",
+      "geometry_representation_expected": true,
+      "height_m": 1.5,
+      "name": "Radiopharmacy interface (test proxy)",
+      "object_class": "IFCBUILDINGELEMENTPROXY",
+      "room_id": "ROOM-RP-101",
+      "width_m": 1.5,
+      "x_m": 5.0,
+      "y_m": 15.0,
+      "z_m": 0.0
+    }
+  ],
+  "expected_room_equipment_bindings": {
+    "CY-001": "ROOM-CY-102",
+    "RP-001": "ROOM-RP-101",
+    "SCN-001": "ROOM-SCN-202"
+  },
+  "expected_route_proof_pairs": [
+    {
+      "end_room_id": "ROOM-INJ-103",
+      "proof_id": "A",
+      "start_room_id": "ROOM-RP-101"
+    },
+    {
+      "end_room_id": "ROOM-PAT-201",
+      "proof_id": "B",
+      "start_room_id": "ROOM-INJ-103"
+    },
+    {
+      "end_room_id": "ROOM-SCN-202",
+      "proof_id": "C",
+      "start_room_id": "ROOM-PAT-201"
+    },
+    {
+      "end_room_id": "ROOM-SCN-202",
+      "proof_id": "D",
+      "start_room_id": "ROOM-RP-101"
+    }
+  ],
+  "floors": [
+    {
+      "elevation_m": 0.0,
+      "floor_id": "F1"
+    },
+    {
+      "elevation_m": 4.0,
+      "floor_id": "F2"
+    }
+  ],
+  "model_units": "meters",
+  "mrtway_model_class": "SYNTHETIC_TEST_BIM",
+  "mrtway_model_purpose": "BENTLEY_ITWIN_INTEGRATION_PROOF",
+  "rooms": [
+    {
+      "depth_m": 6.0,
+      "floor_id": "F1",
+      "geometry_representation_expected": true,
+      "height_m": 3.0,
+      "name": "Radiopharmacy",
+      "object_class": "IFCSPACE",
+      "room_id": "ROOM-RP-101",
+      "width_m": 6.0,
+      "x_m": 5.0,
+      "y_m": 15.0,
+      "z_m": 0.0
+    },
+    {
+      "depth_m": 6.0,
+      "floor_id": "F1",
+      "geometry_representation_expected": true,
+      "height_m": 3.0,
+      "name": "Cyclotron Room",
+      "object_class": "IFCSPACE",
+      "room_id": "ROOM-CY-102",
+      "width_m": 6.0,
+      "x_m": 12.0,
+      "y_m": 15.0,
+      "z_m": 0.0
+    },
+    {
+      "depth_m": 6.0,
+      "floor_id": "F1",
+      "geometry_representation_expected": true,
+      "height_m": 3.0,
+      "name": "Injection/Uptake Room",
+      "object_class": "IFCSPACE",
+      "room_id": "ROOM-INJ-103",
+      "width_m": 6.0,
+      "x_m": 22.0,
+      "y_m": 5.0,
+      "z_m": 0.0
+    },
+    {
+      "depth_m": 6.0,
+      "floor_id": "F1",
+      "geometry_representation_expected": true,
+      "height_m": 3.0,
+      "name": "Floor 1 Main Corridor",
+      "object_class": "IFCSPACE",
+      "room_id": "COR-F1-001",
+      "width_m": 6.0,
+      "x_m": 15.0,
+      "y_m": 10.0,
+      "z_m": 0.0
+    },
+    {
+      "depth_m": 6.0,
+      "floor_id": "F1",
+      "geometry_representation_expected": true,
+      "height_m": 3.0,
+      "name": "Vertical Circulation Core",
+      "object_class": "IFCSPACE",
+      "room_id": "VERT-001",
+      "width_m": 6.0,
+      "x_m": 27.0,
+      "y_m": 10.0,
+      "z_m": 0.0
+    },
+    {
+      "depth_m": 6.0,
+      "floor_id": "F2",
+      "geometry_representation_expected": true,
+      "height_m": 3.0,
+      "name": "Patient Room",
+      "object_class": "IFCSPACE",
+      "room_id": "ROOM-PAT-201",
+      "width_m": 6.0,
+      "x_m": 6.0,
+      "y_m": 15.0,
+      "z_m": 4.0
+    },
+    {
+      "depth_m": 6.0,
+      "floor_id": "F2",
+      "geometry_representation_expected": true,
+      "height_m": 3.0,
+      "name": "Scanner Room",
+      "object_class": "IFCSPACE",
+      "room_id": "ROOM-SCN-202",
+      "width_m": 6.0,
+      "x_m": 24.0,
+      "y_m": 6.0,
+      "z_m": 4.0
+    },
+    {
+      "depth_m": 6.0,
+      "floor_id": "F2",
+      "geometry_representation_expected": true,
+      "height_m": 3.0,
+      "name": "Floor 2 Main Corridor",
+      "object_class": "IFCSPACE",
+      "room_id": "COR-F2-001",
+      "width_m": 6.0,
+      "x_m": 15.0,
+      "y_m": 10.0,
+      "z_m": 4.0
+    }
+  ],
+  "source_ifc_filename": "mrt_pharma_hospital_bim_proof.ifc"
+}

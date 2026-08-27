@@ -156,6 +156,26 @@ def test_mrt_retained_activity_benefit_affects_capacity():
     assert fast.mrt.achieved_capacity_per_day + 1e-9 >= slow.mrt.achieved_capacity_per_day
 
 
+def test_conventional_transport_override_is_authoritative_in_equal_budget_paths():
+    assumptions = PlannerAssumptions()
+    base_inputs = _reference_inputs()
+    override_inputs = replace(base_inputs, conventional_transport_min=8.0, current_average_transport_min=35.0)
+    no_override_inputs = replace(base_inputs, conventional_transport_min=None, current_average_transport_min=35.0)
+    hl = _half_life()
+
+    with_override = run_equal_budget_capacity_optimization(override_inputs, assumptions, hl, explicit_budget=14_250_000.0)
+    no_override = run_equal_budget_capacity_optimization(no_override_inputs, assumptions, hl, explicit_budget=14_250_000.0)
+
+    assert with_override.conventional.retained_activity_pct > no_override.conventional.retained_activity_pct
+
+    # With tiny budget MRT stays in the no-backbone branch, which should also use
+    # the conventional transport resolver fallback chain for baseline retention.
+    tiny_with_override = run_equal_budget_capacity_optimization(override_inputs, assumptions, hl, explicit_budget=1.0)
+    tiny_no_override = run_equal_budget_capacity_optimization(no_override_inputs, assumptions, hl, explicit_budget=1.0)
+
+    assert tiny_with_override.mrt.retained_activity_pct > tiny_no_override.mrt.retained_activity_pct
+
+
 def test_revenue_is_capped_by_max_expected_demand_and_reserve_reported():
     assumptions = PlannerAssumptions()
     inputs = _reference_inputs()

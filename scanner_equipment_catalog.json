@@ -1,0 +1,205 @@
+{
+  "schema_version": "1.0",
+  "models": [
+    {
+      "catalog_model_id": "SIEMENS_SYMBIA_PRO_SPECTA",
+      "manufacturer": "Siemens Healthineers",
+      "model": "Symbia Pro.specta",
+      "modality": "SPECT",
+      "ct_configuration": "SPECT-only base configuration with an optional low-dose CT variant for attenuation correction/anatomical localization (general product-line knowledge; exact configuration availability not independently verified this session)",
+      "commercial_status": "current",
+      "new_purchase_candidate": true,
+      "installed_equipment_selectable": true,
+      "customer_selectable": true,
+      "supported_radionuclides_or_energy_range_kev": "Multi-isotope general-purpose gamma camera energy range (typical clinical SPECT range ~40-511 keV), compatible with Tc-99m (140 keV) and other common SPECT radionuclides",
+      "detector_technology": "Dual-head NaI(Tl) scintillation detector (standard SPECT gamma-camera technology)",
+      "protocol_families": ["myocardial_perfusion_spect", "bone_scan_spect", "general_spect_ct"],
+      "typical_acquisition_minutes_per_protocol": {"myocardial_perfusion_spect": 20.0, "bone_scan_spect": 25.0, "general_spect_ct": 20.0},
+      "patient_weight_limit_kg": null,
+      "dimensions_footprint_notes": "NOT_CALIBRATED -- not independently verified this session",
+      "power_specification_status": "NOT_CALIBRATED",
+      "active_power_kw": null,
+      "idle_power_kw": null,
+      "field_provenance": {
+        "detector_technology": {
+          "value": "Dual-head NaI(Tl)", "unit": null,
+          "source": "General nuclear-medicine SPECT gamma-camera product-line knowledge (recalled, NOT independently re-verified via live fetch this session -- attempted manufacturer URL fetch failed)",
+          "evidence_type": "technical_literature", "confidence": "medium", "calibration_status": "literature_calibrated"
+        }
+      },
+      "economics": [
+        {"component": "purchase_capex", "value": "NOT_CALIBRATED", "currency": null, "cost_year": null, "price_basis": null,
+         "equipment_only_or_installed": "UNKNOWN", "service_scope": null,
+         "source": "No defensible procurement/pricing evidence located this session",
+         "evidence_type": "not_calibrated", "confidence": "unknown", "calibration_status": "not_calibrated"},
+        {"component": "annual_service_opex", "value": "NOT_CALIBRATED", "currency": null, "cost_year": null, "price_basis": null,
+         "equipment_only_or_installed": "UNKNOWN", "service_scope": null,
+         "source": "No defensible cost evidence located this session",
+         "evidence_type": "not_calibrated", "confidence": "unknown", "calibration_status": "not_calibrated"}
+      ],
+      "source_url_or_document": "NOT_INDEPENDENTLY_FETCHED_THIS_SESSION",
+      "source_confidence": "medium"
+    },
+    {
+      "catalog_model_id": "GE_NM_CT_870_DR",
+      "manufacturer": "GE HealthCare",
+      "model": "NM/CT 870 DR",
+      "modality": "SPECT",
+      "ct_configuration": "Integrated diagnostic-capable CT (higher-tier CT component within GE's NM/CT SPECT/CT line; exact CT slice/generator specification not independently verified this session)",
+      "commercial_status": "current",
+      "new_purchase_candidate": true,
+      "installed_equipment_selectable": true,
+      "customer_selectable": true,
+      "supported_radionuclides_or_energy_range_kev": "Multi-isotope general-purpose gamma camera energy range, compatible with Tc-99m (140 keV) and other common SPECT radionuclides",
+      "detector_technology": "Dual-head NaI(Tl) scintillation detector",
+      "protocol_families": ["myocardial_perfusion_spect_ct", "bone_scan_spect_ct", "oncology_spect_ct"],
+      "typical_acquisition_minutes_per_protocol": {"myocardial_perfusion_spect_ct": 25.0, "bone_scan_spect_ct": 30.0, "oncology_spect_ct": 30.0},
+      "patient_weight_limit_kg": null,
+      "dimensions_footprint_notes": "NOT_CALIBRATED -- not independently verified this session",
+      "power_specification_status": "NOT_CALIBRATED",
+      "active_power_kw": null,
+      "idle_power_kw": null,
+      "field_provenance": {
+        "detector_technology": {
+          "value": "Dual-head NaI(Tl)", "unit": null,
+          "source": "General nuclear-medicine SPECT/CT product-line knowledge (recalled, not live-verified this session)",
+          "evidence_type": "technical_literature", "confidence": "medium", "calibration_status": "literature_calibrated"
+        }
+      },
+      "economics": [
+        {"component": "purchase_capex", "value": "NOT_CALIBRATED", "currency": null, "cost_year": null, "price_basis": null,
+         "equipment_only_or_installed": "UNKNOWN", "service_scope": null,
+         "source": "No defensible procurement/pricing evidence located this session (live fetch attempted, page unavailable)",
+         "evidence_type": "not_calibrated", "confidence": "unknown", "calibration_status": "not_calibrated"},
+        {"component": "annual_service_opex", "value": "NOT_CALIBRATED", "currency": null, "cost_year": null, "price_basis": null,
+         "equipment_only_or_installed": "UNKNOWN", "service_scope": null,
+         "source": "No defensible cost evidence located this session",
+         "evidence_type": "not_calibrated", "confidence": "unknown", "calibration_status": "not_calibrated"}
+      ],
+      "source_url_or_document": "NOT_INDEPENDENTLY_FETCHED_THIS_SESSION (attempted https://www.gehealthcare.com/products/molecular-imaging/spect-ct/nm-ct-870-dr -> HTTP 404)",
+      "source_confidence": "medium"
+    },
+    {
+      "catalog_model_id": "GE_NM_CT_860",
+      "manufacturer": "GE HealthCare",
+      "model": "NM/CT 860",
+      "modality": "SPECT",
+      "ct_configuration": "Integrated CT component (lower/mid-tier within GE's NM/CT SPECT/CT line relative to the 870 DR; exact CT specification not independently verified this session)",
+      "commercial_status": "current",
+      "new_purchase_candidate": true,
+      "installed_equipment_selectable": true,
+      "customer_selectable": true,
+      "supported_radionuclides_or_energy_range_kev": "Multi-isotope general-purpose gamma camera energy range, compatible with Tc-99m (140 keV) and other common SPECT radionuclides",
+      "detector_technology": "Dual-head NaI(Tl) scintillation detector",
+      "protocol_families": ["myocardial_perfusion_spect_ct", "bone_scan_spect_ct"],
+      "typical_acquisition_minutes_per_protocol": {"myocardial_perfusion_spect_ct": 25.0, "bone_scan_spect_ct": 30.0},
+      "patient_weight_limit_kg": null,
+      "dimensions_footprint_notes": "NOT_CALIBRATED -- not independently verified this session",
+      "power_specification_status": "NOT_CALIBRATED",
+      "active_power_kw": null,
+      "idle_power_kw": null,
+      "field_provenance": {},
+      "economics": [
+        {"component": "purchase_capex", "value": "NOT_CALIBRATED", "currency": null, "cost_year": null, "price_basis": null,
+         "equipment_only_or_installed": "UNKNOWN", "service_scope": null,
+         "source": "No defensible procurement/pricing evidence located this session",
+         "evidence_type": "not_calibrated", "confidence": "unknown", "calibration_status": "not_calibrated"}
+      ],
+      "source_url_or_document": "NOT_INDEPENDENTLY_FETCHED_THIS_SESSION",
+      "source_confidence": "medium"
+    },
+    {
+      "catalog_model_id": "PHILIPS_BRIGHTVIEW_XCT",
+      "manufacturer": "Philips",
+      "model": "BrightView XCT",
+      "modality": "SPECT",
+      "ct_configuration": "Integrated low-dose CT for attenuation correction/anatomical localization (not a diagnostic-grade CT)",
+      "commercial_status": "LEGACY_INSTALLED_BASE",
+      "new_purchase_candidate": false,
+      "installed_equipment_selectable": true,
+      "customer_selectable": true,
+      "supported_radionuclides_or_energy_range_kev": "Multi-isotope general-purpose gamma camera energy range, compatible with Tc-99m (140 keV) and other common SPECT radionuclides",
+      "detector_technology": "Dual-head NaI(Tl) scintillation detector",
+      "protocol_families": ["myocardial_perfusion_spect_ct", "bone_scan_spect_ct"],
+      "typical_acquisition_minutes_per_protocol": {"myocardial_perfusion_spect_ct": 25.0, "bone_scan_spect_ct": 30.0},
+      "patient_weight_limit_kg": null,
+      "dimensions_footprint_notes": "NOT_CALIBRATED -- not independently verified this session",
+      "power_specification_status": "NOT_CALIBRATED",
+      "active_power_kw": null,
+      "idle_power_kw": null,
+      "field_provenance": {
+        "commercial_status": {
+          "value": "LEGACY_INSTALLED_BASE", "unit": null,
+          "source": "User-supplied classification (section 21 of the build request), consistent with this being an older Philips SPECT/CT product no longer a current new-purchase offering",
+          "evidence_type": "site_specific", "confidence": "medium", "calibration_status": "literature_calibrated"
+        }
+      },
+      "economics": [
+        {"component": "purchase_capex", "value": "NOT_CALIBRATED", "currency": null, "cost_year": null, "price_basis": null,
+         "equipment_only_or_installed": "UNKNOWN", "service_scope": null,
+         "source": "Legacy installed-base equipment -- no current new-purchase pricing applicable; no defensible refurbished/secondary-market price located this session",
+         "evidence_type": "not_calibrated", "confidence": "unknown", "calibration_status": "not_calibrated"}
+      ],
+      "source_url_or_document": "NOT_INDEPENDENTLY_FETCHED_THIS_SESSION",
+      "source_confidence": "medium"
+    },
+    {
+      "catalog_model_id": "GE_DISCOVERY_MI",
+      "manufacturer": "GE HealthCare",
+      "model": "Discovery MI",
+      "modality": "PET",
+      "ct_configuration": "Integrated diagnostic CT (PET/CT)",
+      "commercial_status": "current",
+      "new_purchase_candidate": true,
+      "installed_equipment_selectable": true,
+      "customer_selectable": true,
+      "supported_radionuclides_or_energy_range_kev": "PET annihilation coincidence detection (511 keV), F-18/Ga-68/other PET radionuclides",
+      "detector_technology": "Digital time-of-flight PET detector (general product-line knowledge; exact crystal technology not independently verified this session)",
+      "protocol_families": ["oncology_pet_ct", "whole_body_pet_ct"],
+      "typical_acquisition_minutes_per_protocol": {"oncology_pet_ct": 20.0, "whole_body_pet_ct": 25.0},
+      "patient_weight_limit_kg": null,
+      "dimensions_footprint_notes": "NOT_CALIBRATED -- not independently verified this session",
+      "power_specification_status": "NOT_CALIBRATED",
+      "active_power_kw": null,
+      "idle_power_kw": null,
+      "field_provenance": {},
+      "economics": [
+        {"component": "purchase_capex", "value": "NOT_CALIBRATED", "currency": null, "cost_year": null, "price_basis": null,
+         "equipment_only_or_installed": "UNKNOWN", "service_scope": null,
+         "source": "No defensible procurement/pricing evidence located this session -- existing generic PlannerAssumptions.scanner_capex remains the authoritative study-level PET scanner cost anchor",
+         "evidence_type": "not_calibrated", "confidence": "unknown", "calibration_status": "not_calibrated"}
+      ],
+      "source_url_or_document": "NOT_INDEPENDENTLY_FETCHED_THIS_SESSION",
+      "source_confidence": "medium"
+    },
+    {
+      "catalog_model_id": "SIEMENS_BIOGRAPH_VISION",
+      "manufacturer": "Siemens Healthineers",
+      "model": "Biograph Vision",
+      "modality": "PET",
+      "ct_configuration": "Integrated diagnostic CT (PET/CT)",
+      "commercial_status": "current",
+      "new_purchase_candidate": true,
+      "installed_equipment_selectable": true,
+      "customer_selectable": true,
+      "supported_radionuclides_or_energy_range_kev": "PET annihilation coincidence detection (511 keV), F-18/Ga-68/other PET radionuclides",
+      "detector_technology": "Digital SiPM time-of-flight PET detector (general product-line knowledge; exact specification not independently verified this session)",
+      "protocol_families": ["oncology_pet_ct", "whole_body_pet_ct"],
+      "typical_acquisition_minutes_per_protocol": {"oncology_pet_ct": 15.0, "whole_body_pet_ct": 20.0},
+      "patient_weight_limit_kg": null,
+      "dimensions_footprint_notes": "NOT_CALIBRATED -- not independently verified this session",
+      "power_specification_status": "NOT_CALIBRATED",
+      "active_power_kw": null,
+      "idle_power_kw": null,
+      "field_provenance": {},
+      "economics": [
+        {"component": "purchase_capex", "value": "NOT_CALIBRATED", "currency": null, "cost_year": null, "price_basis": null,
+         "equipment_only_or_installed": "UNKNOWN", "service_scope": null,
+         "source": "No defensible procurement/pricing evidence located this session -- existing generic PlannerAssumptions.scanner_capex remains the authoritative study-level PET scanner cost anchor",
+         "evidence_type": "not_calibrated", "confidence": "unknown", "calibration_status": "not_calibrated"}
+      ],
+      "source_url_or_document": "NOT_INDEPENDENTLY_FETCHED_THIS_SESSION",
+      "source_confidence": "medium"
+    }
+  ]
+}

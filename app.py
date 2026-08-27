@@ -17,16 +17,17 @@ from cyclotron_catalog import (
 from facility_engineering_model import (
     ALL_EQUIPMENT_CLASSES,
     CoordinateSystem,
-    EquipmentClass,
-    FacilityEngineeringObjectModel,
-    ProjectSpatialMode,
+    RequiredFacilityProgram,
     SpatialCoordinate,
-    SpatialMaturity,
-    SpatialSourceType,
-    SubscriptionTier,
+    SPATIAL_INPUT_PATH_OPTIONS,
+    SOURCE_FAMILY_LABELS,
+    UPLOAD_SOURCE_OPTIONS,
     build_default_facility_engineering_object_model,
-    deserialize_facility_engineering_object_model,
+    build_space_function_assignment,
+    evaluate_required_program_feasibility,
     migrate_legacy_geometry_state,
+    resolve_geometry_evidence_assessment,
+    resolve_source_type_for_input_path,
     resolve_default_source_profile,
     resolve_subscription_capability_profile,
     serialize_facility_engineering_object_model,
@@ -1395,6 +1396,16 @@ def _parse_positive_float(value: str, *, label: str, allow_zero: bool = False) -
     return parsed, None
 
 
+def _safe_float(value: str) -> float | None:
+    text = value.strip()
+    if text == "":
+        return None
+    try:
+        return float(text)
+    except ValueError:
+        return None
+
+
 def _default_activity_mbq(radionuclide: str) -> float:
     return {
         "F-18": 370.0,
@@ -1763,6 +1774,7 @@ def _render_geometry_transport(library: ProjectLibrary, navigation: NavigationHi
             coordinate_system=CoordinateSystem(coordinate_system_id="LOCAL-1", name="Local engineering coordinates", building="Building A", storey="Level 1", local_coordinate_system="LOCAL", source_coordinate_reference="manual facility definition", scale_m_per_unit=1.0),
         )
 
+    input_path_key = f"build3_facility_input_path_{project.project_id}"
     source_key = f"build3_facility_source_{project.project_id}"
     evidence_key = f"build3_facility_evidence_{project.project_id}"
     maturity_key = f"build3_facility_maturity_{project.project_id}"
@@ -1789,23 +1801,62 @@ def _render_geometry_transport(library: ProjectLibrary, navigation: NavigationHi
     route_distance_key = f"build3_facility_route_distance_{project.project_id}"
     vertical_change_key = f"build3_facility_vertical_change_{project.project_id}"
     floors_key = f"build3_facility_floors_{project.project_id}"
+    upload_detected_floors_key = f"build3_facility_upload_detected_floors_{project.project_id}"
+    upload_scope_floors_key = f"build3_facility_upload_scope_floors_{project.project_id}"
+    manual_distance_only_key = f"build3_facility_manual_distance_only_{project.project_id}"
+    manual_prod_building_key = f"build3_facility_manual_prod_building_{project.project_id}"
+    manual_prod_to_main_key = f"build3_facility_manual_prod_to_main_{project.project_id}"
+    manual_rad_to_clinical_key = f"build3_facility_manual_rad_to_clinical_{project.project_id}"
+    scanner_floors_key = f"build3_facility_scanner_floors_{project.project_id}"
+    injection_floors_key = f"build3_facility_injection_floors_{project.project_id}"
+    uptake_floors_key = f"build3_facility_uptake_floors_{project.project_id}"
+    cyclotron_storey_key = f"build3_facility_cyclotron_storey_{project.project_id}"
+    clinical_building_name_key = f"build3_facility_clinical_building_name_{project.project_id}"
+    route_corridor_key = f"build3_facility_route_corridor_{project.project_id}"
+    source_space_name_key = f"build3_facility_source_space_name_{project.project_id}"
+    source_space_function_key = f"build3_facility_source_space_function_{project.project_id}"
+    proposed_space_name_key = f"build3_facility_proposed_space_name_{project.project_id}"
+    proposed_space_function_key = f"build3_facility_proposed_space_function_{project.project_id}"
+    assignment_status_key = f"build3_facility_assignment_status_{project.project_id}"
+    benchmark_type_key = f"build3_facility_benchmark_type_{project.project_id}"
+    benchmark_area_key = f"build3_facility_benchmark_area_{project.project_id}"
+    required_scanners_key = f"build3_facility_required_scanners_{project.project_id}"
+    required_injection_key = f"build3_facility_required_injection_{project.project_id}"
+    required_uptake_key = f"build3_facility_required_uptake_{project.project_id}"
 
-    source_options_by_tier = {
-        "BASIC": ["MANUAL", "TEMPLATE", "BENCHMARK"],
-        "PROFESSIONAL": ["MANUAL", "TEMPLATE", "BENCHMARK", "PDF", "IMAGE", "DWG", "DXF"],
-        "ENTERPRISE": ["MANUAL", "TEMPLATE", "BENCHMARK", "PDF", "IMAGE", "DWG", "DXF", "IFC", "REVIT_BIM"],
+    st.markdown("<div class='page-card'><div class='page-card-title'>Facility Definition Path</div>", unsafe_allow_html=True)
+    st.write("How would you like to define the facility?")
+    input_path_labels = {
+        "UPLOAD_FACILITY_DOCUMENT": "Upload facility document",
+        "MANUAL_SPATIAL_DEFINITION": "Enter facility geometry manually",
+        "BENCHMARK_ASSUMED_FACILITY": "Use benchmark / assumed facility",
     }
+    st.session_state.setdefault(input_path_key, project.draft_state.get("build3::facility_engineering::input_path", "MANUAL_SPATIAL_DEFINITION"))
+    selected_input_path = st.radio(
+        "",
+        options=list(SPATIAL_INPUT_PATH_OPTIONS),
+        format_func=lambda value: input_path_labels[value],
+        key=input_path_key,
+        label_visibility="collapsed",
+    )
 
     st.markdown("<div class='page-card'><div class='page-card-title'>Evidence Spectrum</div>", unsafe_allow_html=True)
     st.caption("Subscription level only changes which spatial evidence sources are available. It does not alter physics.")
 
     st.session_state.setdefault(tier_key, str(existing_model.subscription_tier))
     subscription_tier = st.selectbox("Subscription tier", options=["BASIC", "PROFESSIONAL", "ENTERPRISE"], key=tier_key)
-    allowed_sources = source_options_by_tier[subscription_tier]
 
-    default_source = existing_model.source_type if existing_model.source_type in allowed_sources else allowed_sources[0]
-    st.session_state.setdefault(source_key, str(default_source))
-    source_type = st.selectbox("Spatial input source", options=allowed_sources, key=source_key)
+    source_type = resolve_source_type_for_input_path(selected_input_path)
+    if selected_input_path == "UPLOAD_FACILITY_DOCUMENT":
+        allowed_upload_sources = [item for item in UPLOAD_SOURCE_OPTIONS if item in resolve_subscription_capability_profile(subscription_tier).allowed_spatial_sources]
+        if not allowed_upload_sources:
+            st.error("This subscription tier does not currently allow document upload modes.")
+            st.markdown("</div>", unsafe_allow_html=True)
+            return
+        st.session_state.setdefault(source_key, project.draft_state.get("build3::facility_engineering::upload_source_type", allowed_upload_sources[0]))
+        source_type = st.selectbox("Upload source classification", options=allowed_upload_sources, key=source_key, format_func=lambda value: SOURCE_FAMILY_LABELS[value])
+
+    evidence_assessment = resolve_geometry_evidence_assessment(source_type)
     evidence_class_default, maturity_default, _ = resolve_default_source_profile(source_type)
     st.session_state.setdefault(evidence_key, str(existing_model.evidence_class if existing_model.evidence_class else evidence_class_default))
     st.session_state.setdefault(maturity_key, str(existing_model.maturity if existing_model.maturity else maturity_default))
@@ -1818,6 +1869,10 @@ def _render_geometry_transport(library: ProjectLibrary, navigation: NavigationHi
     capability_profile = resolve_subscription_capability_profile(subscription_tier)
     st.write(f"**Allowed source methods**: {', '.join(capability_profile.allowed_spatial_sources)}")
     st.write(f"**Available analysis**: {', '.join(capability_profile.allowed_analysis_modes)}")
+    st.write(f"**Geometry confidence**: {evidence_assessment.geometry_confidence}")
+    st.write(f"**Material confidence**: {evidence_assessment.material_confidence}")
+    st.write(f"**Validation status**: {evidence_assessment.validation_status}")
+    st.caption("BIM/IFC is the highest evidence class, but confidence remains contingent on source completeness and validation.")
 
     st.markdown("<div class='page-card'><div class='page-card-title'>Canonical Facility Object Model</div>", unsafe_allow_html=True)
     st.caption("This page stores a canonical facility engineering object model; IFC, CAD, PDF, manual, template, and benchmark inputs all normalize into the same downstream structure.")
@@ -1847,6 +1902,84 @@ def _render_geometry_transport(library: ProjectLibrary, navigation: NavigationHi
     st.session_state.setdefault(route_distance_key, str(project.draft_state.get("build3::geometry::route_distance_m", "")))
     st.session_state.setdefault(vertical_change_key, str(project.draft_state.get("build3::geometry::vertical_transfer_m", "0")))
     st.session_state.setdefault(floors_key, str(project.draft_state.get("build3::geometry::floors", "1")))
+    st.session_state.setdefault(upload_detected_floors_key, str(project.draft_state.get("build3::facility_engineering::upload_detected_floors", "1")))
+    st.session_state.setdefault(upload_scope_floors_key, str(project.draft_state.get("build3::facility_engineering::upload_floor_scope", "Level 1")))
+    st.session_state.setdefault(manual_distance_only_key, bool(project.draft_state.get("build3::facility_engineering::manual_total_distance_mode", False)))
+    st.session_state.setdefault(manual_prod_building_key, str(project.draft_state.get("build3::facility_engineering::production_building_state", "proposed")))
+    st.session_state.setdefault(manual_prod_to_main_key, str(project.draft_state.get("build3::facility_engineering::production_to_main_distance_m", "")))
+    st.session_state.setdefault(manual_rad_to_clinical_key, str(project.draft_state.get("build3::facility_engineering::radiopharmacy_to_clinical_distance_m", "")))
+    st.session_state.setdefault(scanner_floors_key, list(project.draft_state.get("build3::facility_engineering::scanner_floors", ["UNKNOWN / OPTIMIZER_TO_ASSIGN"])))
+    st.session_state.setdefault(injection_floors_key, list(project.draft_state.get("build3::facility_engineering::injection_floors", ["UNKNOWN / OPTIMIZER_TO_ASSIGN"])))
+    st.session_state.setdefault(uptake_floors_key, list(project.draft_state.get("build3::facility_engineering::uptake_floors", ["UNKNOWN / OPTIMIZER_TO_ASSIGN"])))
+    st.session_state.setdefault(cyclotron_storey_key, str(project.draft_state.get("build3::facility_engineering::cyclotron_storey", "Level 1")))
+    st.session_state.setdefault(clinical_building_name_key, str(project.draft_state.get("build3::facility_engineering::clinical_building_name", "Main Clinical Building")))
+    st.session_state.setdefault(route_corridor_key, str(project.draft_state.get("build3::facility_engineering::route_corridor_class", "INTER_BUILDING_LINK")))
+    st.session_state.setdefault(source_space_name_key, str(project.draft_state.get("build3::facility_engineering::source_space_name", "Production Manager Office")))
+    st.session_state.setdefault(source_space_function_key, str(project.draft_state.get("build3::facility_engineering::source_space_function", "Office")))
+    st.session_state.setdefault(proposed_space_name_key, str(project.draft_state.get("build3::facility_engineering::proposed_space_name", "Injection Room 01")))
+    st.session_state.setdefault(proposed_space_function_key, str(project.draft_state.get("build3::facility_engineering::proposed_space_function", "Injection room")))
+    st.session_state.setdefault(assignment_status_key, str(project.draft_state.get("build3::facility_engineering::assignment_status", "OPTIMIZER_PROPOSED")))
+    st.session_state.setdefault(benchmark_type_key, str(project.draft_state.get("build3::facility_engineering::benchmark_facility_type", "General Hospital")))
+    st.session_state.setdefault(benchmark_area_key, str(project.draft_state.get("build3::facility_engineering::benchmark_area_m2", "")))
+    st.session_state.setdefault(required_scanners_key, str(project.draft_state.get("build3::facility_engineering::required_scanners", "0")))
+    st.session_state.setdefault(required_injection_key, str(project.draft_state.get("build3::facility_engineering::required_injection_rooms", "0")))
+    st.session_state.setdefault(required_uptake_key, str(project.draft_state.get("build3::facility_engineering::required_uptake_rooms", "0")))
+
+    if selected_input_path == "UPLOAD_FACILITY_DOCUMENT":
+        st.write("**Upload facility document**")
+        detected_floors_text = st.text_input("Detected floors / storeys", key=upload_detected_floors_key, help="For IFC/BIM this should reflect detected levels; user must confirm analysis scope.")
+        upload_floor_scope = st.text_input("Floors in analysis scope", key=upload_scope_floors_key, help="Example: Level 1, Level 2, Level 3")
+        st.caption("For PDF/CAD sources, floor count and floor mapping require explicit confirmation before geometry is treated as dimensionally authoritative.")
+    elif selected_input_path == "MANUAL_SPATIAL_DEFINITION":
+        st.write("**Manual spatial definition**")
+        production_building_state = st.selectbox("Production building", options=["present", "proposed"], key=manual_prod_building_key)
+        production_to_main_distance = st.text_input("Production building to main clinical building distance (m)", key=manual_prod_to_main_key)
+        radiopharmacy_to_clinical_distance = st.text_input("Radiopharmacy-to-clinical distance (m)", key=manual_rad_to_clinical_key)
+        manual_total_distance_mode = st.checkbox("Only total route distance is known (do not reconstruct detailed geometry)", key=manual_distance_only_key)
+        st.caption("Manual distances remain USER_SUPPLIED and are not treated as BIM-derived quantities.")
+    else:
+        st.write("**Benchmark / assumed facility**")
+        benchmark_type = st.text_input("Facility type", key=benchmark_type_key)
+        benchmark_area = st.text_input("Approximate gross floor area (m2)", key=benchmark_area_key)
+        st.caption("Benchmark mode is conceptual and preserves BENCHMARK_ASSUMED evidence.")
+
+    floor_options = ["Level 1", "Level 2", "Level 3", "Level 4", "Level 5", "UNKNOWN / OPTIMIZER_TO_ASSIGN"]
+    scanner_floors = st.multiselect("Scanner floors", options=floor_options, key=scanner_floors_key)
+    injection_floors = st.multiselect("Injection-room floors", options=floor_options, key=injection_floors_key)
+    uptake_floors = st.multiselect("Uptake-room floors", options=floor_options, key=uptake_floors_key)
+    cyclotron_storey = st.selectbox("Cyclotron storey", options=["Level 1", "Level 2", "Level 3", "Ground"], key=cyclotron_storey_key)
+    clinical_building_name = st.text_input("Clinical building name", key=clinical_building_name_key)
+    route_corridor_class = st.selectbox(
+        "Primary route corridor class",
+        options=[
+            "EXTERIOR_BUILDING_ENVELOPE",
+            "CEILING_SERVICE_ZONE",
+            "MECHANICAL_SERVICE_ZONE",
+            "UTILITY_CORRIDOR",
+            "DEDICATED_SHAFT",
+            "EXISTING_SERVICE_SHAFT",
+            "ROOF_ROUTE",
+            "INTER_BUILDING_LINK",
+            "DEDICATED_MRT_SHAFT",
+            "EXISTING_SERVICE_SHAFT_CANDIDATE",
+            "VERTICAL_GUIDEWAY",
+            "HORIZONTAL_VERTICAL_TRANSITION",
+            "VERTICAL_HORIZONTAL_TRANSITION",
+            "INTERIOR_CLINICAL_PATH",
+            "UNCLASSIFIED",
+        ],
+        key=route_corridor_key,
+    )
+
+    source_space_name = st.text_input("Source space name", key=source_space_name_key)
+    source_space_function = st.text_input("Source space function", key=source_space_function_key)
+    proposed_space_name = st.text_input("Proposed space name", key=proposed_space_name_key)
+    proposed_space_function = st.text_input("Proposed space function", key=proposed_space_function_key)
+    assignment_status = st.selectbox("Assignment status", options=["EXISTING_AS_BUILT", "OPTIMIZER_PROPOSED", "ACCEPTED_DESIGN"], key=assignment_status_key)
+
+    required_scanners_text = st.text_input("Required scanners", key=required_scanners_key)
+    required_injection_text = st.text_input("Required injection rooms", key=required_injection_key)
+    required_uptake_text = st.text_input("Required uptake rooms", key=required_uptake_key)
 
     facility_name = st.text_input("Facility name", key=facility_name_key)
     building_name = st.text_input("Building name", key=building_name_key)
@@ -1885,6 +2018,32 @@ def _render_geometry_transport(library: ProjectLibrary, navigation: NavigationHi
     if vertical_issue:
         errors.append(vertical_issue)
 
+    scanner_required, scanner_issue = parse_non_negative_integer(required_scanners_text)
+    if scanner_issue:
+        errors.append(f"Required scanners: {scanner_issue}")
+    injection_required, injection_issue = parse_non_negative_integer(required_injection_text)
+    if injection_issue:
+        errors.append(f"Required injection rooms: {injection_issue}")
+    uptake_required, uptake_issue = parse_non_negative_integer(required_uptake_text)
+    if uptake_issue:
+        errors.append(f"Required uptake rooms: {uptake_issue}")
+
+    if selected_input_path == "UPLOAD_FACILITY_DOCUMENT":
+        detected_floors_value, detected_issue = parse_non_negative_integer(st.session_state[upload_detected_floors_key])
+        if detected_issue or detected_floors_value in (None, 0):
+            errors.append("Detected floors / storeys must be a whole number greater than zero.")
+    if selected_input_path == "MANUAL_SPATIAL_DEFINITION":
+        _, prod_main_issue = _parse_positive_float(st.session_state[manual_prod_to_main_key], label="Production-to-main distance", allow_zero=False)
+        if prod_main_issue:
+            errors.append(prod_main_issue)
+        _, rad_clin_issue = _parse_positive_float(st.session_state[manual_rad_to_clinical_key], label="Radiopharmacy-to-clinical distance", allow_zero=False)
+        if rad_clin_issue:
+            errors.append(rad_clin_issue)
+    if selected_input_path == "BENCHMARK_ASSUMED_FACILITY":
+        _, benchmark_area_issue = _parse_positive_float(st.session_state[benchmark_area_key], label="Approximate gross floor area", allow_zero=False)
+        if benchmark_area_issue:
+            errors.append(benchmark_area_issue)
+
     if errors:
         for error in errors:
             st.error(error)
@@ -1907,6 +2066,8 @@ def _render_geometry_transport(library: ProjectLibrary, navigation: NavigationHi
         facility_id=project.project_id,
         facility_name=facility_name,
         project_spatial_mode=project_spatial_mode,
+        adaptive_spatial_mode="ADAPTIVE_REPURPOSING" if project_spatial_mode == "RETROFIT" else "GREENFIELD",
+        spatial_input_path=selected_input_path,
         source_type=source_type,
         subscription_tier=subscription_tier,
         coordinate_system=CoordinateSystem(
@@ -1920,16 +2081,69 @@ def _render_geometry_transport(library: ProjectLibrary, navigation: NavigationHi
         ),
         facility_instance_id=facility_instance_id or None,
         building_name=building_name,
+        clinical_building_name=clinical_building_name,
         storey_name=storey_name,
         space_name=space_name,
         equipment_class=equipment_class,  # type: ignore[arg-type]
         equipment_name=equipment_name or None,
         route_distance_m=_safe_float(route_distance),
         vertical_change_m=_safe_float(vertical_change),
+        route_corridor_class=route_corridor_class,
+        route_geometry_status="NOT_RECONSTRUCTED" if bool(st.session_state[manual_distance_only_key]) and selected_input_path == "MANUAL_SPATIAL_DEFINITION" else "RECONSTRUCTED",
         room_coordinate=coordinate,
+        clinical_floors_in_scope=int(floors_value),
+        scanner_floors=tuple(scanner_floors),
+        injection_floors=tuple(injection_floors),
+        uptake_floors=tuple(uptake_floors),
+        include_ground_floor=True,
+        enforce_cyclotron_ground_level=True,
+        enforce_separate_production_building=bool(st.session_state[manual_prod_building_key] in {"present", "proposed"}),
+        source_space_assignments=(
+            build_space_function_assignment(
+                space_id="SOURCE-SPACE-001",
+                source_name=source_space_name,
+                source_function=source_space_function,
+                proposed_name=source_space_name,
+                proposed_function=source_space_function,
+                assignment_status="EXISTING_AS_BUILT",
+                suitability="UNKNOWN",
+            ),
+        ),
+        proposed_space_assignments=(
+            build_space_function_assignment(
+                space_id="SOURCE-SPACE-001",
+                source_name=source_space_name,
+                source_function=source_space_function,
+                proposed_name=proposed_space_name,
+                proposed_function=proposed_space_function,
+                assignment_status=assignment_status,
+                suitability="SUITABLE_WITH_MODIFICATION" if "Injection" in proposed_space_function or "Radiopharmacy" in proposed_space_function else "UNKNOWN",
+                structural_suitability="UNKNOWN",
+                shielding_suitability="NOT_VERIFIED" if "Radiopharmacy" in proposed_space_function else "UNKNOWN",
+                hvac_suitability="MODIFICATION_REQUIRED" if "Injection" in proposed_space_function or "Radiopharmacy" in proposed_space_function else "UNKNOWN",
+                recommendation="Candidate subject to engineering validation.",
+            ),
+        ),
+        required_program=RequiredFacilityProgram(
+            injection_rooms_required=0 if injection_required is None else injection_required,
+            uptake_rooms_required=0 if uptake_required is None else uptake_required,
+            pet_ct_scanners_required=0 if scanner_required is None else scanner_required,
+        ),
         notes=(f"Spatial maturity: {maturity}", f"Storeys represented: {floors.strip() or '1'}"),
     )
     model = replace(model, evidence_class=evidence_class, maturity=maturity, subscription_tier=subscription_tier)
+    if cyclotron_storey != "Level 1" and cyclotron_storey != "Ground":
+        model = replace(
+            model,
+            storeys=(replace(model.storeys[0], name=cyclotron_storey, elevation_m=1.0),) + tuple(model.storeys[1:]),
+            equipment=(replace(model.equipment[0], storey_id=model.storeys[0].object_id),) + tuple(model.equipment[1:]),
+        )
+
+    feasibility_report = None
+    if model.required_program is not None:
+        feasibility_report = evaluate_required_program_feasibility(model=model, required_program=model.required_program)
+        model = replace(model, feasibility_report=feasibility_report)
+
     validation_issues = validate_facility_engineering_object_model(model)
     if validation_issues:
         st.markdown("**Spatial validation**")
@@ -1948,10 +2162,41 @@ def _render_geometry_transport(library: ProjectLibrary, navigation: NavigationHi
     st.write(f"Facility objects: {len(model.buildings) + len(model.storeys) + len(model.spaces) + len(model.equipment)}")
     st.write(f"Spatial nodes: {len(model.nodes)}")
     st.write(f"Spatial edges: {len(model.edges)}")
+    st.write(f"Input path: {selected_input_path}")
+    st.write(f"Route origin: {model.primary_route_origin_object_id}")
+    if model.feasibility_report is not None:
+        st.write(f"Program feasible: {model.feasibility_report.feasible}")
+        if model.feasibility_report.notes:
+            for note in model.feasibility_report.notes:
+                st.info(note)
 
     project.set_draft_value("build3::geometry::route_distance_m", route_distance.strip())
     project.set_draft_value("build3::geometry::floors", floors.strip() or "1")
     project.set_draft_value("build3::geometry::vertical_transfer_m", vertical_change.strip())
+    project.set_draft_value("build3::facility_engineering::input_path", selected_input_path)
+    project.set_draft_value("build3::facility_engineering::upload_source_type", source_type if selected_input_path == "UPLOAD_FACILITY_DOCUMENT" else "")
+    project.set_draft_value("build3::facility_engineering::upload_detected_floors", st.session_state[upload_detected_floors_key])
+    project.set_draft_value("build3::facility_engineering::upload_floor_scope", st.session_state[upload_scope_floors_key])
+    project.set_draft_value("build3::facility_engineering::manual_total_distance_mode", bool(st.session_state[manual_distance_only_key]))
+    project.set_draft_value("build3::facility_engineering::production_building_state", st.session_state[manual_prod_building_key])
+    project.set_draft_value("build3::facility_engineering::production_to_main_distance_m", st.session_state[manual_prod_to_main_key])
+    project.set_draft_value("build3::facility_engineering::radiopharmacy_to_clinical_distance_m", st.session_state[manual_rad_to_clinical_key])
+    project.set_draft_value("build3::facility_engineering::benchmark_facility_type", st.session_state[benchmark_type_key])
+    project.set_draft_value("build3::facility_engineering::benchmark_area_m2", st.session_state[benchmark_area_key])
+    project.set_draft_value("build3::facility_engineering::scanner_floors", tuple(scanner_floors))
+    project.set_draft_value("build3::facility_engineering::injection_floors", tuple(injection_floors))
+    project.set_draft_value("build3::facility_engineering::uptake_floors", tuple(uptake_floors))
+    project.set_draft_value("build3::facility_engineering::cyclotron_storey", cyclotron_storey)
+    project.set_draft_value("build3::facility_engineering::clinical_building_name", clinical_building_name)
+    project.set_draft_value("build3::facility_engineering::route_corridor_class", route_corridor_class)
+    project.set_draft_value("build3::facility_engineering::source_space_name", source_space_name)
+    project.set_draft_value("build3::facility_engineering::source_space_function", source_space_function)
+    project.set_draft_value("build3::facility_engineering::proposed_space_name", proposed_space_name)
+    project.set_draft_value("build3::facility_engineering::proposed_space_function", proposed_space_function)
+    project.set_draft_value("build3::facility_engineering::assignment_status", assignment_status)
+    project.set_draft_value("build3::facility_engineering::required_scanners", required_scanners_text)
+    project.set_draft_value("build3::facility_engineering::required_injection_rooms", required_injection_text)
+    project.set_draft_value("build3::facility_engineering::required_uptake_rooms", required_uptake_text)
     project.set_draft_value("build3::facility_engineering::model", serialize_facility_engineering_object_model(model))
     project.set_draft_value("build3::facility_engineering::source_type", source_type)
     project.set_draft_value("build3::facility_engineering::subscription_tier", subscription_tier)
@@ -1968,6 +2213,30 @@ def _render_geometry_transport(library: ProjectLibrary, navigation: NavigationHi
             "build3::geometry::route_distance_m",
             "build3::geometry::floors",
             "build3::geometry::vertical_transfer_m",
+            "build3::facility_engineering::input_path",
+            "build3::facility_engineering::upload_source_type",
+            "build3::facility_engineering::upload_detected_floors",
+            "build3::facility_engineering::upload_floor_scope",
+            "build3::facility_engineering::manual_total_distance_mode",
+            "build3::facility_engineering::production_building_state",
+            "build3::facility_engineering::production_to_main_distance_m",
+            "build3::facility_engineering::radiopharmacy_to_clinical_distance_m",
+            "build3::facility_engineering::benchmark_facility_type",
+            "build3::facility_engineering::benchmark_area_m2",
+            "build3::facility_engineering::scanner_floors",
+            "build3::facility_engineering::injection_floors",
+            "build3::facility_engineering::uptake_floors",
+            "build3::facility_engineering::cyclotron_storey",
+            "build3::facility_engineering::clinical_building_name",
+            "build3::facility_engineering::route_corridor_class",
+            "build3::facility_engineering::source_space_name",
+            "build3::facility_engineering::source_space_function",
+            "build3::facility_engineering::proposed_space_name",
+            "build3::facility_engineering::proposed_space_function",
+            "build3::facility_engineering::assignment_status",
+            "build3::facility_engineering::required_scanners",
+            "build3::facility_engineering::required_injection_rooms",
+            "build3::facility_engineering::required_uptake_rooms",
             "build3::facility_engineering::model",
             "build3::facility_engineering::source_type",
             "build3::facility_engineering::subscription_tier",

@@ -4,5 +4,6 @@
   "C-11": {"half_life_min": 20.3},
   "N-13": {"half_life_min": 9.97},
   "O-15": {"half_life_min": 2.04},
-  "Tc-99m": {"half_life_min": 360.0}
+  "Tc-99m": {"half_life_min": 360.0},
+  "Mo-99": {"half_life_min": 3956.4}
 }

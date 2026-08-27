@@ -1,0 +1,14 @@
+Assumption,Value
+required_patients_per_day,200
+operating_hours_per_day,18.0
+regular_shift_hours,8.0
+overtime_multiplier,1.5
+operating_days_per_year,300
+revenue_per_patient_usd,300.0
+discount_rate_pct,10.0
+analysis_years,10
+electricity_cost_per_kwh,0.12
+synthesis_yield_fraction,1.0
+manual_wage_per_hour,17.0
+manual_employer_cost_multiplier,1.3
+provenance,"models.PlannerAssumptions + conventional_transport_authority.PorterOperatingPolicy (existing authorities, single common basis)"

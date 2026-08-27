@@ -1,0 +1,9 @@
+Item,Building A,Building B,Shared Campus,Economic Treatment,Notes
+Production origin (CY-001/RADIOPHARMACY-A),Present (existing),Not present,"Shared, once","Building A new CapEx = $0 (existing shell, campus_retrofit_benchmark.CampusRetrofitResult.building_a_new_capex convention)",Never duplicated merely because Building B has a separate transport architecture
+Clinical rooms,0 (production-only building),40 candidate rooms (4 floors x 10 rooms/floor),n/a,Building B CapEx only,campus_retrofit_benchmark.build_two_building_campus_geometry
+Transport architecture,Conventional (fixed),"MRT (all 4 floors, default)","Campus classification = HYBRID (per governing definition, Section 1)",Building B CapEx/OPEX computed via evaluate_hybrid_zone_candidate with conventional_floors=(),Never 50/50 blend -- physically separate architectures per building
+Campus separation (default),-,-,"500.0 m (now resolvable via canonical geometry, Build 2)",Feeds guideway length -> CapEx/OPEX,Prior to Build 2: hardcoded float; Build 2: derivable from resolve_global_position/compute_global_distance
+Building B total CapEx (default 500m),-,"45,040,000.00",-,-,run_campus_case_2_hybrid
+Building B annual OPEX (default 500m),-,"6,580,955.00",-,-,run_campus_case_2_hybrid
+Retention-qualified completed (default 500m),-,72,-,-,run_campus_case_2_hybrid
+Qualified lifecycle NPV (default 500m),-,"200,676,772.70",-,-,evaluate_lifecycle_economics

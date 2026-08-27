@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import math
+from dataclasses import replace
 
 import pytest
 
@@ -10,9 +11,12 @@ from patient_radionuclide_demand import (
     PatientRadionuclideDemand,
 )
 from production_clinical_schedule import (
+    MRTCarrierTransportScheduleResult,
+    ConventionalTransportScheduleResult,
     ProductionClinicalScenario,
     build_production_clinical_schedule,
 )
+from spatial_benchmark import build_benchmark_geometry
 
 
 def _patient(patient_id: str, radionuclide: str, activity: float) -> PatientRadionuclideDemand:
@@ -76,6 +80,11 @@ def _scenario(
     uptake_resources: int = 1,
     distribution_concurrency: int = 1,
     operating_day_minutes: float = 1080.0,
+    pathway: str = "Conventional",
+    facility_model=None,
+    conventional_payload_capacity_doses: int = 5,
+    mrt_payload_capacity_doses: int = 1,
+    mrt_operated_carriers: int | None = None,
 ) -> ProductionClinicalScenario:
     return ProductionClinicalScenario(
         facility_day_demand=_demo_day(),
@@ -91,6 +100,62 @@ def _scenario(
         distribution_concurrency=distribution_concurrency,
         operating_day_minutes=operating_day_minutes,
         production_horizon_minutes=1080.0,
+        pathway=pathway,
+        facility_engineering_model=facility_model,
+        conventional_payload_capacity_doses=conventional_payload_capacity_doses,
+        mrt_payload_capacity_doses=mrt_payload_capacity_doses,
+        mrt_operated_carriers=mrt_operated_carriers,
+    )
+
+
+def _single_isotope_day(total_patients: int) -> FacilityDayPatientDemand:
+    return FacilityDayPatientDemand(
+        patients=tuple(
+            PatientRadionuclideDemand(
+                patient_id=f"PX{index + 1:03d}",
+                radionuclide="F-18",
+                prescribed_activity_mbq=200.0,
+            )
+            for index in range(total_patients)
+        )
+    )
+
+
+def _single_isotope_scenario(
+    *,
+    patient_count: int,
+    batch_count: int,
+    pathway: str,
+    facility_model,
+    distribution_concurrency: int,
+    conventional_payload_capacity_doses: int = 5,
+    mrt_payload_capacity_doses: int = 1,
+    mrt_operated_carriers: int | None = None,
+) -> ProductionClinicalScenario:
+    return ProductionClinicalScenario(
+        facility_day_demand=_single_isotope_day(patient_count),
+        requested_batch_count_by_radionuclide={"F-18": batch_count},
+        cyclotron_capability=CyclotronProductionCapability(
+            cyclotron_id="F18-ONLY",
+            supported_radionuclides=("F-18",),
+            max_simultaneous_production_streams=1,
+            production_cycle_minutes_by_radionuclide={"F-18": 30.0},
+        ),
+        transport_minutes=5.0,
+        injection_service_minutes=5.0,
+        uptake_minutes=5.0,
+        scanner_service_minutes=5.0,
+        injection_resources=2,
+        uptake_resources=2,
+        scanners=2,
+        distribution_concurrency=distribution_concurrency,
+        operating_day_minutes=1080.0,
+        production_horizon_minutes=1080.0,
+        pathway=pathway,
+        facility_engineering_model=facility_model,
+        conventional_payload_capacity_doses=conventional_payload_capacity_doses,
+        mrt_payload_capacity_doses=mrt_payload_capacity_doses,
+        mrt_operated_carriers=mrt_operated_carriers,
     )
 
 
@@ -152,7 +217,7 @@ def test_generated_batchrelease_patient_counts_reconcile_with_batch_demand():
 
 def test_serial_production_release_times_are_chronological():
     result = build_production_clinical_schedule(_scenario(_serial_capability()))
-    assert [release.release_time_minutes for release in result.batch_releases] == [30.0, 60.0, 80.0, 105.0]
+    assert [release.release_time_minutes for release in result.batch_releases] == [35.0, 65.0, 85.0, 110.0]
 
 
 def test_dual_compatible_production_can_create_earlier_release_for_batches():
@@ -262,3 +327,183 @@ def test_traceability_chain_is_complete_for_every_patient():
         assert trace.injection_start >= trace.distribution_end
         assert trace.uptake_start >= trace.injection_end
         assert trace.scan_start >= trace.uptake_end
+
+
+@pytest.mark.parametrize(
+    ("capacity", "expected_jobs"),
+    ((20, 1), (10, 2), (5, 4), (1, 20)),
+)
+def test_payload_capacity_enforces_delivery_job_count_for_one_batch_one_destination(capacity: int, expected_jobs: int) -> None:
+    geometry = build_benchmark_geometry()
+    model = replace(
+        geometry.base_model,
+        primary_route_destination_object_ids=("F1-R01",),
+    )
+    scenario = _single_isotope_scenario(
+        patient_count=20,
+        batch_count=1,
+        pathway="Conventional",
+        facility_model=model,
+        distribution_concurrency=2,
+        conventional_payload_capacity_doses=capacity,
+    )
+    result = build_production_clinical_schedule(scenario)
+
+    assert len(result.batch_release_mappings) == 1
+    assert len(result.transport_payloads) == expected_jobs
+    assert result.transport_schedule.transport_jobs_per_day == expected_jobs
+    assert all(payload.destination_object_id == "F1-R01" for payload in result.transport_payloads)
+
+
+def test_one_batch_can_generate_multiple_payloads_and_multiple_delivery_jobs() -> None:
+    geometry = build_benchmark_geometry()
+    model = replace(
+        geometry.base_model,
+        primary_route_destination_object_ids=("F1-R01",),
+    )
+    result = build_production_clinical_schedule(
+        _single_isotope_scenario(
+            patient_count=20,
+            batch_count=1,
+            pathway="Conventional",
+            facility_model=model,
+            distribution_concurrency=2,
+            conventional_payload_capacity_doses=5,
+        )
+    )
+
+    assert len(result.batch_release_mappings) == 1
+    assert len(result.transport_payloads) == 4
+    assert result.transport_schedule.transport_jobs_per_day == 4
+
+
+def test_one_batch_assigned_across_three_destinations_generates_jobs_for_each_destination() -> None:
+    geometry = build_benchmark_geometry()
+    model = replace(
+        geometry.base_model,
+        primary_route_destination_object_ids=("F1-R01", "F2-R01", "F3-R01"),
+    )
+    result = build_production_clinical_schedule(
+        _single_isotope_scenario(
+            patient_count=20,
+            batch_count=1,
+            pathway="Conventional",
+            facility_model=model,
+            distribution_concurrency=3,
+            conventional_payload_capacity_doses=5,
+        )
+    )
+
+    destination_counts: dict[str, int] = {}
+    for payload in result.transport_payloads:
+        destination_counts[payload.destination_object_id] = destination_counts.get(payload.destination_object_id, 0) + 1
+
+    assert set(destination_counts.keys()) == {"F1-R01", "F2-R01", "F3-R01"}
+    assert sum(destination_counts.values()) == result.transport_schedule.transport_jobs_per_day
+
+
+def test_controlled_simultaneous_payloads_prove_serial_vs_parallel_limits() -> None:
+    geometry = build_benchmark_geometry()
+    model = replace(
+        geometry.base_model,
+        primary_route_destination_object_ids=("F1-R01", "F2-R01", "F3-R01"),
+    )
+
+    conventional_one = build_production_clinical_schedule(
+        _single_isotope_scenario(
+            patient_count=12,
+            batch_count=1,
+            pathway="Conventional",
+            facility_model=model,
+            distribution_concurrency=1,
+            conventional_payload_capacity_doses=2,
+        )
+    )
+    conventional_two = build_production_clinical_schedule(
+        _single_isotope_scenario(
+            patient_count=12,
+            batch_count=1,
+            pathway="Conventional",
+            facility_model=model,
+            distribution_concurrency=2,
+            conventional_payload_capacity_doses=2,
+        )
+    )
+    mrt_three = build_production_clinical_schedule(
+        _single_isotope_scenario(
+            patient_count=12,
+            batch_count=1,
+            pathway="MRT",
+            facility_model=model,
+            distribution_concurrency=3,
+            mrt_payload_capacity_doses=2,
+            mrt_operated_carriers=3,
+        )
+    )
+
+    assert isinstance(conventional_one.transport_schedule, ConventionalTransportScheduleResult)
+    assert isinstance(conventional_two.transport_schedule, ConventionalTransportScheduleResult)
+    assert isinstance(mrt_three.transport_schedule, MRTCarrierTransportScheduleResult)
+
+    conv_one_jobs = conventional_one.transport_schedule.jobs
+    assert all(
+        conv_one_jobs[index + 1].dispatch_time_minutes >= conv_one_jobs[index].transporter_release_time_minutes
+        for index in range(len(conv_one_jobs) - 1)
+    )
+
+    first_ready = min(payload.ready_time_minutes for payload in mrt_three.transport_payloads)
+    same_ready_dispatches = [
+        job for job in mrt_three.transport_schedule.jobs
+        if math.isclose(job.dispatch_time_minutes, first_ready, rel_tol=0.0, abs_tol=1e-9)
+    ]
+    assert len(same_ready_dispatches) >= 2
+
+    conv_two_peak = max(
+        sum(
+            1
+            for other in conventional_two.transport_schedule.jobs
+            if other.dispatch_time_minutes <= job.dispatch_time_minutes < other.transporter_release_time_minutes
+        )
+        for job in conventional_two.transport_schedule.jobs
+    )
+    mrt_three_peak = max(
+        sum(
+            1
+            for other in mrt_three.transport_schedule.jobs
+            if other.dispatch_time_minutes <= job.dispatch_time_minutes < other.carrier_release_time_minutes
+        )
+        for job in mrt_three.transport_schedule.jobs
+    )
+
+    assert conv_two_peak <= 2
+    assert mrt_three_peak <= 3
+
+
+def test_patient_traceability_links_destination_payload_and_delivery_job() -> None:
+    geometry = build_benchmark_geometry()
+    model = replace(
+        geometry.base_model,
+        primary_route_destination_object_ids=("F1-R01", "F2-R01", "F3-R01"),
+    )
+    result = build_production_clinical_schedule(
+        _single_isotope_scenario(
+            patient_count=12,
+            batch_count=1,
+            pathway="Conventional",
+            facility_model=model,
+            distribution_concurrency=2,
+            conventional_payload_capacity_doses=2,
+        )
+    )
+
+    payload_by_id = {payload.payload_id: payload for payload in result.transport_payloads}
+    delivery_by_payload_id = {delivery.payload_id: delivery for delivery in result.transport_deliveries}
+    assert len(result.patient_traces) == 12
+
+    for trace in result.patient_traces:
+        payload = payload_by_id[trace.payload_id]
+        delivery = delivery_by_payload_id[trace.payload_id]
+        assert trace.assigned_destination_object_id == payload.destination_object_id
+        assert trace.delivery_job_id == delivery.delivery_job_id
+        assert trace.transport_arrival_time_minutes == pytest.approx(delivery.arrival_time_minutes)
+        assert trace.patient_id in payload.patient_ids

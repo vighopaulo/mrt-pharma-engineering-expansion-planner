@@ -1,0 +1,5 @@
+Architecture,Served patients/day,Annual patients,Revenue/patient,Gross annual revenue (informational)
+MANUAL_CONVENTIONAL,200,60000,300.0,18000000.0
+AUTOMATED_CONVENTIONAL,200,60000,300.0,18000000.0
+MRT,200,60000,300.0,18000000.0
+HYBRID,200,60000,300.0,18000000.0

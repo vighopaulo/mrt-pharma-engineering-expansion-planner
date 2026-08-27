@@ -1,0 +1,5 @@
+Architecture,Delta CapEx,Delta known annual OPEX savings,Delta revenue,Delta annual cash flow,Calibration status
+MANUAL_CONVENTIONAL,0.0,0.0,0.0,0.0,REFERENCE_BASELINE (Manual Conventional; delta always zero by definition)
+AUTOMATED_CONVENTIONAL,795000.0,-41411.99999999994,0.0,-41411.99999999994,"PARTIAL -- unresolved OPEX categories excluded from delta: ['clinical_labor_opex', 'consumables_opex', 'maintenance_opex', 'production_opex']"
+MRT,611000.0,377906.93038000003,0.0,377906.93038000003,"PARTIAL -- unresolved OPEX categories excluded from delta: ['clinical_labor_opex', 'consumables_opex', 'maintenance_opex', 'production_opex']"
+HYBRID,611000.0,377906.93236000004,0.0,377906.93236000004,"PARTIAL -- unresolved OPEX categories excluded from delta: ['clinical_labor_opex', 'consumables_opex', 'maintenance_opex', 'production_opex']"

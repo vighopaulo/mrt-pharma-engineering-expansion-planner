@@ -1,0 +1,5 @@
+Metric,Before Rotation,After Rotation,Delta,Engineering Cause,Economic Consequence
+Building B global position (own origin),"(500.0, 0.0, 0.0)","(500.0, 0.0, 0.0)",0.0,Rotation is applied about the building's own local origin -- the origin itself is a fixed point under any rotation,None
+Inter-building distance (A<->B),500.0,500.0,0.0,Both buildings' connection points are at their own local origins in this canonical registry,None -- PHYSICALLY_INVARIANT_FOR_THIS_TRANSFORM
+"Off-axis room global position (B-F1-R01, local offset (10,5,0))","(510.0, 5.0, 0.0)","(495.0, 10.0, 0.0)","dx=-15.0, dy=+5.0",Rotation matrix applied to the room's non-zero local offset,Not evaluated in the campus-CapEx run (campus benchmark uses building-origin-to-building-origin distance only); demonstrates the geometry engine correctly distinguishes on-axis vs off-axis sensitivity
+Building B campus CapEx,"45,040,000.00","45,040,000.00",0.00,"Campus benchmark route length is driven by building-origin-to-building-origin distance, unaffected by rotation about that same origin",None

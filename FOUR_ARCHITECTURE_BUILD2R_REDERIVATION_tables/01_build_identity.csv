@@ -1,0 +1,7 @@
+Item,Value
+Build,Build 2R -- Authoritative Four-Architecture Re-Derivation
+Starting baseline,"Build 2 (2361 passed, 3 deselected, 0 failed)"
+Files modified,whole_oncology_four_architecture_optimization.py
+Files added,FOUR_ARCHITECTURE_BUILD2R_REDERIVATION_REPORT.md + tables/
+Authorities added,"classify_floor_envelope, resolve_nuclear_floor_envelopes, compute_automated_conventional_nuclear_envelope, evaluate_eight_floor_zonal_hybrid"
+Authorities reused,"spatial_benchmark.compute_retention_envelope, hybrid_optimization.evaluate_hybrid_zone_candidate, conventional_transport_authority (Build 1), multi_isotope_decay.retained_fraction"

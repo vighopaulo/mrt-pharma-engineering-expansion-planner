@@ -1,0 +1,11 @@
+Component,MRT,Hybrid
+guideway_length_m,NOT_CALIBRATED,NOT_CALIBRATED
+guideway_capex_usd,NOT_CALIBRATED,NOT_CALIBRATED
+vestibule_count,1,1
+vestibule_capex_usd,30000.0,30000.0
+endpoint_count,170,170
+endpoint_capex_usd,170000.0,170000.0
+carrier_fleet_capex_usd,11000.0,11000.0
+controls_capex_usd,100000.0,100000.0
+installation_commissioning_capex_usd,300000.0,300000.0
+total_capex_usd,611000.0,611000.0

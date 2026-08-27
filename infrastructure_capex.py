@@ -63,9 +63,12 @@ class InfrastructureCapexInputs:
     existing_mrt_base_infrastructure_units: int = 0
     installed_mrt_endpoints: int = 0
     existing_mrt_endpoints: int = 0
+    installed_mrt_carriers: int = 0
+    existing_mrt_carriers: int = 0
     installed_guideway_length_m: float = 0.0
     existing_guideway_length_m: float = 0.0
     guideway_capex_per_m: float = 0.0
+    mrt_carrier_capex_per_unit: float | None = None
     installed_vertical_transitions: int = 0
     existing_vertical_transitions: int = 0
     installed_building_connections: int = 0
@@ -96,6 +99,8 @@ class InfrastructureCapexInputs:
             "existing_mrt_base_infrastructure_units",
             "installed_mrt_endpoints",
             "existing_mrt_endpoints",
+            "installed_mrt_carriers",
+            "existing_mrt_carriers",
             "installed_vertical_transitions",
             "existing_vertical_transitions",
             "installed_building_connections",
@@ -120,6 +125,7 @@ class InfrastructureCapexInputs:
         _incremental_quantity(self.conventional_infrastructure_allowance_units, self.existing_conventional_infrastructure_allowance_units)
         _incremental_quantity(self.installed_mrt_base_infrastructure_units, self.existing_mrt_base_infrastructure_units)
         _incremental_quantity(self.installed_mrt_endpoints, self.existing_mrt_endpoints)
+        _incremental_quantity(self.installed_mrt_carriers, self.existing_mrt_carriers)
         _incremental_quantity(self.installed_guideway_length_m, self.existing_guideway_length_m)
         _incremental_quantity(self.installed_vertical_transitions, self.existing_vertical_transitions)
         _incremental_quantity(self.installed_building_connections, self.existing_building_connections)
@@ -178,6 +184,7 @@ def calculate_infrastructure_capex(inputs: InfrastructureCapexInputs) -> Infrast
         inputs.existing_mrt_base_infrastructure_units,
     )
     charged_endpoints = _incremental_quantity(inputs.installed_mrt_endpoints, inputs.existing_mrt_endpoints)
+    charged_carriers = _incremental_quantity(inputs.installed_mrt_carriers, inputs.existing_mrt_carriers)
     charged_guideway_length = _incremental_quantity(inputs.installed_guideway_length_m, inputs.existing_guideway_length_m)
     charged_vertical_transitions = _incremental_quantity(
         inputs.installed_vertical_transitions,
@@ -187,6 +194,8 @@ def calculate_infrastructure_capex(inputs: InfrastructureCapexInputs) -> Infrast
         inputs.installed_building_connections,
         inputs.existing_building_connections,
     )
+    guideway_capex_per_m = inputs.guideway_capex_per_m if inputs.guideway_capex_per_m > 0.0 else assumptions.mrt_guideway_capex_per_m
+    carrier_capex_per_unit = assumptions.mrt_carrier_capex_per_installed_unit if inputs.mrt_carrier_capex_per_unit is None else float(inputs.mrt_carrier_capex_per_unit)
 
     ledger: list[CapexLedgerItem] = [
         _ledger_item(
@@ -270,12 +279,24 @@ def calculate_infrastructure_capex(inputs: InfrastructureCapexInputs) -> Infrast
                     cost_basis="PlannerAssumptions.endpoint_capex",
                 ),
                 _ledger_item(
+                    component="MRT carriers",
+                    category="MRT",
+                    quantity=charged_carriers,
+                    unit="units",
+                    unit_cost=carrier_capex_per_unit,
+                    cost_basis="PROJECT_PLANNING_ASSUMPTION: PlannerAssumptions.mrt_carrier_capex_per_installed_unit",
+                ),
+                _ledger_item(
                     component="MRT guideway",
                     category="MRT",
                     quantity=charged_guideway_length,
                     unit="m",
-                    unit_cost=inputs.guideway_capex_per_m,
-                    cost_basis="Scenario calibrated input",
+                    unit_cost=guideway_capex_per_m,
+                    cost_basis=(
+                        "Scenario calibrated input"
+                        if inputs.guideway_capex_per_m > 0.0
+                        else "PROJECT_PLANNING_ASSUMPTION: PlannerAssumptions.mrt_guideway_capex_per_m"
+                    ),
                 ),
                 _ledger_item(
                     component="Vertical transitions",
@@ -311,6 +332,7 @@ def calculate_infrastructure_capex(inputs: InfrastructureCapexInputs) -> Infrast
         "conventional_infrastructure_allowance_units": float(inputs.conventional_infrastructure_allowance_units),
         "installed_mrt_base_infrastructure_units": float(inputs.installed_mrt_base_infrastructure_units),
         "installed_mrt_endpoints": float(inputs.installed_mrt_endpoints),
+        "installed_mrt_carriers": float(inputs.installed_mrt_carriers),
         "installed_guideway_length_m": float(inputs.installed_guideway_length_m),
         "installed_vertical_transitions": float(inputs.installed_vertical_transitions),
         "installed_building_connections": float(inputs.installed_building_connections),
@@ -324,6 +346,7 @@ def calculate_infrastructure_capex(inputs: InfrastructureCapexInputs) -> Infrast
         "charged_conventional_infrastructure_allowance_units": float(charged_conventional_allowance),
         "charged_mrt_base_infrastructure_units": float(charged_mrt_base),
         "charged_mrt_endpoints": float(charged_endpoints),
+        "charged_mrt_carriers": float(charged_carriers),
         "charged_guideway_length_m": float(charged_guideway_length),
         "charged_vertical_transitions": float(charged_vertical_transitions),
         "charged_building_connections": float(charged_building_connections),

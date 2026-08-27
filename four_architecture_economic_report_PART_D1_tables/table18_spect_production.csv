@@ -1,0 +1,5 @@
+Architecture,Patients,Activity/patient (MBq),Transport-relevant elapsed (min),Retained fraction,A_admin,A_release_required,A_EOB_required,EOB vs Manual delta,% reduction vs Manual
+MANUAL_CONVENTIONAL,60,740.0,62.0,0.887475,44400.0,50029.599,50029.599,0.0,0.0
+AUTOMATED_CONVENTIONAL,60,740.0,62.0,0.887475,44400.0,50029.599,50029.599,0.0,0.0
+MRT,60,740.0,45.5,0.916122,44400.0,48465.179,48465.179,-1564.421,-3.127
+HYBRID,60,740.0,45.5,0.916122,44400.0,48465.179,48465.179,-1564.421,-3.127

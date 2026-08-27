@@ -1,0 +1,11 @@
+Item,Value
+Build,Build 3 -- Operating-Day Final Closure
+Purpose,"Make the operating-day simulation (Representative Tuesday) execute a coherent, authoritative, five-stream, four-architecture hospital day suitable for future NVIDIA Live 3D consumption"
+Starting baseline,"Build 2 -- 2361 passed, 3 deselected, 0 failed, 2368.25s (0:39:28)"
+Files modified,operational_day_orchestrator.py (event journal closure)
+Files added,"test_operating_day_journal_and_identity_closure.py, OPERATING_DAY_FINAL_CLOSURE_BUILD3_REPORT.md + tables/"
+Authorities reused,"operational_day_orchestrator (run_operating_day, execute_operating_day_architecture, build_controlled_representative_day), mrt_service_class_authority, conventional_transport_authority, canonical_spatial_authority, oncology_pet_spect_scenario, general_oncology_logistics"
+Authorities modified,operational_day_orchestrator.run_operating_day (merged whole-day event journal); validate_operating_day_result (orphan-journal check extended to conventional mission IDs)
+Authorities added,operational_day_orchestrator.build_conventional_mission_journal
+Genuine gap found and closed,Event journal was MRT-only (0 entries for MANUAL_CONVENTIONAL); now whole-day (66-107 entries across all 4 architectures)
+Genuine gap found and NOT closed (disclosed),"operational_day_orchestrator.py implements its own production/clinical/mission scheduling, parallel to production_clinical_schedule.py's 'sole authoritative' scheduler used by whole_oncology_four_architecture_optimization.py/hybrid_optimization.py/decision_pipeline.py -- pre-existing from Parts A-D of this session, NOT introduced by Build 3, disclosed as DUPLICATED_AUTHORITY_TECH_DEBT rather than redesigned under time pressure"

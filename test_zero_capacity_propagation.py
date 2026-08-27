@@ -36,7 +36,17 @@ def _asset(cyclotron_id: str, model_id: str, supported: tuple[str, ...], cycles:
         capability=_capability(cyclotron_id, supported, cycles),
         manufacturer="StressDemo",
         model_identifier=model_id,
-        capability_provenance=model_id,
+        # PRE_EXISTING_INCOMPLETE_MIGRATION correction: capability_provenance
+        # must be the established "test" sentinel (see
+        # test_cyclotron_fleet_integration.py's identical convention) so
+        # decision_pipeline._asset_uses_catalog_strict_activity_basis does not
+        # treat this synthetic capability as a real, uncalibrated catalog
+        # entry -- passing model_id here previously made EVERY batch skip the
+        # production-activity-capacity guard entirely (no calibrated EOB data
+        # exists for these synthetic assets), silently forcing
+        # production_activity_feasible_completed_patients=0 regardless of
+        # decay feasibility.
+        capability_provenance="test",
     )
 
 
@@ -138,7 +148,15 @@ def test_zero_effective_throughput_propagates_without_crashing_and_preserves_cos
 
 
 def test_partial_effective_throughput_keeps_raw_and_revenue_distinct_and_preserves_infeasible_patient_trace():
-    request = _stressed_request(target_patients_per_day=50, transport_minutes=20.0, max_compensation_factor=1.3)
+    # STALE_TEST_EXPECTATION correction: transport_minutes=20.0 does not
+    # actually produce a PARTIAL feasibility split for this fleet/activity
+    # stress combination -- traced (parameter sweep) that ALL 50 patients
+    # become decay-infeasible at transport_minutes>=15.0 (identical to the
+    # adjacent all-infeasible test), while transport_minutes=10.0 genuinely
+    # yields a mixed split (7 feasible / 43 infeasible) with the SAME
+    # max_compensation_factor=1.3 -- the production/decay pipeline itself is
+    # unchanged; only the test's stress parameter was miscalibrated.
+    request = _stressed_request(target_patients_per_day=50, transport_minutes=10.0, max_compensation_factor=1.3)
 
     result = run_native_decision_pipeline(request)
     mrt = result.mrt

@@ -5,7 +5,10 @@ import math
 import pytest
 
 from cyclotron_production_windows import (
+    CyclotronAsset,
+    CyclotronFleet,
     CyclotronProductionCapability,
+    resolve_fleet_schedule_derived_eob_capacity_mbq,
     schedule_cyclotron_production_windows,
 )
 from patient_radionuclide_demand import (
@@ -240,6 +243,107 @@ def test_over_horizon_schedule_returns_false():
         production_horizon_minutes=90.0,
     )
     assert schedule.fits_within_production_horizon is False
+
+
+def test_negative_preclinical_production_start_is_allowed():
+    schedule = schedule_cyclotron_production_windows(
+        _demo_batches(),
+        _serial_capability(),
+        production_start_time_minutes=-120.0,
+        production_horizon_minutes=120.0,
+    )
+
+    assert schedule.production_start_time_minutes == pytest.approx(-120.0)
+    assert schedule.windows[0].start_time_minutes == pytest.approx(-120.0)
+    assert schedule.windows[0].end_time_minutes == pytest.approx(-90.0)
+
+
+def test_production_horizon_caps_serial_windows_and_marks_unscheduled_batches():
+    batches = partition_facility_day_patient_demand(
+        FacilityDayPatientDemand(
+            patients=(
+                _patient("P1", "F-18", 200.0),
+                _patient("P2", "F-18", 200.0),
+                _patient("P3", "F-18", 200.0),
+            )
+        ),
+        {"F-18": 3},
+    )
+    capability = CyclotronProductionCapability(
+        cyclotron_id="CY-horizon",
+        supported_radionuclides=("F-18",),
+        max_simultaneous_production_streams=1,
+        production_cycle_minutes_by_radionuclide={"F-18": 120.0},
+        calibrated_eob_activity_mbq_by_radionuclide={"F-18": 648_000.0},
+    )
+
+    schedule = schedule_cyclotron_production_windows(
+        batches,
+        capability,
+        production_start_time_minutes=0.0,
+        production_horizon_minutes=240.0,
+    )
+
+    assert schedule.scheduled_batches == 2
+    assert schedule.unscheduled_batches == 1
+    assert schedule.unscheduled_batch_ids == (3,)
+    assert schedule.all_batches_scheduled is False
+    assert schedule.fits_within_production_horizon is False
+
+
+def test_schedule_derived_capacity_uses_feasible_window_count_not_requested_batches():
+    capability = CyclotronProductionCapability(
+        cyclotron_id="CY-capacity",
+        supported_radionuclides=("F-18",),
+        max_simultaneous_production_streams=1,
+        production_cycle_minutes_by_radionuclide={"F-18": 120.0},
+        calibrated_eob_activity_mbq_by_radionuclide={"F-18": 648_000.0},
+    )
+    fleet = CyclotronFleet(
+        assets=(
+            CyclotronAsset(
+                cyclotron_id="CY-capacity",
+                capability=capability,
+            ),
+        )
+    )
+
+    capacity, status = resolve_fleet_schedule_derived_eob_capacity_mbq(
+        fleet=fleet,
+        radionuclide="F-18",
+        feasible_scheduled_windows=2,
+    )
+
+    assert capacity == pytest.approx(1_296_000.0)
+    assert status == "schedule_derived_capacity"
+
+
+def test_explicit_site_daily_capacity_remains_authoritative():
+    capability = CyclotronProductionCapability(
+        cyclotron_id="CY-site",
+        supported_radionuclides=("F-18",),
+        max_simultaneous_production_streams=1,
+        production_cycle_minutes_by_radionuclide={"F-18": 120.0},
+        calibrated_eob_activity_mbq_by_radionuclide={"F-18": 648_000.0},
+        site_eob_capacity_mbq_per_day=900_000.0,
+    )
+    fleet = CyclotronFleet(
+        assets=(
+            CyclotronAsset(
+                cyclotron_id="CY-site",
+                capability=capability,
+            ),
+        )
+    )
+
+    capacity, status = resolve_fleet_schedule_derived_eob_capacity_mbq(
+        fleet=fleet,
+        radionuclide="F-18",
+        feasible_scheduled_windows=10,
+    )
+
+    assert capacity == pytest.approx(900_000.0)
+    assert status == "explicit_site_daily_capacity"
 
 
 def test_deterministic_ordering_is_preserved():

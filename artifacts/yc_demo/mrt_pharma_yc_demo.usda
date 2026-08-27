@@ -1,0 +1,313 @@
+#usda 1.0
+(
+    defaultPrim = "MRTPharma"
+    endTimeCode = 161.89664169040495
+    framesPerSecond = 24
+    metersPerUnit = 1
+    startTimeCode = 0
+    timeCodesPerSecond = 1
+    upAxis = "Z"
+)
+
+def Xform "MRTPharma" (
+    customData = {
+        string engineering_time_unit = "MINUTES"
+        string mrtway_simulation_time_unit = "MINUTES"
+        string mrtway_time_basis = "1_USD_TIMECODE_EQUALS_1_SIMULATION_SECOND"
+        string scene_id = "YC-DEMO-DAY-1"
+    }
+)
+{
+    def Xform "Facility"
+    {
+        def Cube "MRT_ENDPOINT_RP" (
+            customData = {
+                string room_id = "MRT-ENDPOINT-RP"
+            }
+        )
+        {
+            double size = 2
+            double3 xformOp:translate = (-5, 0, 0)
+            uniform token[] xformOpOrder = ["xformOp:translate"]
+        }
+
+        def Cube "MRT_ENDPOINT_SCN" (
+            customData = {
+                string room_id = "MRT-ENDPOINT-SCN"
+            }
+        )
+        {
+            double size = 2
+            double3 xformOp:translate = (20, 25, 0)
+            uniform token[] xformOpOrder = ["xformOp:translate"]
+        }
+
+        def Cube "RGHT_STN_RP" (
+            customData = {
+                string room_id = "RGHT-STN-RP"
+            }
+        )
+        {
+            double size = 2
+            double3 xformOp:translate = (5, 15, 0)
+            uniform token[] xformOpOrder = ["xformOp:translate"]
+        }
+
+        def Cube "RGHT_STN_SCN" (
+            customData = {
+                string room_id = "RGHT-STN-SCN"
+            }
+        )
+        {
+            double size = 2
+            double3 xformOp:translate = (24, 6, 4)
+            uniform token[] xformOpOrder = ["xformOp:translate"]
+        }
+
+        def Cube "ROOM_PAT_201" (
+            customData = {
+                string room_id = "ROOM-PAT-201"
+            }
+        )
+        {
+            double size = 2
+            double3 xformOp:translate = (6, 15, 4)
+            uniform token[] xformOpOrder = ["xformOp:translate"]
+        }
+
+        def Cube "ROOM_RP_101" (
+            customData = {
+                string room_id = "ROOM-RP-101"
+            }
+        )
+        {
+            double size = 2
+            double3 xformOp:translate = (5, 15, 0)
+            uniform token[] xformOpOrder = ["xformOp:translate"]
+        }
+
+        def Cube "ROOM_SCN_202" (
+            customData = {
+                string room_id = "ROOM-SCN-202"
+            }
+        )
+        {
+            double size = 2
+            double3 xformOp:translate = (24, 6, 4)
+            uniform token[] xformOpOrder = ["xformOp:translate"]
+        }
+    }
+
+    def Xform "Infrastructure"
+    {
+        def Xform "MRT"
+        {
+            def BasisCurves "Guideway"
+            {
+                int[] curveVertexCounts = [5]
+                point3f[] points = [(-5, 0, 0), (0, 0, 0), (20, 0, 0), (20, 15, 0), (20, 25, 0)]
+                uniform token type = "linear"
+                float[] widths = [0.1, 0.1, 0.1, 0.1, 0.1]
+            }
+        }
+
+        def Xform "Pedestrian"
+        {
+            def BasisCurves "Guideway"
+            {
+                int[] curveVertexCounts = [3]
+                point3f[] points = [(6, 15, 4), (15, 10, 4), (24, 6, 4)]
+                uniform token type = "linear"
+                float[] widths = [0.1, 0.1, 0.1]
+            }
+        }
+
+        def Xform "RGHT"
+        {
+            def BasisCurves "Guideway"
+            {
+                int[] curveVertexCounts = [4]
+                point3f[] points = [(5, 15, 0), (15, 10, 0), (15, 10, 4), (24, 6, 4)]
+                uniform token type = "linear"
+                float[] widths = [0.1, 0.1, 0.1, 0.1]
+            }
+        }
+    }
+
+    def Xform "DynamicEntities"
+    {
+        def Cube "MRT_CARRIER_001" (
+            customData = {
+                string dynamic_trajectory_interpolation_method = "LINEAR"
+                string dynamic_trajectory_provenance = "canonical_spatial_authority.resolve_route(mode='MRT') + mrt_service_class_authority.build_carrier_trajectory"
+                string entity_id = "MRT-CARRIER-001"
+                string entity_type = "MRT_CARRIER"
+                string mission_ids = "M-YC-MRT"
+                string mrtway_object_id = "MRT-CARRIER-001"
+                string service_class = "RADIOPHARMACEUTICAL_NUCLEAR"
+                string transport_mode = "MRT"
+            }
+        )
+        {
+            custom token mrtway:movementState
+            token mrtway:movementState.timeSamples = {
+                0: "MOVING",
+                0.5: "MOVING",
+                2.5: "MOVING",
+                4: "MOVING",
+                5: "COMPLETE",
+            }
+            custom double mrtway:simulationTimeMinutes
+            double mrtway:simulationTimeMinutes.timeSamples = {
+                0: 0,
+                0.5: 0.008333333333333333,
+                2.5: 0.041666666666666664,
+                4: 0.06666666666666667,
+                5: 0.08333333333333333,
+            }
+            color3f[] primvars:displayColor = [(0.85, 0.15, 0.15)]
+            double size = 1
+            double3 xformOp:translate.timeSamples = {
+                0: (-5, 0, 0),
+                0.5: (0, 0, 0),
+                2.5: (20, 0, 0),
+                4: (20, 15, 0),
+                5: (20, 25, 0),
+            }
+            uniform token[] xformOpOrder = ["xformOp:translate"]
+        }
+
+        def Capsule "PATIENT_001" (
+            customData = {
+                string dynamic_trajectory_interpolation_method = "LINEAR"
+                string dynamic_trajectory_provenance = "human_circulation_authority.resolve_pedestrian_route (shared PATIENT_MOVEMENT/WALKING_PORTER pedestrian network via corridors/elevators) -- never straight-line-through-walls"
+                string entity_id = "PATIENT-001"
+                string entity_type = "PATIENT"
+                string mission_ids = "M-YC-PATIENT"
+                string mrtway_object_id = "PATIENT-001"
+                string patient_id = "PT-001"
+                string transport_mode = "PATIENT_MOVEMENT"
+            }
+        )
+        {
+            double height = 1
+            custom token mrtway:movementState
+            token mrtway:movementState.timeSamples = {
+                0: "MOVING",
+                8.579691784155834: "MOVING",
+                16.78707328565259: "COMPLETE",
+            }
+            custom double mrtway:simulationTimeMinutes
+            double mrtway:simulationTimeMinutes.timeSamples = {
+                0: 0,
+                8.579691784155834: 0.1429948630692639,
+                16.78707328565259: 0.2797845547608765,
+            }
+            color3f[] primvars:displayColor = [(0.15, 0.75, 0.3)]
+            double radius = 0.3
+            double3 xformOp:translate.timeSamples = {
+                0: (6, 15, 4),
+                8.579691784155834: (15, 10, 4),
+                16.78707328565259: (24, 6, 4),
+            }
+            uniform token[] xformOpOrder = ["xformOp:translate"]
+        }
+
+        def Capsule "PORTER_001" (
+            customData = {
+                string dynamic_trajectory_interpolation_method = "LINEAR"
+                string dynamic_trajectory_provenance = "human_circulation_authority.resolve_pedestrian_route (shared PATIENT_MOVEMENT/WALKING_PORTER pedestrian network via corridors/elevators) -- never straight-line-through-walls"
+                string entity_id = "PORTER-001"
+                string entity_type = "MANUAL_PORTER"
+                string mission_ids = "M-YC-PORTER"
+                string mrtway_object_id = "PORTER-001"
+                string transport_mode = "WALKING_PORTER"
+            }
+        )
+        {
+            double height = 1
+            custom token mrtway:movementState
+            token mrtway:movementState.timeSamples = {
+                0: "WAITING",
+                120: "MOVING",
+                129.3169499062491: "MOVING",
+                139.3169499062491: "MOVING",
+                143.3169499062491: "MOVING",
+                153.3169499062491: "MOVING",
+                161.89664169040495: "COMPLETE",
+            }
+            custom double mrtway:simulationTimeMinutes
+            double mrtway:simulationTimeMinutes.timeSamples = {
+                0: 0,
+                120: 2,
+                129.3169499062491: 2.155282498437485,
+                139.3169499062491: 2.3219491651041517,
+                143.3169499062491: 2.3886158317708186,
+                153.3169499062491: 2.555282498437485,
+                161.89664169040495: 2.698277361506749,
+            }
+            color3f[] primvars:displayColor = [(0.95, 0.65, 0.1)]
+            double radius = 0.3
+            double3 xformOp:translate.timeSamples = {
+                0: (5, 15, 0),
+                120: (5, 15, 0),
+                129.3169499062491: (15, 10, 0),
+                139.3169499062491: (27, 10, 0),
+                143.3169499062491: (27, 10, 4),
+                153.3169499062491: (15, 10, 4),
+                161.89664169040495: (6, 15, 4),
+            }
+            uniform token[] xformOpOrder = ["xformOp:translate"]
+        }
+
+        def Cube "RGHT_VEH_001" (
+            customData = {
+                string dynamic_trajectory_interpolation_method = "LINEAR"
+                string dynamic_trajectory_provenance = "canonical_spatial_authority.resolve_route(mode=RGHT's own AGV_AMR identifier) -- RGHT's own network, never shared with MRT"
+                string entity_id = "RGHT-VEH-001"
+                string entity_type = "RGHT_VEHICLE"
+                string mission_ids = "M-YC-RGHT"
+                string mrtway_object_id = "RGHT-VEH-001"
+                string transport_mode = "AGV_AMR"
+            }
+        )
+        {
+            custom token mrtway:movementState
+            token mrtway:movementState.timeSamples = {
+                0: "MOVING",
+                13.975424859373685: "MOVING",
+                18.975424859373685: "MOVING",
+                31.286497111618814: "COMPLETE",
+            }
+            custom double mrtway:simulationTimeMinutes
+            double mrtway:simulationTimeMinutes.timeSamples = {
+                0: 0,
+                13.975424859373685: 0.2329237476562281,
+                18.975424859373685: 0.3162570809895614,
+                31.286497111618814: 0.5214416185269802,
+            }
+            color3f[] primvars:displayColor = [(0.15, 0.45, 0.85)]
+            double size = 1
+            double3 xformOp:translate.timeSamples = {
+                0: (5, 15, 0),
+                13.975424859373685: (15, 10, 0),
+                18.975424859373685: (15, 10, 4),
+                31.286497111618814: (24, 6, 4),
+            }
+            uniform token[] xformOpOrder = ["xformOp:translate"]
+        }
+    }
+
+    def Camera "DemoCam" (
+        customData = {
+            string purpose = "YC demo overview camera -- simple elevated view, not cinematic"
+        }
+    )
+    {
+        float focalLength = 35
+        float3 xformOp:rotateXYZ = (-35, 0, 45)
+        double3 xformOp:translate = (-21, -19.5, 34)
+        uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:rotateXYZ"]
+    }
+}
+

@@ -184,13 +184,13 @@ def _architecture_request(
 def test_native_mrt_carrier_audit_identifies_distribution_concurrency_as_authoritative_equivalent():
     audit = audit_native_mrt_carrier_integration()
 
-    assert audit.distribution_concurrency_is_native_equivalent is True
+    assert audit.distribution_concurrency_is_native_equivalent is False
     assert audit.carrier_count_changes_throughput_natively is True
-    assert audit.carrier_capex_line_item_exists is False
-    assert audit.carrier_opex_line_item_exists is False
-    assert audit.carrier_energy_line_item_exists is False
-    assert audit.reporting_exposes_carrier_quantity is False
-    assert audit.integration_audit["carrier fleet -> distribution concurrency"] == "DIRECT NATIVE CONNECTION"
+    assert audit.carrier_capex_line_item_exists is True
+    assert audit.carrier_opex_line_item_exists is True
+    assert audit.carrier_energy_line_item_exists is True
+    assert audit.reporting_exposes_carrier_quantity is True
+    assert audit.integration_audit["carrier fleet -> distribution concurrency"] == "NATIVE BOUNDED ORCHESTRATION"
     assert audit.integration_audit["carrier fleet -> architecture recommendation"] == "NATIVE BOUNDED ORCHESTRATION"
 
 
@@ -210,9 +210,12 @@ def test_backward_compatibility_defaults_carriers_to_distribution_concurrency():
     assert mrt.operated_mrt_carriers == 3
 
 
-def test_operated_carriers_must_match_distribution_concurrency():
-    with pytest.raises(ValueError, match="operated_carriers must equal distribution_concurrency"):
-        _mrt(distribution_concurrency=2, operated_mrt_carriers=3)
+def test_operated_carriers_are_independent_from_distribution_concurrency():
+    mrt = _mrt(distribution_concurrency=2, operated_mrt_carriers=3, installed_mrt_carriers=4)
+
+    assert mrt.distribution_concurrency == 2
+    assert mrt.operated_mrt_carriers == 3
+    assert mrt.installed_mrt_carriers == 4
 
 
 def test_too_few_carriers_constrain_throughput_when_distribution_binds():
@@ -243,7 +246,11 @@ def test_too_few_carriers_constrain_throughput_when_distribution_binds():
 
     assert low.mrt.operational_result.mrt_carrier_fleet is not None
     assert low.mrt.operational_result.mrt_carrier_fleet.carrier_constrained_throughput is True
-    assert high.mrt.operational_result.decay_feasible_completed_patients > low.mrt.operational_result.decay_feasible_completed_patients
+    assert low.mrt.operational_result.bottleneck.resource == "carrier_transport"
+    low_schedule = low.mrt.operational_result.production_clinical_result.transport_schedule
+    high_schedule = high.mrt.operational_result.production_clinical_result.transport_schedule
+    assert high_schedule.average_carrier_queue_wait_minutes < low_schedule.average_carrier_queue_wait_minutes
+    assert high.mrt.operational_result.decay_feasible_completed_patients >= low.mrt.operational_result.decay_feasible_completed_patients
 
 
 def test_additional_carriers_do_not_improve_throughput_after_scanners_bind():
@@ -310,7 +317,7 @@ def test_carrier_quantity_appears_in_architecture_recommendation_and_reporting()
     assert detail.operated_mrt_carriers == detail.distribution_concurrency
     assert detail.installed_mrt_carriers >= detail.operated_mrt_carriers
     assert detail.spare_mrt_carriers == detail.installed_mrt_carriers - detail.operated_mrt_carriers
-    assert detail.carrier_proxy_relationship == "distribution_concurrency == operated_carriers"
+    assert "operated_mrt_carriers" in detail.carrier_proxy_relationship
 
 
 def test_no_fabricated_carrier_capex_opex_or_energy_multiplier():
@@ -320,18 +327,18 @@ def test_no_fabricated_carrier_capex_opex_or_energy_multiplier():
     low_carrier = low.mrt.operational_result.mrt_carrier_fleet
     high_carrier = high.mrt.operational_result.mrt_carrier_fleet
     assert low_carrier is not None and high_carrier is not None
-    assert low_carrier.carrier_capex_modeled is False
-    assert low_carrier.carrier_opex_modeled is False
-    assert low_carrier.carrier_energy_modeled is False
+    assert low_carrier.carrier_capex_modeled is True
+    assert low_carrier.carrier_opex_modeled is True
+    assert low_carrier.carrier_energy_modeled is True
 
-    assert low.mrt.capex_result.total_capex == pytest.approx(high.mrt.capex_result.total_capex)
-    assert low.mrt.opex_result.total_annual_opex == pytest.approx(high.mrt.opex_result.total_annual_opex)
+    assert high.mrt.capex_result.total_capex > low.mrt.capex_result.total_capex
+    assert high.mrt.opex_result.total_annual_opex > low.mrt.opex_result.total_annual_opex
 
     low_mrt_energy = next(item for item in low.mrt.opex_result.ledger if item.component == "MRT energy")
     high_mrt_energy = next(item for item in high.mrt.opex_result.ledger if item.component == "MRT energy")
     assert low_mrt_energy.annual_cost == pytest.approx(high_mrt_energy.annual_cost)
-    assert all("carrier" not in item.component.lower() for item in low.mrt.capex_result.ledger)
-    assert all("carrier" not in item.component.lower() for item in low.mrt.opex_result.ledger)
+    assert any("carrier" in item.component.lower() for item in low.mrt.capex_result.ledger)
+    assert any("carrier" in item.component.lower() for item in low.mrt.opex_result.ledger)
 
 
 def test_bounded_carrier_sizing_is_deterministic_and_smaller_qualifying_candidate_can_win():

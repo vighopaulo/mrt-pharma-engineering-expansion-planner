@@ -661,7 +661,7 @@ def maximize_conventional_capacity(
     half_life_min: float,
     common_budget: float,
 ) -> PathwayBudgetResult:
-    retained = retention(inputs.current_average_transport_min, half_life_min)
+    retained = retention(_conventional_transport_min(inputs), half_life_min)
     baseline_capacity = _conventional_baseline_capacity(inputs, assumptions, half_life_min)
 
     prescribed_activity_mbq = _prescribed_activity_mbq_per_patient(assumptions)
@@ -872,7 +872,7 @@ def maximize_mrt_capacity(
 ) -> PathwayBudgetResult:
     baseline_capacity = _conventional_baseline_capacity(inputs, assumptions, half_life_min)
 
-    retained_no_backbone = retention(inputs.current_average_transport_min, half_life_min)
+    retained_no_backbone = retention(_conventional_transport_min(inputs), half_life_min)
     prescribed_activity_mbq = _prescribed_activity_mbq_per_patient(assumptions)
     synthesis_yield = _synthesis_yield_fraction(assumptions)
     synthesis_retention = _synthesis_retention_fraction(assumptions, half_life_min)
@@ -920,7 +920,7 @@ def maximize_mrt_capacity(
         "prod_pct": 0.0,
         "cyclotron_needed": False,
         "backbone": False,
-        "transport_min": inputs.current_average_transport_min,
+        "transport_min": _conventional_transport_min(inputs),
     }
 
     if common_budget >= assumptions.mrt_infrastructure_capex:
@@ -1672,7 +1672,7 @@ def part2b3a_mrt_batch_audit(
                     common_budget,
                     batches_per_day,
                     False,
-                    inputs.current_average_transport_min,
+                    _conventional_transport_min(inputs),
                     0,
                     0,
                     0,
@@ -1964,7 +1964,7 @@ def _enumerate_mrt_candidates(
                     common_budget,
                     batches_per_day,
                     False,
-                    inputs.current_average_transport_min,
+                    _conventional_transport_min(inputs),
                     0,
                     0,
                     0,

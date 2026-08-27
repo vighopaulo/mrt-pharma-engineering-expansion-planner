@@ -1,0 +1,6 @@
+service_class,total_missions,mrt_missions,agv_missions,pts_missions,manual_missions,non_mrt_worker_minutes
+PHARMACY_INFUSION,6,0,6,0,0,94.23
+SPECIMEN_BLOOD,6,6,0,0,0,0
+STERILE_CLEAN_SUPPLY,6,0,6,0,0,94.23
+LAUNDRY_CLEAN_LINEN,18,0,18,0,0,282.68
+RADIOPHARMACEUTICAL_NUCLEAR,200,200,0,0,0,0

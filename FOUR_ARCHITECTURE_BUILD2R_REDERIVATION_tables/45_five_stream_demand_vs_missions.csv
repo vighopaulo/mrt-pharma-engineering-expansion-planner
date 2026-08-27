@@ -1,0 +1,6 @@
+stream,raw_demands,raw_payload_total,manual_missions,automated_missions,mrt_missions,hybrid_missions,consolidation_rule,unserved
+CLEAN_LINEN,170,1275.0,88,146,88,88,"consolidate_demands_into_loads_with_window (90min window, capacity-bounded)",0
+PHARMACY_INFUSION,170,170.0,32,53,29,29,"consolidate_demands_into_loads_with_window (90min window, capacity-bounded)",0
+SPECIMEN_BLOOD,170,170.0,170,282,170,170,"consolidate_demands_into_loads_with_window (90min window, capacity-bounded)",0
+STERILE_CLEAN_SUPPLY,170,170.0,23,38,13,13,"consolidate_demands_into_loads_with_window (90min window, capacity-bounded)",0
+RADIOPHARMACEUTICAL_NUCLEAR,19,,19,19,19,19,1 nuclear mission per patient (no cross-patient consolidation),0

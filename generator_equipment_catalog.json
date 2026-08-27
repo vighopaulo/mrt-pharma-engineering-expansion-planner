@@ -1,0 +1,130 @@
+{
+  "schema_version": "1.0",
+  "models": [
+    {
+      "catalog_model_id": "CURIUM_TECHNELITE",
+      "manufacturer": "Curium Pharma",
+      "model": "TechneLite (Technetium Tc99m Generator)",
+      "parent_radionuclide": "Mo-99",
+      "daughter_radionuclide": "Tc-99m",
+      "commercial_status": "current",
+      "new_purchase_candidate": true,
+      "installed_equipment_selectable": true,
+      "customer_selectable": true,
+      "nominal_reference_activity_options_mbq": [37000.0, 111000.0, 222000.0, 555000.0],
+      "reference_calibration_semantics": "Manufacturer-stated Mo-99 activity at a specified calibration reference date/time (typical US industry 'calibration day' convention); NOT the activity available at any later elution.",
+      "useful_life_days": 14.0,
+      "elution_efficiency_fraction": 0.85,
+      "max_elutions_per_day": 2,
+      "dimensions_cm": null,
+      "mass_kg": null,
+      "shielding_handling_notes": "Lead-shielded wet/dry chromatographic column generator, saline-eluted, shipped and stored in a lead transport/service container per standard radiopharmacy handling practice.",
+      "technical_operating_requirements": "Standard radiopharmacy hot-lab handling (shielded workbench, dose calibrator, waste/decay-in-storage area); no specialized facility beyond typical nuclear pharmacy infrastructure.",
+      "requires_electrical_power": false,
+      "field_provenance": {
+        "useful_life_days": {
+          "value": 14.0, "unit": "days", "source": "General nuclear-pharmacy professional knowledge (recalled, NOT independently re-verified via live fetch this session -- both attempted manufacturer URL fetches returned HTTP 404)",
+          "evidence_type": "technical_literature", "confidence": "medium", "calibration_status": "literature_calibrated",
+          "notes": "Typical clinical generator replacement interval driven by Mo-99 decay economics, not a hard failure mode."
+        },
+        "elution_efficiency_fraction": {
+          "value": 0.85, "unit": "fraction", "source": "General nuclear-pharmacy professional knowledge (recalled, not live-verified this session)",
+          "evidence_type": "technical_literature", "confidence": "medium", "calibration_status": "literature_calibrated"
+        }
+      },
+      "economics": [
+        {"component": "purchase_capex", "value": "NOT_CALIBRATED", "currency": null, "cost_year": null, "price_basis": null,
+         "source": "No defensible procurement/pricing evidence located this session (live fetch attempts failed, HTTP 404)",
+         "evidence_type": "not_calibrated", "confidence": "unknown", "calibration_status": "not_calibrated"},
+        {"component": "replacement_cost_per_cycle", "value": "NOT_CALIBRATED", "currency": null, "cost_year": null, "price_basis": null,
+         "source": "No defensible procurement/pricing evidence located this session",
+         "evidence_type": "not_calibrated", "confidence": "unknown", "calibration_status": "not_calibrated"},
+        {"component": "annual_maintenance_opex", "value": "NOT_CALIBRATED", "currency": null, "cost_year": null, "price_basis": null,
+         "source": "No defensible cost evidence located this session",
+         "evidence_type": "not_calibrated", "confidence": "unknown", "calibration_status": "not_calibrated"}
+      ],
+      "source_url_or_document": "NOT_INDEPENDENTLY_FETCHED_THIS_SESSION (attempted https://www.curiumpharma.com/product/technelite/ -> HTTP 404)",
+      "source_confidence": "medium"
+    },
+    {
+      "catalog_model_id": "CURIUM_ULTRA_TECHNEKOW_FM",
+      "manufacturer": "Curium Pharma",
+      "model": "Ultra-TechneKow FM (Technetium Tc99m Generator)",
+      "parent_radionuclide": "Mo-99",
+      "daughter_radionuclide": "Tc-99m",
+      "commercial_status": "current",
+      "new_purchase_candidate": true,
+      "installed_equipment_selectable": true,
+      "customer_selectable": true,
+      "nominal_reference_activity_options_mbq": [37000.0, 111000.0, 222000.0],
+      "reference_calibration_semantics": "Manufacturer-stated Mo-99 activity at a specified calibration reference date/time; NOT the activity available at any later elution.",
+      "useful_life_days": 14.0,
+      "elution_efficiency_fraction": 0.85,
+      "max_elutions_per_day": 2,
+      "dimensions_cm": null,
+      "mass_kg": null,
+      "shielding_handling_notes": "Lead-shielded chromatographic column generator, saline-eluted, standard radiopharmacy transport/service container.",
+      "technical_operating_requirements": "Standard radiopharmacy hot-lab handling; no specialized facility beyond typical nuclear pharmacy infrastructure.",
+      "requires_electrical_power": false,
+      "field_provenance": {
+        "useful_life_days": {
+          "value": 14.0, "unit": "days", "source": "General nuclear-pharmacy professional knowledge (recalled, not live-verified this session)",
+          "evidence_type": "technical_literature", "confidence": "medium", "calibration_status": "literature_calibrated"
+        }
+      },
+      "economics": [
+        {"component": "purchase_capex", "value": "NOT_CALIBRATED", "currency": null, "cost_year": null, "price_basis": null,
+         "source": "No defensible procurement/pricing evidence located this session",
+         "evidence_type": "not_calibrated", "confidence": "unknown", "calibration_status": "not_calibrated"},
+        {"component": "replacement_cost_per_cycle", "value": "NOT_CALIBRATED", "currency": null, "cost_year": null, "price_basis": null,
+         "source": "No defensible procurement/pricing evidence located this session",
+         "evidence_type": "not_calibrated", "confidence": "unknown", "calibration_status": "not_calibrated"},
+        {"component": "annual_maintenance_opex", "value": "NOT_CALIBRATED", "currency": null, "cost_year": null, "price_basis": null,
+         "source": "No defensible cost evidence located this session",
+         "evidence_type": "not_calibrated", "confidence": "unknown", "calibration_status": "not_calibrated"}
+      ],
+      "source_url_or_document": "NOT_INDEPENDENTLY_FETCHED_THIS_SESSION",
+      "source_confidence": "medium"
+    },
+    {
+      "catalog_model_id": "GE_HEALTHCARE_DRYTEC",
+      "manufacturer": "GE Healthcare",
+      "model": "Drytec (Technetium Tc99m Generator)",
+      "parent_radionuclide": "Mo-99",
+      "daughter_radionuclide": "Tc-99m",
+      "commercial_status": "current",
+      "new_purchase_candidate": true,
+      "installed_equipment_selectable": true,
+      "customer_selectable": true,
+      "nominal_reference_activity_options_mbq": [37000.0, 111000.0, 222000.0, 444000.0],
+      "reference_calibration_semantics": "Manufacturer-stated Mo-99 activity at a specified calibration reference date/time; NOT the activity available at any later elution.",
+      "useful_life_days": 14.0,
+      "elution_efficiency_fraction": 0.85,
+      "max_elutions_per_day": 2,
+      "dimensions_cm": null,
+      "mass_kg": null,
+      "shielding_handling_notes": "Lead-shielded dry-column chromatographic generator, saline-eluted via evacuated collection vial, standard radiopharmacy transport/service container.",
+      "technical_operating_requirements": "Standard radiopharmacy hot-lab handling; no specialized facility beyond typical nuclear pharmacy infrastructure.",
+      "requires_electrical_power": false,
+      "field_provenance": {
+        "useful_life_days": {
+          "value": 14.0, "unit": "days", "source": "General nuclear-pharmacy professional knowledge (recalled, not live-verified this session)",
+          "evidence_type": "technical_literature", "confidence": "medium", "calibration_status": "literature_calibrated"
+        }
+      },
+      "economics": [
+        {"component": "purchase_capex", "value": "NOT_CALIBRATED", "currency": null, "cost_year": null, "price_basis": null,
+         "source": "No defensible procurement/pricing evidence located this session (live fetch attempted, page unavailable)",
+         "evidence_type": "not_calibrated", "confidence": "unknown", "calibration_status": "not_calibrated"},
+        {"component": "replacement_cost_per_cycle", "value": "NOT_CALIBRATED", "currency": null, "cost_year": null, "price_basis": null,
+         "source": "No defensible procurement/pricing evidence located this session",
+         "evidence_type": "not_calibrated", "confidence": "unknown", "calibration_status": "not_calibrated"},
+        {"component": "annual_maintenance_opex", "value": "NOT_CALIBRATED", "currency": null, "cost_year": null, "price_basis": null,
+         "source": "No defensible cost evidence located this session",
+         "evidence_type": "not_calibrated", "confidence": "unknown", "calibration_status": "not_calibrated"}
+      ],
+      "source_url_or_document": "NOT_INDEPENDENTLY_FETCHED_THIS_SESSION (attempted https://www.gehealthcare.com/products/molecular-imaging/spect-ct/nm-ct-870-dr -> HTTP 404, unrelated product page)",
+      "source_confidence": "medium"
+    }
+  ]
+}

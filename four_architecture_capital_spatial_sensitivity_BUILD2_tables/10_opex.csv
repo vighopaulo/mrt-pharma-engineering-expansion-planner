@@ -1,0 +1,7 @@
+OPEX Item,Manual Conventional,Automated Conventional,MRT (Dominant),Hybrid (zone-level),Quantity/Basis,Unit Cost,Provenance/Status
+CLUSTER/Manual transport labor,33.00 FTE component of annual_opex,34.00 FTE component,0.00 (no manual transport),61.00 FTE component (fallback streams),FTE-year,base_wage_per_hour x loaded_employer_cost_multiplier x shift_hours x operating_days_per_year,conventional_transport_authority
+AGV OPEX (maintenance+energy+supervision),0.00,included in annual_opex,0.00,0.00,1 vehicle,annual_maintenance_opex+annual_energy_opex + residual_supervision_fte x loaded cost,agv_annual_opex
+PTS OPEX (maintenance+energy+labor),0.00,included in annual_opex,0.00,0.00,1 station,annual_maintenance_opex+annual_energy_opex + residual_labor_fte x loaded cost,pts_annual_opex
+MRT support labor,0.00,0.00,"3.00 FTE x 105,000","3.00 FTE x 105,000","3.0 FTE (fixed, Build 2 bound to ledger)","105,000.00/FTE-yr",infrastructure_opex 'MRT support labor' row
+Nuclear annual OPEX (production+clinical+MRT/Conventional-specific),"5,021,480.00","5,021,480.00","5,049,580.00","5,265,780.00",-,-,_nuclear_result.total_annual_opex (infrastructure_opex ledger)
+TOTAL annual_opex (general logistics/transport only),"1,750,320.00","1,826,272.00","5,058,730.00","8,502,570.00",-,-,ArchitectureResult.annual_opex

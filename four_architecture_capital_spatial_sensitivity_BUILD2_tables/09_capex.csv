@@ -1,0 +1,10 @@
+CapEx Item,Manual Conventional,Automated Conventional,MRT (Dominant),Hybrid (zone-level),Quantity,Unit Cost,Provenance/Status
+Cyclotron purchase+installation,"5,000,000.00 (in nuclear_total_capex)","5,000,000.00","5,000,000.00","5,000,000.00",1 unit,cyclotron_purchase_capex+installation,"PlannerAssumptions, shared across all 4"
+Scanner CapEx (6 scanners),"15,000,000.00 (in nuclear_total_capex)","15,000,000.00","15,000,000.00","15,000,000.00",6 scanners,"2,500,000.00/scanner","PlannerAssumptions.scanner_capex, shared"
+AGV fleet CapEx (Automated only),0.00,"150,000.00 (approx; fleet_size=1 x (vehicle+integration))",0.00,0.00,"1 vehicle (workload-derived, Build 1)","100,000 vehicle + 50,000 integration","agv_new_study_capex, Build 1 fix (real fleet size, not hardcoded)"
+PTS CapEx (Automated only),0.00,"45,000.00 (approx; 1 station, workload-derived)",0.00,0.00,"1 station (workload-derived, Build 1)","45,000/station","pts_new_study_capex, Build 1/2 (pts_required_station_count)"
+MRT carrier CapEx (full-MRT case),0.00,0.00,"20,000.00",n/a (partial coverage),2 carriers,"10,000.00/carrier",PlannerAssumptions.mrt_carrier_capex_per_installed_unit
+MRT guideway CapEx (full-MRT case),0.00,0.00,included in nuclear_total_capex (guideway_capex accumulation),n/a,114.0 m,"5,000.00/m (mrt_guideway_capex_per_m)",hybrid_optimization compute_inbound_room_guideway_extension
+Building-level campus Building B total CapEx,n/a (zone-level architectures only),n/a,n/a,n/a (see chart 18 for campus-specific figures),-,-,see 18_hybrid_campus_audit.csv
+TOTAL new_study_capex (general logistics/transport only),0.00,"270,000.00","31,300,000.00","27,430,000.00",-,-,ArchitectureResult.new_study_capex
+TOTAL nuclear_total_capex,"20,575,000.00","20,575,000.00","31,300,000.00","27,430,000.00",-,-,ArchitectureResult.nuclear_total_capex

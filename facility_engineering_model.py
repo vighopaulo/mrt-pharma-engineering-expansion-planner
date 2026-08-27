@@ -16,6 +16,7 @@ EvidenceClass = Literal[
 
 Confidence = Literal["HIGH", "MEDIUM", "LOW", "UNKNOWN"]
 SpatialMaturity = Literal["CONCEPTUAL", "PRELIMINARY", "ENGINEERING", "BIM_VERIFIED"]
+SpatialInputPath = Literal["UPLOAD_FACILITY_DOCUMENT", "MANUAL_SPATIAL_DEFINITION", "BENCHMARK_ASSUMED_FACILITY"]
 SpatialSourceType = Literal[
     "IFC",
     "REVIT_BIM",
@@ -29,6 +30,8 @@ SpatialSourceType = Literal[
     "OTHER",
 ]
 ProjectSpatialMode = Literal["RETROFIT", "GREENFIELD"]
+AdaptiveSpatialMode = Literal["RETROFIT", "GREENFIELD", "ADAPTIVE_REPURPOSING"]
+DevelopmentZone = Literal["EXISTING_CORE", "EXISTING_ADJACENT", "EXPANSION_ZONE", "NEW_BUILDING", "UNKNOWN"]
 SubscriptionTier = Literal["BASIC", "PROFESSIONAL", "ENTERPRISE"]
 ObjectStatus = Literal[
     "FIXED",
@@ -68,6 +71,23 @@ MaterialCategory = Literal[
 SpatialAccessibility = Literal["PUBLIC", "CONTROLLED", "RESTRICTED", "SERVICE", "UNKNOWN"]
 EdgeDirectionality = Literal["BIDIRECTIONAL", "ONE_WAY", "ONE_WAY_REVERSE", "UNKNOWN"]
 EdgeType = Literal["HORIZONTAL", "VERTICAL", "DOORWAY", "OPENING", "SHAFT", "STAIR", "ELEVATOR", "OTHER"]
+RouteCorridorClass = Literal[
+    "EXTERIOR_BUILDING_ENVELOPE",
+    "CEILING_SERVICE_ZONE",
+    "MECHANICAL_SERVICE_ZONE",
+    "UTILITY_CORRIDOR",
+    "DEDICATED_SHAFT",
+    "EXISTING_SERVICE_SHAFT",
+    "ROOF_ROUTE",
+    "INTER_BUILDING_LINK",
+    "DEDICATED_MRT_SHAFT",
+    "EXISTING_SERVICE_SHAFT_CANDIDATE",
+    "VERTICAL_GUIDEWAY",
+    "HORIZONTAL_VERTICAL_TRANSITION",
+    "VERTICAL_HORIZONTAL_TRANSITION",
+    "INTERIOR_CLINICAL_PATH",
+    "UNCLASSIFIED",
+]
 SpatialNodeKind = Literal[
     "facility",
     "building",
@@ -130,6 +150,16 @@ EquipmentClass = Literal[
     "Buffer",
     "Other",
 ]
+SpaceSuitability = Literal[
+    "SUITABLE",
+    "SUITABLE_WITH_MODIFICATION",
+    "CONDITIONALLY_SUITABLE",
+    "NOT_SUITABLE",
+    "UNKNOWN",
+]
+ProgramAssignmentStatus = Literal["EXISTING_AS_BUILT", "OPTIMIZER_PROPOSED", "ACCEPTED_DESIGN"]
+SpatialValidationStatus = Literal["PASSED", "WARNINGS", "INCOMPLETE"]
+RouteGeometryStatus = Literal["RECONSTRUCTED", "NOT_RECONSTRUCTED"]
 
 
 @dataclass(frozen=True)
@@ -254,7 +284,62 @@ class SpatialEdge:
     directionality: EdgeDirectionality = "BIDIRECTIONAL"
     evidence_class: EvidenceClass = "DERIVED_GEOMETRY"
     confidence: Confidence = "UNKNOWN"
+    route_corridor_class: RouteCorridorClass = "UNCLASSIFIED"
     source_identifier: str | None = None
+    notes: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True)
+class GeometryEvidenceAssessment:
+    source_type: SpatialSourceType
+    evidence_class: EvidenceClass
+    geometry_confidence: Confidence
+    material_confidence: Confidence
+    validation_status: SpatialValidationStatus
+    data_completeness: Literal["COMPLETE", "PARTIAL", "SPARSE", "UNKNOWN"] = "UNKNOWN"
+
+
+@dataclass(frozen=True)
+class SpaceFunctionAssignment:
+    space_id: str
+    source_name: str
+    source_function: str
+    proposed_name: str
+    proposed_function: str
+    assignment_status: ProgramAssignmentStatus
+    suitability: SpaceSuitability = "UNKNOWN"
+    structural_suitability: Literal["VERIFIED", "NOT_VERIFIED", "UNKNOWN"] = "UNKNOWN"
+    shielding_suitability: Literal["VERIFIED", "NOT_VERIFIED", "UNKNOWN"] = "UNKNOWN"
+    hvac_suitability: Literal["VERIFIED", "MODIFICATION_REQUIRED", "UNKNOWN"] = "UNKNOWN"
+    recommendation: str | None = None
+
+
+@dataclass(frozen=True)
+class RequiredFacilityProgram:
+    cyclotron_production_complex_required: int = 1
+    radiopharmacy_required: int = 1
+    qc_laboratory_required: int = 1
+    injection_rooms_required: int = 0
+    uptake_rooms_required: int = 0
+    pet_ct_scanners_required: int = 0
+    pet_mr_scanners_required: int = 0
+    spect_ct_scanners_required: int = 0
+    control_rooms_required: int = 0
+    mrt_stations_required: int | None = None
+
+
+@dataclass(frozen=True)
+class ProgramFeasibilityReport:
+    feasible: bool
+    required_scanners: int
+    available_scanner_spaces: int
+    missing_scanner_spaces: int
+    required_injection_rooms: int
+    available_injection_spaces: int
+    missing_injection_spaces: int
+    required_uptake_rooms: int
+    available_uptake_spaces: int
+    missing_uptake_spaces: int
     notes: tuple[str, ...] = ()
 
 
@@ -290,6 +375,7 @@ class Facility(FacilityObject):
 class Building(FacilityObject):
     kind: Literal["Building"] = "Building"
     storeys: tuple[str, ...] = ()
+    development_zone: DevelopmentZone = "UNKNOWN"
 
 
 @dataclass(frozen=True)
@@ -430,6 +516,11 @@ class FacilityEngineeringObjectModel:
     maturity: SpatialMaturity
     subscription_tier: SubscriptionTier
     coordinate_system: CoordinateSystem
+    adaptive_spatial_mode: AdaptiveSpatialMode = "GREENFIELD"
+    spatial_input_path: SpatialInputPath = "MANUAL_SPATIAL_DEFINITION"
+    geometry_evidence_assessment: GeometryEvidenceAssessment | None = None
+    full_engineering_dataset_access: bool = False
+    executive_summary_only: bool = True
     provenance: ProvenanceRecord | None = None
     facility: Facility | None = None
     buildings: tuple[Building, ...] = ()
@@ -454,6 +545,23 @@ class FacilityEngineeringObjectModel:
     edges: tuple[SpatialEdge, ...] = ()
     quantities: tuple[DerivedQuantityRecord, ...] = ()
     construction_cost_items: tuple[ConstructionCostItem, ...] = ()
+    source_space_assignments: tuple[SpaceFunctionAssignment, ...] = ()
+    proposed_space_assignments: tuple[SpaceFunctionAssignment, ...] = ()
+    required_program: RequiredFacilityProgram | None = None
+    feasibility_report: ProgramFeasibilityReport | None = None
+    primary_route_origin_object_id: str | None = None
+    primary_route_destination_object_ids: tuple[str, ...] = ()
+    route_geometry_status: RouteGeometryStatus = "RECONSTRUCTED"
+    route_distance_source: EvidenceClass = "DERIVED_GEOMETRY"
+    clinical_floors_in_scope: int = 1
+    scanner_floors: tuple[str, ...] = ()
+    injection_floors: tuple[str, ...] = ()
+    uptake_floors: tuple[str, ...] = ()
+    include_ground_floor: bool = True
+    production_building_id: str | None = None
+    clinical_building_ids: tuple[str, ...] = ()
+    enforce_cyclotron_ground_level: bool = True
+    enforce_separate_production_building: bool = True
     notes: tuple[str, ...] = ()
 
 
@@ -484,9 +592,98 @@ SUBSCRIPTION_CAPABILITY_MAP: dict[SubscriptionTier, tuple[SpatialSourceType, ...
     "ENTERPRISE": ("MANUAL", "TEMPLATE", "BENCHMARK", "PDF", "IMAGE", "DWG", "DXF", "IFC", "REVIT_BIM"),
 }
 
+SPATIAL_INPUT_PATH_OPTIONS: tuple[SpatialInputPath, ...] = (
+    "UPLOAD_FACILITY_DOCUMENT",
+    "MANUAL_SPATIAL_DEFINITION",
+    "BENCHMARK_ASSUMED_FACILITY",
+)
+
+UPLOAD_SOURCE_OPTIONS: tuple[SpatialSourceType, ...] = (
+    "IFC",
+    "REVIT_BIM",
+    "DWG",
+    "DXF",
+    "PDF",
+)
+
+SOURCE_FAMILY_LABELS: Mapping[SpatialSourceType, str] = {
+    "IFC": "IFC / BIM",
+    "REVIT_BIM": "Revit-derived BIM",
+    "DWG": "CAD / DWG",
+    "DXF": "CAD / DXF",
+    "PDF": "PDF / Floor Plan",
+    "IMAGE": "Image-derived plan",
+    "MANUAL": "Manual spatial definition",
+    "TEMPLATE": "Template-derived facility",
+    "BENCHMARK": "Benchmark / assumed facility",
+    "OTHER": "Other",
+}
+
 
 def resolve_default_source_profile(source_type: SpatialSourceType) -> tuple[EvidenceClass, SpatialMaturity, SubscriptionTier]:
     return SOURCE_PROFILE_BY_TYPE[source_type]
+
+
+def resolve_source_type_for_input_path(input_path: SpatialInputPath, upload_source_type: SpatialSourceType | None = None) -> SpatialSourceType:
+    if input_path == "UPLOAD_FACILITY_DOCUMENT":
+        if upload_source_type is None:
+            return "IFC"
+        if upload_source_type not in UPLOAD_SOURCE_OPTIONS:
+            raise ValueError("Upload source type must be IFC/REVIT_BIM/DWG/DXF/PDF")
+        return upload_source_type
+    if input_path == "MANUAL_SPATIAL_DEFINITION":
+        return "MANUAL"
+    if input_path == "BENCHMARK_ASSUMED_FACILITY":
+        return "BENCHMARK"
+    raise ValueError(f"Unsupported spatial input path: {input_path}")
+
+
+def resolve_geometry_evidence_assessment(source_type: SpatialSourceType) -> GeometryEvidenceAssessment:
+    evidence_class, _, _ = resolve_default_source_profile(source_type)
+    if source_type in {"IFC", "REVIT_BIM"}:
+        return GeometryEvidenceAssessment(
+            source_type=source_type,
+            evidence_class=evidence_class,
+            geometry_confidence="HIGH",
+            material_confidence="UNKNOWN",
+            validation_status="WARNINGS",
+            data_completeness="PARTIAL",
+        )
+    if source_type in {"DWG", "DXF"}:
+        return GeometryEvidenceAssessment(
+            source_type=source_type,
+            evidence_class=evidence_class,
+            geometry_confidence="MEDIUM",
+            material_confidence="UNKNOWN",
+            validation_status="INCOMPLETE",
+            data_completeness="PARTIAL",
+        )
+    if source_type in {"PDF", "IMAGE"}:
+        return GeometryEvidenceAssessment(
+            source_type=source_type,
+            evidence_class=evidence_class,
+            geometry_confidence="LOW",
+            material_confidence="UNKNOWN",
+            validation_status="INCOMPLETE",
+            data_completeness="SPARSE",
+        )
+    if source_type in {"BENCHMARK", "TEMPLATE"}:
+        return GeometryEvidenceAssessment(
+            source_type=source_type,
+            evidence_class=evidence_class,
+            geometry_confidence="LOW",
+            material_confidence="UNKNOWN",
+            validation_status="INCOMPLETE",
+            data_completeness="SPARSE",
+        )
+    return GeometryEvidenceAssessment(
+        source_type=source_type,
+        evidence_class=evidence_class,
+        geometry_confidence="MEDIUM",
+        material_confidence="UNKNOWN",
+        validation_status="INCOMPLETE",
+        data_completeness="PARTIAL",
+    )
 
 
 def resolve_subscription_capability_profile(subscription_tier: SubscriptionTier) -> FacilityEngineeringCapability:
@@ -545,6 +742,81 @@ MRT_EQUIPMENT_CLASSES: tuple[EquipmentClass, ...] = (
 ALL_EQUIPMENT_CLASSES: tuple[EquipmentClass, ...] = PRODUCTION_EQUIPMENT_CLASSES + CLINICAL_EQUIPMENT_CLASSES + MRT_EQUIPMENT_CLASSES + ("Other",)
 
 
+def build_space_function_assignment(
+    *,
+    space_id: str,
+    source_name: str,
+    source_function: str,
+    proposed_name: str,
+    proposed_function: str,
+    assignment_status: ProgramAssignmentStatus,
+    suitability: SpaceSuitability = "UNKNOWN",
+    structural_suitability: Literal["VERIFIED", "NOT_VERIFIED", "UNKNOWN"] = "UNKNOWN",
+    shielding_suitability: Literal["VERIFIED", "NOT_VERIFIED", "UNKNOWN"] = "UNKNOWN",
+    hvac_suitability: Literal["VERIFIED", "MODIFICATION_REQUIRED", "UNKNOWN"] = "UNKNOWN",
+    recommendation: str | None = None,
+) -> SpaceFunctionAssignment:
+    return SpaceFunctionAssignment(
+        space_id=space_id,
+        source_name=source_name,
+        source_function=source_function,
+        proposed_name=proposed_name,
+        proposed_function=proposed_function,
+        assignment_status=assignment_status,
+        suitability=suitability,
+        structural_suitability=structural_suitability,
+        shielding_suitability=shielding_suitability,
+        hvac_suitability=hvac_suitability,
+        recommendation=recommendation,
+    )
+
+
+def evaluate_required_program_feasibility(
+    *,
+    model: FacilityEngineeringObjectModel,
+    required_program: RequiredFacilityProgram,
+) -> ProgramFeasibilityReport:
+    scanner_labels = {"PET/CT scanner", "PET/MR scanner", "SPECT/CT scanner"}
+    injection_labels = {"Injection room", "Injection station/chair"}
+    uptake_labels = {"Uptake room"}
+
+    available_scanners = sum(1 for assignment in model.proposed_space_assignments if assignment.proposed_function in scanner_labels)
+    available_injection = sum(1 for assignment in model.proposed_space_assignments if assignment.proposed_function in injection_labels)
+    available_uptake = sum(1 for assignment in model.proposed_space_assignments if assignment.proposed_function in uptake_labels)
+
+    required_scanners = (
+        int(required_program.pet_ct_scanners_required)
+        + int(required_program.pet_mr_scanners_required)
+        + int(required_program.spect_ct_scanners_required)
+    )
+    missing_scanners = max(0, required_scanners - available_scanners)
+    missing_injection = max(0, int(required_program.injection_rooms_required) - available_injection)
+    missing_uptake = max(0, int(required_program.uptake_rooms_required) - available_uptake)
+
+    feasible = missing_scanners == 0 and missing_injection == 0 and missing_uptake == 0
+    notes: list[str] = []
+    if missing_scanners > 0:
+        notes.append(f"Required PET/SPECT scanners: {required_scanners}; maximum feasible in current model: {available_scanners}.")
+    if missing_injection > 0:
+        notes.append(f"Injection rooms missing: {missing_injection}.")
+    if missing_uptake > 0:
+        notes.append(f"Uptake rooms missing: {missing_uptake}.")
+
+    return ProgramFeasibilityReport(
+        feasible=feasible,
+        required_scanners=required_scanners,
+        available_scanner_spaces=available_scanners,
+        missing_scanner_spaces=missing_scanners,
+        required_injection_rooms=int(required_program.injection_rooms_required),
+        available_injection_spaces=available_injection,
+        missing_injection_spaces=missing_injection,
+        required_uptake_rooms=int(required_program.uptake_rooms_required),
+        available_uptake_spaces=available_uptake,
+        missing_uptake_spaces=missing_uptake,
+        notes=tuple(notes),
+    )
+
+
 def straight_line_distance_m(left: SpatialCoordinate, right: SpatialCoordinate) -> float:
     if not left.has_position() or not right.has_position():
         raise ValueError("straight line distance requires coordinates with x, y, and z")
@@ -586,6 +858,9 @@ def validate_facility_engineering_object_model(model: FacilityEngineeringObjectM
 
     if model.source_type == "IFC" and model.evidence_class != "BIM_AUTHORITATIVE":
         issues.append(SpatialValidationIssue(code="IFC_EVIDENCE_MISMATCH", severity="WARNING", message="IFC inputs should normally retain BIM_AUTHORITATIVE evidence."))
+
+    if model.clinical_floors_in_scope < 1:
+        issues.append(SpatialValidationIssue(code="INVALID_FLOOR_SCOPE", severity="ERROR", message="At least one clinical floor must be modeled."))
 
     for collection in (
         model.buildings,
@@ -651,7 +926,61 @@ def validate_facility_engineering_object_model(model: FacilityEngineeringObjectM
     if model.facility is not None and not model.facility.buildings:
         issues.append(SpatialValidationIssue(code="INVALID_GEOMETRY", severity="WARNING", message="Facility object exists but contains no building references.", object_id=model.facility.object_id))
 
+    if model.primary_route_origin_object_id is None:
+        issues.append(SpatialValidationIssue(code="MISSING_ROUTE_ORIGIN", severity="WARNING", message="Primary route origin should be set to radiopharmacy release / MRT loading."))
+
+    if model.route_geometry_status == "NOT_RECONSTRUCTED" and model.nodes and model.source_type == "MANUAL":
+        issues.append(SpatialValidationIssue(code="MANUAL_DISTANCE_GEOMETRY_MISMATCH", severity="WARNING", message="Manual total-distance mode should not fabricate detailed node geometry."))
+
+    if model.enforce_cyclotron_ground_level:
+        storey_lookup = {storey.object_id: storey for storey in model.storeys}
+        for equipment in model.equipment:
+            if equipment.equipment_class != "Cyclotron":
+                continue
+            storey = storey_lookup.get(equipment.storey_id or "")
+            storey_label = "" if storey is None else storey.name
+            if not _is_ground_storey_label(storey_label, storey.elevation_m if storey is not None else None):
+                issues.append(
+                    SpatialValidationIssue(
+                        code="CYCLOTRON_NOT_GROUND_LEVEL",
+                        severity="ERROR",
+                        message="Cyclotron must be placed at ground level under current project engineering constraints.",
+                        object_id=equipment.object_id,
+                    )
+                )
+
+    if model.enforce_separate_production_building and model.production_building_id:
+        clinical_buildings = set(model.clinical_building_ids)
+        if model.production_building_id in clinical_buildings:
+            issues.append(
+                SpatialValidationIssue(
+                    code="PRODUCTION_BUILDING_NOT_SEPARATE",
+                    severity="ERROR",
+                    message="Production building must remain distinct from clinical building set under current MRT methodology.",
+                    object_id=model.production_building_id,
+                )
+            )
+
     return tuple(issues)
+
+
+def _is_ground_storey_label(storey_name: str, elevation_m: float | None) -> bool:
+    normalized = storey_name.strip().lower()
+    ground_aliases = {
+        "ground",
+        "ground floor",
+        "g",
+        "level 1",
+        "floor 1",
+        "l1",
+        "storey 1",
+        "story 1",
+    }
+    if normalized in ground_aliases:
+        return True
+    if elevation_m is not None and abs(float(elevation_m)) <= 0.25:
+        return True
+    return False
 
 
 def _payload_get(payload: Mapping[str, Any] | None, key: str, default: Any = None) -> Any:
@@ -697,11 +1026,16 @@ def deserialize_facility_engineering_object_model(payload: Mapping[str, Any] | N
         facility_id=str(payload["facility_id"]),
         facility_name=str(payload["facility_name"]),
         project_spatial_mode=payload["project_spatial_mode"],
+        adaptive_spatial_mode=payload.get("adaptive_spatial_mode", payload["project_spatial_mode"]),
+        spatial_input_path=payload.get("spatial_input_path", "MANUAL_SPATIAL_DEFINITION"),
         source_type=payload["source_type"],
         evidence_class=payload["evidence_class"],
         maturity=payload["maturity"],
         subscription_tier=payload["subscription_tier"],
+        geometry_evidence_assessment=_load_optional_dataclass(payload, "geometry_evidence_assessment", GeometryEvidenceAssessment),
         coordinate_system=CoordinateSystem(**dict(payload["coordinate_system"])),
+        full_engineering_dataset_access=bool(payload.get("full_engineering_dataset_access", False)),
+        executive_summary_only=bool(payload.get("executive_summary_only", True)),
         provenance=_load_optional_dataclass(payload, "provenance", ProvenanceRecord),
         facility=_load_optional_dataclass(payload, "facility", Facility),
         buildings=_load_tuple(payload, "buildings", Building),
@@ -726,6 +1060,23 @@ def deserialize_facility_engineering_object_model(payload: Mapping[str, Any] | N
         edges=_load_tuple(payload, "edges", SpatialEdge),
         quantities=_load_tuple(payload, "quantities", DerivedQuantityRecord),
         construction_cost_items=_load_tuple(payload, "construction_cost_items", ConstructionCostItem),
+        source_space_assignments=_load_tuple(payload, "source_space_assignments", SpaceFunctionAssignment),
+        proposed_space_assignments=_load_tuple(payload, "proposed_space_assignments", SpaceFunctionAssignment),
+        required_program=_load_optional_dataclass(payload, "required_program", RequiredFacilityProgram),
+        feasibility_report=_load_optional_dataclass(payload, "feasibility_report", ProgramFeasibilityReport),
+        primary_route_origin_object_id=payload.get("primary_route_origin_object_id"),
+        primary_route_destination_object_ids=tuple(payload.get("primary_route_destination_object_ids", ())),
+        route_geometry_status=payload.get("route_geometry_status", "RECONSTRUCTED"),
+        route_distance_source=payload.get("route_distance_source", "DERIVED_GEOMETRY"),
+        clinical_floors_in_scope=int(payload.get("clinical_floors_in_scope", 1)),
+        scanner_floors=tuple(payload.get("scanner_floors", ())),
+        injection_floors=tuple(payload.get("injection_floors", ())),
+        uptake_floors=tuple(payload.get("uptake_floors", ())),
+        include_ground_floor=bool(payload.get("include_ground_floor", True)),
+        production_building_id=payload.get("production_building_id"),
+        clinical_building_ids=tuple(payload.get("clinical_building_ids", ())),
+        enforce_cyclotron_ground_level=bool(payload.get("enforce_cyclotron_ground_level", True)),
+        enforce_separate_production_building=bool(payload.get("enforce_separate_production_building", True)),
         notes=tuple(_payload_get(payload, "notes", ())),
     )
 
@@ -738,8 +1089,13 @@ def build_default_facility_engineering_object_model(
     source_type: SpatialSourceType,
     subscription_tier: SubscriptionTier,
     coordinate_system: CoordinateSystem,
+    spatial_input_path: SpatialInputPath = "MANUAL_SPATIAL_DEFINITION",
+    adaptive_spatial_mode: AdaptiveSpatialMode | None = None,
+    production_building_development_zone: DevelopmentZone | None = None,
+    clinical_building_development_zone: DevelopmentZone | None = None,
     facility_instance_id: str | None = None,
     building_name: str = "Building A",
+    clinical_building_name: str | None = None,
     storey_name: str = "Level 1",
     space_name: str = "Primary Room",
     space_id: str | None = None,
@@ -747,14 +1103,39 @@ def build_default_facility_engineering_object_model(
     equipment_name: str | None = None,
     route_distance_m: float | None = None,
     vertical_change_m: float | None = None,
+    route_corridor_class: RouteCorridorClass = "INTERIOR_CLINICAL_PATH",
+    route_geometry_status: RouteGeometryStatus = "RECONSTRUCTED",
     room_coordinate: SpatialCoordinate | None = None,
+    clinical_floors_in_scope: int = 1,
+    scanner_floors: Sequence[str] = (),
+    injection_floors: Sequence[str] = (),
+    uptake_floors: Sequence[str] = (),
+    include_ground_floor: bool = True,
+    enforce_cyclotron_ground_level: bool = True,
+    enforce_separate_production_building: bool = True,
     materials: Sequence[MaterialRecord] = (),
+    source_space_assignments: Sequence[SpaceFunctionAssignment] = (),
+    proposed_space_assignments: Sequence[SpaceFunctionAssignment] = (),
+    required_program: RequiredFacilityProgram | None = None,
     notes: Sequence[str] = (),
 ) -> FacilityEngineeringObjectModel:
     evidence_class, maturity, _ = resolve_default_source_profile(source_type)
     capability = resolve_subscription_capability_profile(subscription_tier)
     if source_type not in capability.allowed_spatial_sources:
         raise ValueError(f"Source type {source_type} is not available at subscription tier {subscription_tier}")
+
+    if clinical_floors_in_scope < 1:
+        raise ValueError("clinical_floors_in_scope must be at least 1")
+
+    if adaptive_spatial_mode is None:
+        adaptive_spatial_mode = "ADAPTIVE_REPURPOSING" if project_spatial_mode == "RETROFIT" else "GREENFIELD"
+
+    if production_building_development_zone is None:
+        production_building_development_zone = "EXISTING_CORE" if project_spatial_mode == "RETROFIT" else "NEW_BUILDING"
+    if clinical_building_development_zone is None:
+        clinical_building_development_zone = "EXPANSION_ZONE" if project_spatial_mode == "RETROFIT" and clinical_building_name else "NEW_BUILDING"
+
+    geometry_assessment = resolve_geometry_evidence_assessment(source_type)
 
     facility = Facility(
         object_id=facility_id,
@@ -763,7 +1144,7 @@ def build_default_facility_engineering_object_model(
         evidence_class=evidence_class,
         confidence="MEDIUM",
         status="NEW_CANDIDATE" if project_spatial_mode == "GREENFIELD" else "PROTECTED",
-        buildings=(f"{facility_id}:B1",),
+        buildings=(f"{facility_id}:B1",) if not clinical_building_name else (f"{facility_id}:B1", f"{facility_id}:B2"),
     )
     building = Building(
         object_id=f"{facility_id}:B1",
@@ -774,7 +1155,48 @@ def build_default_facility_engineering_object_model(
         status="NEW_CANDIDATE" if project_spatial_mode == "GREENFIELD" else "FIXED",
         parent_id=facility.object_id,
         storeys=(f"{facility_id}:S1",),
+        development_zone=production_building_development_zone,
     )
+    clinical_building: Building | None = None
+    clinical_storey: Storey | None = None
+    clinical_space: Space | None = None
+    if clinical_building_name:
+        clinical_building = Building(
+            object_id=f"{facility_id}:B2",
+            name=clinical_building_name,
+            source_identifier=f"{facility_id}:B2",
+            evidence_class=evidence_class,
+            confidence="MEDIUM",
+            status="FIXED" if project_spatial_mode == "RETROFIT" else "NEW_CANDIDATE",
+            parent_id=facility.object_id,
+            storeys=(f"{facility_id}:S2",),
+            development_zone=clinical_building_development_zone,
+        )
+        clinical_storey = Storey(
+            object_id=f"{facility_id}:S2",
+            name="Clinical Level 1",
+            source_identifier=f"{facility_id}:S2",
+            evidence_class=evidence_class,
+            confidence="MEDIUM",
+            status="FIXED" if project_spatial_mode == "RETROFIT" else "NEW_CANDIDATE",
+            building_id=clinical_building.object_id,
+            parent_id=clinical_building.object_id,
+            elevation_m=0.0,
+            spaces=(f"{facility_id}:R2",),
+        )
+        clinical_space = Space(
+            object_id=f"{facility_id}:R2",
+            name="Clinical Destination",
+            source_identifier=f"{facility_id}:R2",
+            evidence_class=evidence_class,
+            confidence="MEDIUM",
+            status="MOVABLE",
+            building_id=clinical_building.object_id,
+            storey_id=clinical_storey.object_id,
+            parent_id=clinical_storey.object_id,
+            coordinate=room_coordinate,
+            access_class="CONTROLLED",
+        )
     storey = Storey(
         object_id=f"{facility_id}:S1",
         name=storey_name,
@@ -832,11 +1254,29 @@ def build_default_facility_engineering_object_model(
     )
     edges: tuple[SpatialEdge, ...] = ()
     if route_distance_m is not None:
+        destination_node = nodes[1].node_id
+        if clinical_space is not None:
+            destination_node = f"{facility_id}:N2"
+            nodes = (
+                *nodes,
+                SpatialNode(
+                    node_id=destination_node,
+                    object_id=clinical_space.object_id,
+                    kind="space",
+                    coordinate=room_coordinate,
+                    evidence_class=evidence_class,
+                    confidence="MEDIUM",
+                    source_identifier=clinical_space.object_id,
+                    building_id=clinical_space.building_id,
+                    storey_id=clinical_space.storey_id,
+                    room_id=clinical_space.object_id,
+                ),
+            )
         edges = (
             SpatialEdge(
                 edge_id=f"{facility_id}:E1",
                 source_node_id=nodes[0].node_id,
-                destination_node_id=nodes[1].node_id,
+                destination_node_id=destination_node,
                 length_m=float(route_distance_m),
                 vertical_change_m=0.0 if vertical_change_m is None else float(vertical_change_m),
                 edge_type="HORIZONTAL",
@@ -844,6 +1284,7 @@ def build_default_facility_engineering_object_model(
                 directionality="BIDIRECTIONAL",
                 evidence_class="DERIVED_GEOMETRY",
                 confidence="MEDIUM",
+                route_corridor_class=route_corridor_class,
                 source_identifier=facility_id,
             ),
         )
@@ -869,15 +1310,35 @@ def build_default_facility_engineering_object_model(
             manufacturer_catalog_reference=facility_instance_id,
         ),
     )
+    feasibility_report = None
+    if required_program is not None:
+        provisional_model = FacilityEngineeringObjectModel(
+            facility_id=facility_id,
+            facility_name=facility_name,
+            project_spatial_mode=project_spatial_mode,
+            source_type=source_type,
+            evidence_class=evidence_class,
+            maturity=maturity,
+            subscription_tier=subscription_tier,
+            coordinate_system=coordinate_system,
+            proposed_space_assignments=tuple(proposed_space_assignments),
+        )
+        feasibility_report = evaluate_required_program_feasibility(model=provisional_model, required_program=required_program)
+
     return FacilityEngineeringObjectModel(
         facility_id=facility_id,
         facility_name=facility_name,
         project_spatial_mode=project_spatial_mode,
+        adaptive_spatial_mode=adaptive_spatial_mode,
+        spatial_input_path=spatial_input_path,
         source_type=source_type,
         evidence_class=evidence_class,
         maturity=maturity,
         subscription_tier=subscription_tier,
+        geometry_evidence_assessment=geometry_assessment,
         coordinate_system=coordinate_system,
+        full_engineering_dataset_access=subscription_tier in {"PROFESSIONAL", "ENTERPRISE"},
+        executive_summary_only=subscription_tier == "BASIC",
         provenance=ProvenanceRecord(
             value=facility_name,
             source=source_type,
@@ -887,9 +1348,9 @@ def build_default_facility_engineering_object_model(
             user_override=source_type in {"MANUAL", "TEMPLATE", "BENCHMARK"},
         ),
         facility=facility,
-        buildings=(building,),
-        storeys=(storey,),
-        spaces=(space,),
+        buildings=(building,) if clinical_building is None else (building, clinical_building),
+        storeys=(storey,) if clinical_storey is None else (storey, clinical_storey),
+        spaces=(space,) if clinical_space is None else (space, clinical_space),
         equipment=equipment,
         materials=tuple(materials),
         relationships=(
@@ -904,6 +1365,23 @@ def build_default_facility_engineering_object_model(
         ),
         nodes=nodes,
         edges=edges,
+        source_space_assignments=tuple(source_space_assignments),
+        proposed_space_assignments=tuple(proposed_space_assignments),
+        required_program=required_program,
+        feasibility_report=feasibility_report,
+        primary_route_origin_object_id=f"{facility_id}:RELEASE",
+        primary_route_destination_object_ids=(space.object_id,) if clinical_space is None else (clinical_space.object_id,),
+        route_geometry_status=route_geometry_status,
+        route_distance_source="USER_SUPPLIED" if source_type == "MANUAL" else "DERIVED_GEOMETRY",
+        clinical_floors_in_scope=int(clinical_floors_in_scope),
+        scanner_floors=tuple(scanner_floors),
+        injection_floors=tuple(injection_floors),
+        uptake_floors=tuple(uptake_floors),
+        include_ground_floor=include_ground_floor,
+        production_building_id=building.object_id,
+        clinical_building_ids=() if clinical_building is None else (clinical_building.object_id,),
+        enforce_cyclotron_ground_level=enforce_cyclotron_ground_level,
+        enforce_separate_production_building=enforce_separate_production_building,
         notes=tuple(notes),
     )
 
@@ -945,6 +1423,14 @@ def migrate_legacy_geometry_state(saved_or_draft_state: Mapping[str, Any] | None
     project_spatial_mode = saved_or_draft_state.get("build3::facility_engineering::project_spatial_mode", "GREENFIELD")
     if project_spatial_mode not in {"RETROFIT", "GREENFIELD"}:
         project_spatial_mode = "GREENFIELD"
+    spatial_input_path = saved_or_draft_state.get("build3::facility_engineering::input_path", "MANUAL_SPATIAL_DEFINITION")
+    if spatial_input_path not in SPATIAL_INPUT_PATH_OPTIONS:
+        spatial_input_path = "MANUAL_SPATIAL_DEFINITION"
+
+    route_geometry_status = saved_or_draft_state.get("build3::facility_engineering::route_geometry_status", "RECONSTRUCTED")
+    if route_geometry_status not in {"RECONSTRUCTED", "NOT_RECONSTRUCTED"}:
+        route_geometry_status = "RECONSTRUCTED"
+
     coordinate_system = CoordinateSystem(
         coordinate_system_id=str(saved_or_draft_state.get("build3::facility_engineering::coordinate_system_id", "LOCAL-1")),
         name=str(saved_or_draft_state.get("build3::facility_engineering::coordinate_system_name", "Local engineering coordinates")),
@@ -960,6 +1446,7 @@ def migrate_legacy_geometry_state(saved_or_draft_state: Mapping[str, Any] | None
         project_spatial_mode=project_spatial_mode,
         source_type=source_type,
         subscription_tier=subscription_tier,
+        spatial_input_path=spatial_input_path,
         coordinate_system=coordinate_system,
         facility_instance_id=saved_or_draft_state.get("build3::facility_engineering::facility_instance_id"),
         building_name=str(saved_or_draft_state.get("build3::facility_engineering::building_name", "Building A")),
@@ -970,6 +1457,12 @@ def migrate_legacy_geometry_state(saved_or_draft_state: Mapping[str, Any] | None
         equipment_name=saved_or_draft_state.get("build3::facility_engineering::equipment_name"),
         route_distance_m=float(route_distance) if route_distance is not None else None,
         vertical_change_m=float(vertical_transfer) if vertical_transfer is not None else None,
+        route_geometry_status=route_geometry_status,
+        clinical_floors_in_scope=int(saved_or_draft_state.get("build3::geometry::floors", 1) or 1),
+        include_ground_floor=bool(saved_or_draft_state.get("build3::facility_engineering::ground_floor_included", True)),
+        scanner_floors=tuple(saved_or_draft_state.get("build3::facility_engineering::scanner_floors", ())),
+        injection_floors=tuple(saved_or_draft_state.get("build3::facility_engineering::injection_floors", ())),
+        uptake_floors=tuple(saved_or_draft_state.get("build3::facility_engineering::uptake_floors", ())),
         room_coordinate=SpatialCoordinate(
             x_m=_safe_float(saved_or_draft_state.get("build3::facility_engineering::x_m")),
             y_m=_safe_float(saved_or_draft_state.get("build3::facility_engineering::y_m")),

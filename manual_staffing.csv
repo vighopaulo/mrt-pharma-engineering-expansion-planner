@@ -1,0 +1,5 @@
+Architecture,Missions/day,Worker-hours required,Regular hours,Overtime hours,Simultaneous positions,FTE equivalent,Daily labor cost (USD),Annual labor cost (USD)
+MANUAL_CONVENTIONAL,236,66.867,64.0,8.0,4,10.385,1679.6,503880.0
+AUTOMATED_CONVENTIONAL,236,70.242,64.0,8.0,4,10.385,1679.6,503880.0
+MRT,12,4.65,16.0,2.0,1,2.596,419.9,125970.0
+HYBRID,30,11.625,16.0,2.0,1,2.596,419.9,125970.0

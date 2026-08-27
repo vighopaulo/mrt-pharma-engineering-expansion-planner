@@ -1,0 +1,5 @@
+asset,manual,automated,mrt,hybrid,ownership_classification,existing_or_new,provenance
+Scanners (6x),15000000.0,15000000.0,15000000.0,15000000.0,COMMON,EXISTING,PlannerAssumptions.scanner_capex
+Injection rooms (6x),150000.0,150000.0,150000.0,150000.0,COMMON,EXISTING,PlannerAssumptions.additional_room_capex
+Uptake rooms (12x),300000.0,300000.0,300000.0,300000.0,COMMON,EXISTING,PlannerAssumptions.additional_room_capex
+Cyclotron (CY-001),5000000.0,5000000.0,5000000.0,5000000.0,COMMON,EXISTING,PlannerAssumptions.cyclotron_purchase/installation_capex

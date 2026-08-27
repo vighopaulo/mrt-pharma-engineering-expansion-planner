@@ -1,0 +1,21 @@
+Stream,Architecture,Technology,Representative time (min),Service path
+RADIOPHARMACEUTICAL_NUCLEAR,MANUAL_CONVENTIONAL,MANUAL_PORTER,17.0,source -> porter -> room
+SPECIMEN_BLOOD,MANUAL_CONVENTIONAL,MANUAL_PORTER,17.0,source -> porter -> room
+PHARMACY_INFUSION,MANUAL_CONVENTIONAL,MANUAL_PORTER,17.0,source -> porter -> room
+STERILE_CLEAN_SUPPLY,MANUAL_CONVENTIONAL,MANUAL_PORTER,17.0,source -> porter -> room
+LAUNDRY_CLEAN_LINEN,MANUAL_CONVENTIONAL,MANUAL_PORTER,17.0,source -> porter -> room
+RADIOPHARMACEUTICAL_NUCLEAR,AUTOMATED_CONVENTIONAL,MANUAL_PORTER,17.0,source -> porter -> room
+SPECIMEN_BLOOD,AUTOMATED_CONVENTIONAL,PNEUMATIC_TUBE,19.5,source -> PTS station -> tube -> destination station -> porter (residual last mile) -> room
+PHARMACY_INFUSION,AUTOMATED_CONVENTIONAL,AGV_AMR,23.25,source -> AGV -> station -> porter (residual last mile) -> room
+STERILE_CLEAN_SUPPLY,AUTOMATED_CONVENTIONAL,AGV_AMR,23.25,source -> AGV -> station -> porter (residual last mile) -> room
+LAUNDRY_CLEAN_LINEN,AUTOMATED_CONVENTIONAL,AGV_AMR,23.25,source -> AGV -> station -> porter (residual last mile) -> room
+RADIOPHARMACEUTICAL_NUCLEAR,HYBRID_MRT,MRT,0.5,source -> MRT network -> room endpoint -> room
+SPECIMEN_BLOOD,HYBRID_MRT,MRT,0.7142857142857224,source -> MRT network -> room endpoint -> room
+PHARMACY_INFUSION,HYBRID_MRT,AGV_AMR,23.25,source -> AGV -> station -> porter (residual last mile) -> room
+STERILE_CLEAN_SUPPLY,HYBRID_MRT,AGV_AMR,23.25,source -> AGV -> station -> porter (residual last mile) -> room
+LAUNDRY_CLEAN_LINEN,HYBRID_MRT,AGV_AMR,23.25,source -> AGV -> station -> porter (residual last mile) -> room
+RADIOPHARMACEUTICAL_NUCLEAR,MRT_DOMINANT,MRT,0.5,source -> MRT network -> room endpoint -> room
+SPECIMEN_BLOOD,MRT_DOMINANT,MRT,0.7142857142857224,source -> MRT network -> room endpoint -> room
+PHARMACY_INFUSION,MRT_DOMINANT,AGV_AMR,23.25,source -> AGV -> station -> porter (residual last mile) -> room
+STERILE_CLEAN_SUPPLY,MRT_DOMINANT,AGV_AMR,23.25,source -> AGV -> station -> porter (residual last mile) -> room
+LAUNDRY_CLEAN_LINEN,MRT_DOMINANT,MRT,5.0,source -> MRT network -> room endpoint -> room

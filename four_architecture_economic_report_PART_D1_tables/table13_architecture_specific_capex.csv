@@ -1,0 +1,10 @@
+Component,MANUAL_CONVENTIONAL,AUTOMATED_CONVENTIONAL,MRT,HYBRID
+transport_equipment,0.0,N/A,N/A,N/A
+agv_fleet_capex,N/A,450000.0,N/A,N/A
+pts_network_capex,N/A,345000.0,N/A,N/A
+carrier_hardware_fleet_capex,N/A,N/A,11000.0,11000.0
+mrt_guideway_capex,N/A,N/A,NOT_CALIBRATED,NOT_CALIBRATED
+mrt_radiopharmacy_vestibule_capex,N/A,N/A,30000.0,30000.0
+room_endpoint_capex,N/A,N/A,170000.0,170000.0
+mrt_controls_capex,N/A,N/A,100000.0,100000.0
+mrt_installation_commissioning_capex,N/A,N/A,300000.0,300000.0

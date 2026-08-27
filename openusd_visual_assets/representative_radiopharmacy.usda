@@ -1,0 +1,38 @@
+#usda 1.0
+(
+    defaultPrim = "RepresentativeRadiopharmacy"
+)
+
+def Xform "RepresentativeRadiopharmacy" (
+    customData = {
+        string asset_label = "TEST_REPRESENTATIVE_ONLY_NOT_MANUFACTURER_GEOMETRY"
+        string visual_asset_authority = "NON_AUTHORITATIVE"
+        string visual_asset_geometry_quality = "REPRESENTATIVE_ASSET"
+        string visual_asset_purpose = "DEMONSTRATION"
+    }
+)
+{
+    def Cube "HotCell"
+    {
+        double size = 1
+        float3 xformOp:scale = (1, 0.8, 1.4)
+        uniform token[] xformOpOrder = ["xformOp:scale"]
+    }
+
+    def Cube "Workbench"
+    {
+        double size = 1
+        float3 xformOp:scale = (1.6, 0.6, 0.05)
+        double3 xformOp:translate = (1.2, 0, 0.4)
+        uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:scale"]
+    }
+
+    def Cube "Dispensing"
+    {
+        double size = 1
+        float3 xformOp:scale = (0.3, 0.3, 0.5)
+        double3 xformOp:translate = (1.2, 0, 0.7)
+        uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:scale"]
+    }
+}
+

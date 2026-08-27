@@ -1,0 +1,5 @@
+Architecture,Unresolved OPEX categories,total_annual_opex_usd
+MANUAL_CONVENTIONAL,clinical_labor_opex; production_opex; maintenance_opex; consumables_opex,NOT_CALIBRATED
+AUTOMATED_CONVENTIONAL,clinical_labor_opex; production_opex; maintenance_opex; consumables_opex,NOT_CALIBRATED
+MRT,clinical_labor_opex; production_opex; maintenance_opex; consumables_opex,NOT_CALIBRATED
+HYBRID,clinical_labor_opex; production_opex; maintenance_opex; consumables_opex,NOT_CALIBRATED

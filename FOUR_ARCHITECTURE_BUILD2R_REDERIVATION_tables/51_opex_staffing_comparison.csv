@@ -1,0 +1,5 @@
+architecture,transport_missions_sample,regular_hours_per_day,porter_fte,scheduled_regular_hours,scheduled_overtime_hours,fte_equivalent,annual_transport_labor_opex,automation_or_mrt_fte,note
+MANUAL_CONVENTIONAL,680,16.0,33.0,16.0,2.0,33.0,1750320.0,N/A,N/A
+AUTOMATED_CONVENTIONAL,680,16.0,34.0,16.0,2.0,34.0,1826272.0,0.30000000000000004,AGV/PTS residual supervision
+MRT_DOMINANT,0,16.0,0.0,16.0,2.0,0.0,5074930.0,3.0,MRT support labor (ledger row)
+HYBRID_MRT,170,16.0,21.0,16.0,2.0,21.0,6262320.0,3.0,Manual-zone fallback + MRT support labor

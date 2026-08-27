@@ -1,0 +1,3 @@
+Metric,Manual Conventional,Automated Conventional,MRT (Dominant),Hybrid (zone-level),Notes
+patients_retention_qualified_completed (nuclear),19,19,19,19,Primary retention-constrained design value (Section 14)
+General logistics streams requested==served (all 4 streams),170/170 each,170/170 each,170/170 each,170/170 each,stream_metrics -- no unmet demand in this controlled benchmark for any architecture

@@ -10,6 +10,7 @@ import decision_pipeline as pipeline_module
 from decision_pipeline import (
     NativeDecisionPipelineScenario,
     NativePathwayScenario,
+    run_native_conventional_only_pipeline,
     run_native_decision_pipeline,
 )
 from models import PlannerAssumptions, SharedNetworkAssumptions
@@ -169,6 +170,29 @@ def test_run_native_decision_pipeline_generates_demand_once_and_reuses_it(monkey
     assert result.batch_policy_description.startswith("PIPELINE BATCH POLICY:")
 
 
+def test_conventional_result_matches_between_dual_and_conventional_only_profiles():
+    dual_request = _request()
+    dual_result = run_native_decision_pipeline(dual_request)
+
+    conventional_only_request = replace(dual_request, mrt=None, product_profile="CONVENTIONAL_ONLY")
+    conventional_only_result = run_native_conventional_only_pipeline(conventional_only_request)
+
+    dual_conv = dual_result.conventional
+    solo_conv = conventional_only_result.conventional
+
+    assert dual_conv.operational_result.pathway_config.transport_minutes == pytest.approx(
+        solo_conv.operational_result.pathway_config.transport_minutes
+    )
+    assert dual_conv.operational_result.pathway_config.transport_minutes_source == (
+        solo_conv.operational_result.pathway_config.transport_minutes_source
+    )
+    assert dual_conv.operational_result.patients_completed == solo_conv.operational_result.patients_completed
+    assert dual_conv.decay_summary.mean_retained_fraction == pytest.approx(solo_conv.decay_summary.mean_retained_fraction)
+    assert dual_conv.capex_result.total_capex == pytest.approx(solo_conv.capex_result.total_capex)
+    assert dual_conv.opex_result.total_annual_opex == pytest.approx(solo_conv.opex_result.total_annual_opex)
+    assert dual_conv.lifecycle_result.final_npv == pytest.approx(solo_conv.lifecycle_result.final_npv)
+
+
 def test_generated_patients_propagate_into_batching():
     result = run_native_decision_pipeline(_request())
     demand = result.demand_result.simulation
@@ -281,7 +305,8 @@ def test_every_batch_propagates_into_production_and_clinical_schedule():
 
     assert operational.patients_completed + operational.patients_incomplete == operational.patients_considered
     assert len(operational.production_clinical_result.batch_demands) == len(operational.production_clinical_result.batch_release_mappings)
-    assert len(operational.production_clinical_result.batch_releases) == len(operational.production_clinical_result.batch_demands)
+    assert len(operational.production_clinical_result.batch_releases) == len(operational.production_clinical_result.transport_payloads)
+    assert len(operational.production_clinical_result.batch_releases) >= len(operational.production_clinical_result.batch_demands)
     assert clinical.completed_patients + clinical.uncompleted_patients == clinical.total_patients_considered
 
 
@@ -398,11 +423,11 @@ def test_end_to_end_200_patient_scenario_matches_native_comparison_expectations(
 
     assert result.demand_result.simulation.patient_count == 200
     assert result.demand_result.simulation.patient_count_by_radionuclide == {"F-18": 106, "Ga-68": 50, "Tc-99m": 44}
-    assert result.conventional.operational_result.patients_completed == 140
-    assert result.mrt.operational_result.patients_completed == 200
-    assert result.conventional.operational_result.bottleneck.resource == "distribution"
-    assert result.mrt.operational_result.bottleneck.resource == "uptake"
-    assert result.throughput_difference == 60
+    assert result.conventional.operational_result.patients_completed == 147
+    assert result.mrt.operational_result.patients_completed == 196
+    assert result.conventional.operational_result.bottleneck.resource == "uptake"
+    assert result.mrt.operational_result.bottleneck.resource == "carrier_transport"
+    assert result.throughput_difference == 49
     assert result.economic_winner == "MRT"
     assert result.lifecycle_comparison_result is not None
     assert math.isclose(result.lifecycle_comparison_result.incremental_final_npv_mrt_minus_conventional, result.incremental_npv, rel_tol=0.0, abs_tol=1e-9)
@@ -415,3 +440,478 @@ def test_end_to_end_200_patient_scenario_matches_native_comparison_expectations(
         assert mrt_decay.total_activity_at_injection_mbq_by_isotope[isotope] <= mrt_decay.total_prescribed_activity_mbq_by_isotope[isotope]
     assert conventional_decay.decay_infeasible_patient_count >= 0
     assert mrt_decay.decay_infeasible_patient_count >= 0
+
+
+def test_requirement_derived_scheduler_allows_one_cycle_to_serve_more_than_20_patients() -> None:
+    request = NativeDecisionPipelineScenario(
+        project_name="Requirement Derived >20 One Cycle",
+        target_patients_per_day=40,
+        radionuclide_mix={"F-18": 1.0},
+        activity_distribution_by_radionuclide={
+            "F-18": ActivityDemandModel("fixed", fixed_activity_mbq=200.0),
+        },
+        cyclotron_capability=CyclotronProductionCapability(
+            cyclotron_id="F18-CAL",
+            supported_radionuclides=("F-18",),
+            max_simultaneous_production_streams=1,
+            production_cycle_minutes_by_radionuclide={"F-18": 30.0},
+            calibrated_eob_activity_mbq_by_radionuclide={"F-18": 20_000.0},
+        ),
+        conventional=_conventional_pathway(),
+        mrt=_mrt_pathway(),
+        planner_assumptions=replace(_planner_assumptions(), default_clinical_administration_cohorts_per_day=1),
+        shared_network_assumptions=SharedNetworkAssumptions(),
+        day_type="typical",
+        seed=20260901,
+        operating_day_minutes=1080.0,
+        production_start_time_minutes=500.0,
+        batch_target_patients_per_batch=20,
+    )
+    result = run_native_decision_pipeline(request)
+    assert result.demand_result.requested_batch_count_by_radionuclide["F-18"] == 1
+    assert result.demand_result.activity_derived_cycle_count_by_radionuclide["F-18"] == 1
+    assert result.demand_result.temporal_derived_cycle_count_by_radionuclide["F-18"] == 1
+
+
+def test_requirement_derived_scheduler_can_require_multiple_cycles_for_fewer_than_20_patients() -> None:
+    request = NativeDecisionPipelineScenario(
+        project_name="Requirement Derived <20 Multi Cycle",
+        target_patients_per_day=10,
+        radionuclide_mix={"F-18": 1.0},
+        activity_distribution_by_radionuclide={
+            "F-18": ActivityDemandModel("fixed", fixed_activity_mbq=1000.0),
+        },
+        cyclotron_capability=CyclotronProductionCapability(
+            cyclotron_id="F18-CAL",
+            supported_radionuclides=("F-18",),
+            max_simultaneous_production_streams=1,
+            production_cycle_minutes_by_radionuclide={"F-18": 30.0},
+            calibrated_eob_activity_mbq_by_radionuclide={"F-18": 4_000.0},
+        ),
+        conventional=_conventional_pathway(),
+        mrt=_mrt_pathway(),
+        planner_assumptions=replace(_planner_assumptions(), default_clinical_administration_cohorts_per_day=1),
+        shared_network_assumptions=SharedNetworkAssumptions(),
+        day_type="typical",
+        seed=20260902,
+        operating_day_minutes=1080.0,
+        batch_target_patients_per_batch=20,
+    )
+    result = run_native_decision_pipeline(request)
+    assert result.demand_result.requested_batch_count_by_radionuclide["F-18"] >= 3
+
+
+def test_requirement_derived_temporal_separation_can_increase_required_cycles() -> None:
+    base_request = NativeDecisionPipelineScenario(
+        project_name="Requirement Derived Temporal",
+        target_patients_per_day=12,
+        radionuclide_mix={"F-18": 1.0},
+        activity_distribution_by_radionuclide={
+            "F-18": ActivityDemandModel("fixed", fixed_activity_mbq=200.0),
+        },
+        cyclotron_capability=CyclotronProductionCapability(
+            cyclotron_id="F18-CAL",
+            supported_radionuclides=("F-18",),
+            max_simultaneous_production_streams=1,
+            production_cycle_minutes_by_radionuclide={"F-18": 30.0},
+            calibrated_eob_activity_mbq_by_radionuclide={"F-18": 20_000.0},
+        ),
+        conventional=_conventional_pathway(),
+        mrt=_mrt_pathway(),
+        planner_assumptions=replace(
+            _planner_assumptions(),
+            default_clinical_administration_cohorts_per_day=1,
+            decay_feasibility_min_retained_fraction=0.10,
+        ),
+        shared_network_assumptions=SharedNetworkAssumptions(),
+        day_type="typical",
+        seed=20260903,
+        operating_day_minutes=1080.0,
+        batch_target_patients_per_batch=20,
+    )
+    single = run_native_decision_pipeline(base_request)
+    multi = run_native_decision_pipeline(
+        replace(
+            base_request,
+            planner_assumptions=replace(
+                base_request.planner_assumptions,
+                default_clinical_administration_cohorts_per_day=2,
+            ),
+        )
+    )
+    assert single.demand_result.requested_batch_count_by_radionuclide["F-18"] <= multi.demand_result.requested_batch_count_by_radionuclide["F-18"]
+
+
+def test_required_activity_cycle_count_uses_required_eob_formula_for_blocker_case() -> None:
+    assert pipeline_module._required_activity_cycle_count(2_380_785.0, 648_000.0) == 4
+
+
+def test_required_activity_cycle_count_exact_boundary_two_cycles() -> None:
+    assert pipeline_module._required_activity_cycle_count(2.0 * 648_000.0, 648_000.0) == 2
+
+
+def test_requirement_derived_activity_can_dominate_temporal_cycle_count() -> None:
+    # NOTE: calibrated capacity is set to 2_000.0 (not the original 12_000.0). Under
+    # the corrected cycle-relative requirement (patient EOB computed relative to the
+    # supplying cycle, not a common early EOB reference), 12_000.0 MBq comfortably
+    # covers all 4 patients from a single freshest cycle. 2_000.0 MBq forces genuine
+    # activity-capacity-driven splitting across multiple physically distinct cycles.
+    request = NativeDecisionPipelineScenario(
+        project_name="Activity Dominates",
+        target_patients_per_day=4,
+        radionuclide_mix={"F-18": 1.0},
+        activity_distribution_by_radionuclide={
+            "F-18": ActivityDemandModel("fixed", fixed_activity_mbq=600.0),
+        },
+        cyclotron_capability=CyclotronProductionCapability(
+            cyclotron_id="F18-ACT",
+            supported_radionuclides=("F-18",),
+            max_simultaneous_production_streams=1,
+            production_cycle_minutes_by_radionuclide={"F-18": 120.0},
+            calibrated_eob_activity_mbq_by_radionuclide={"F-18": 2_000.0},
+        ),
+        conventional=_conventional_pathway(),
+        mrt=_mrt_pathway(),
+        planner_assumptions=replace(_planner_assumptions(), default_clinical_administration_cohorts_per_day=1),
+        shared_network_assumptions=SharedNetworkAssumptions(),
+        day_type="typical",
+        seed=20260907,
+        operating_day_minutes=1080.0,
+        batch_target_patients_per_batch=20,
+    )
+    result = run_native_decision_pipeline(request)
+    assert result.demand_result.activity_derived_cycle_count_by_radionuclide["F-18"] == 3
+    assert result.demand_result.temporal_derived_cycle_count_by_radionuclide["F-18"] == 1
+    assert result.demand_result.required_cycle_count_by_radionuclide["F-18"] == 3
+
+
+def test_requirement_derived_temporal_cycles_can_dominate_activity_cycles() -> None:
+    request = NativeDecisionPipelineScenario(
+        project_name="Temporal Dominates",
+        target_patients_per_day=12,
+        radionuclide_mix={"F-18": 1.0},
+        activity_distribution_by_radionuclide={
+            "F-18": ActivityDemandModel("fixed", fixed_activity_mbq=100.0),
+        },
+        cyclotron_capability=CyclotronProductionCapability(
+            cyclotron_id="F18-TEMP",
+            supported_radionuclides=("F-18",),
+            max_simultaneous_production_streams=1,
+            production_cycle_minutes_by_radionuclide={"F-18": 30.0},
+            calibrated_eob_activity_mbq_by_radionuclide={"F-18": 1_000_000.0},
+        ),
+        conventional=_conventional_pathway(),
+        mrt=_mrt_pathway(),
+        planner_assumptions=replace(
+            _planner_assumptions(),
+            default_clinical_administration_cohorts_per_day=2,
+            decay_feasibility_min_retained_fraction=0.2,
+        ),
+        shared_network_assumptions=SharedNetworkAssumptions(),
+        day_type="typical",
+        seed=20260908,
+        operating_day_minutes=1080.0,
+        batch_target_patients_per_batch=20,
+    )
+    result = run_native_decision_pipeline(request)
+    assert result.demand_result.activity_derived_cycle_count_by_radionuclide["F-18"] == 1
+    assert result.demand_result.temporal_derived_cycle_count_by_radionuclide["F-18"] == 2
+    assert result.demand_result.required_cycle_count_by_radionuclide["F-18"] == 2
+
+
+def test_required_cycles_are_capped_by_the_configured_production_horizon() -> None:
+    # NOTE: this test previously asserted a required_cycle_count of 4 derived from the
+    # (now removed) common-early-EOB heuristic, which inflated aggregate demand well
+    # beyond what these 8 patients actually need, forcing an artificial
+    # PRODUCTION_SCHEDULE_CAPACITY shortfall against horizon [0, 360] at 120
+    # minutes/cycle. Under the corrected cycle-relative requirement, patient EOB is
+    # computed relative to the freshest cycle that can actually supply it, so this
+    # demand comfortably fits in a single physically required cycle -- and that cycle
+    # is never placed beyond the configured production horizon (section 18).
+    request = NativeDecisionPipelineScenario(
+        project_name="Required Capped By Horizon",
+        target_patients_per_day=8,
+        radionuclide_mix={"F-18": 1.0},
+        activity_distribution_by_radionuclide={
+            "F-18": ActivityDemandModel("fixed", fixed_activity_mbq=200.0),
+        },
+        cyclotron_capability=CyclotronProductionCapability(
+            cyclotron_id="F18-HZN",
+            supported_radionuclides=("F-18",),
+            max_simultaneous_production_streams=1,
+            production_cycle_minutes_by_radionuclide={"F-18": 120.0},
+            calibrated_eob_activity_mbq_by_radionuclide={"F-18": 6_000.0},
+        ),
+        conventional=_conventional_pathway(),
+        mrt=_mrt_pathway(),
+        planner_assumptions=replace(_planner_assumptions(), default_clinical_administration_cohorts_per_day=1),
+        shared_network_assumptions=SharedNetworkAssumptions(),
+        day_type="typical",
+        seed=20260909,
+        operating_day_minutes=1080.0,
+        production_start_time_minutes=0.0,
+        production_horizon_minutes=360.0,
+        batch_target_patients_per_batch=20,
+    )
+    result = run_native_decision_pipeline(request)
+
+    assert result.demand_result.required_cycle_count_by_radionuclide["F-18"] == 1
+    assert result.demand_result.unassigned_patient_ids_by_radionuclide["F-18"] == ()
+    for pathway in (result.conventional, result.mrt):
+        diag = pathway.operational_result.production_schedule_diagnostic
+        assert diag.required_batch_count == 1
+        assert diag.scheduled_batch_count == 1
+        assert diag.unscheduled_batch_count == 0
+        assert pathway.operational_result.primary_unmet_demand_cause == "NONE"
+
+
+def test_cycle_relative_requirement_never_generates_candidate_cycles_beyond_configured_horizon() -> None:
+    # Directly proves section 18: candidate production cycles must never be invented
+    # beyond the configured production horizon, even when demand would benefit from more.
+    request = NativeDecisionPipelineScenario(
+        project_name="Horizon Is Authoritative",
+        target_patients_per_day=8,
+        radionuclide_mix={"F-18": 1.0},
+        activity_distribution_by_radionuclide={
+            "F-18": ActivityDemandModel("fixed", fixed_activity_mbq=200.0),
+        },
+        cyclotron_capability=CyclotronProductionCapability(
+            cyclotron_id="F18-HZN",
+            supported_radionuclides=("F-18",),
+            max_simultaneous_production_streams=1,
+            production_cycle_minutes_by_radionuclide={"F-18": 120.0},
+            calibrated_eob_activity_mbq_by_radionuclide={"F-18": 2_000.0},
+        ),
+        conventional=_conventional_pathway(),
+        mrt=_mrt_pathway(),
+        planner_assumptions=replace(_planner_assumptions(), default_clinical_administration_cohorts_per_day=1),
+        shared_network_assumptions=SharedNetworkAssumptions(),
+        day_type="typical",
+        seed=20260909,
+        operating_day_minutes=1080.0,
+        production_start_time_minutes=0.0,
+        production_horizon_minutes=360.0,
+        batch_target_patients_per_batch=20,
+    )
+    result = run_native_decision_pipeline(request)
+    crr = result.demand_result.cycle_relative_requirement_by_radionuclide["F-18"]
+    for usage in crr.cycle_usages:
+        assert usage.eob_minutes <= 360.0 + 1e-9
+
+
+def test_requirement_derived_multi_radionuclide_activity_authority_is_independent() -> None:
+    request = NativeDecisionPipelineScenario(
+        project_name="Independent Activity Authority",
+        target_patients_per_day=12,
+        radionuclide_mix={"F-18": 0.5, "C-11": 0.5},
+        activity_distribution_by_radionuclide={
+            "F-18": ActivityDemandModel("fixed", fixed_activity_mbq=300.0),
+            "C-11": ActivityDemandModel("fixed", fixed_activity_mbq=60.0),
+        },
+        cyclotron_capability=CyclotronProductionCapability(
+            cyclotron_id="DUAL-INDEPENDENT",
+            supported_radionuclides=("F-18", "C-11"),
+            max_simultaneous_production_streams=2,
+            production_cycle_minutes_by_radionuclide={"F-18": 120.0, "C-11": 30.0},
+            calibrated_eob_activity_mbq_by_radionuclide={"F-18": 8_000.0, "C-11": 2_000.0},
+            simultaneously_compatible_radionuclide_sets=(frozenset({"F-18", "C-11"}),),
+        ),
+        conventional=_conventional_pathway(),
+        mrt=_mrt_pathway(),
+        planner_assumptions=replace(_planner_assumptions(), default_clinical_administration_cohorts_per_day=1),
+        shared_network_assumptions=SharedNetworkAssumptions(),
+        day_type="typical",
+        seed=20260910,
+        operating_day_minutes=1080.0,
+        production_start_time_minutes=500.0,
+        batch_target_patients_per_batch=20,
+    )
+    result = run_native_decision_pipeline(request)
+    assert result.demand_result.activity_derived_cycle_count_by_radionuclide["F-18"] >= 1
+    assert result.demand_result.activity_derived_cycle_count_by_radionuclide["C-11"] >= 1
+    assert result.demand_result.required_eob_activity_mbq_by_radionuclide["F-18"] != result.demand_result.required_eob_activity_mbq_by_radionuclide["C-11"]
+
+
+def test_legacy_fallback_remains_explicit_when_calibration_is_missing() -> None:
+    request = NativeDecisionPipelineScenario(
+        project_name="Legacy Fallback Explicit",
+        target_patients_per_day=25,
+        radionuclide_mix={"F-18": 1.0},
+        activity_distribution_by_radionuclide={
+            "F-18": ActivityDemandModel("fixed", fixed_activity_mbq=200.0),
+        },
+        cyclotron_capability=CyclotronProductionCapability(
+            cyclotron_id="F18-NO-CAL",
+            supported_radionuclides=("F-18",),
+            max_simultaneous_production_streams=1,
+            production_cycle_minutes_by_radionuclide={"F-18": 30.0},
+            calibrated_eob_activity_mbq_by_radionuclide=None,
+        ),
+        conventional=_conventional_pathway(),
+        mrt=_mrt_pathway(),
+        planner_assumptions=replace(_planner_assumptions(), default_clinical_administration_cohorts_per_day=1),
+        shared_network_assumptions=SharedNetworkAssumptions(),
+        day_type="typical",
+        seed=20260911,
+        operating_day_minutes=1080.0,
+        batch_target_patients_per_batch=20,
+    )
+    result = run_native_decision_pipeline(request)
+    assert result.demand_result.required_cycle_count_by_radionuclide["F-18"] == 2
+    assert result.demand_result.production_requirement_mode == "REQUIREMENT_DERIVED_WITH_LEGACY_COMPATIBILITY_BYPASS"
+    assert any("LEGACY_COMPATIBILITY_BATCH_HEURISTIC_ACTIVE" in token for token in result.demand_result.production_requirement_bypasses)
+
+
+def test_required_eob_reconciles_from_cycles_within_tolerance() -> None:
+    request = NativeDecisionPipelineScenario(
+        project_name="Cycle EOB Reconciliation",
+        target_patients_per_day=8,
+        radionuclide_mix={"F-18": 1.0},
+        activity_distribution_by_radionuclide={
+            "F-18": ActivityDemandModel("fixed", fixed_activity_mbq=200.0),
+        },
+        cyclotron_capability=CyclotronProductionCapability(
+            cyclotron_id="F18-RECON",
+            supported_radionuclides=("F-18",),
+            max_simultaneous_production_streams=1,
+            production_cycle_minutes_by_radionuclide={"F-18": 120.0},
+            calibrated_eob_activity_mbq_by_radionuclide={"F-18": 6_000.0},
+        ),
+        conventional=_conventional_pathway(),
+        mrt=_mrt_pathway(),
+        planner_assumptions=replace(_planner_assumptions(), default_clinical_administration_cohorts_per_day=1),
+        shared_network_assumptions=SharedNetworkAssumptions(),
+        day_type="typical",
+        seed=20260912,
+        operating_day_minutes=1080.0,
+        batch_target_patients_per_batch=20,
+    )
+    result = run_native_decision_pipeline(request)
+
+    for pathway_result in (result.conventional, result.mrt):
+        decay = pathway_result.decay_summary
+        production = pathway_result.operational_result.production_clinical_result
+        expected_total = float(decay.total_required_activity_at_eob_mbq_by_isotope["F-18"])
+        by_cycle: dict[int, float] = {}
+        for trace in decay.patient_traces:
+            by_cycle[trace.batch_id] = by_cycle.get(trace.batch_id, 0.0) + float(trace.required_upstream_activity_for_prescribed_mbq)
+        assert math.isclose(sum(by_cycle.values()), expected_total, rel_tol=0.0, abs_tol=1e-6)
+
+        batch_map = {mapping.batch_id: mapping for mapping in production.batch_release_mappings}
+        per_cycle_cap = request.cyclotron_capability.calibrated_eob_activity_mbq_by_radionuclide["F-18"]
+        for batch_id, required_cycle_eob in by_cycle.items():
+            if batch_id in batch_map:
+                assert required_cycle_eob <= per_cycle_cap + 1e-6
+
+
+def test_requirement_derived_unsupported_radionuclide_raises_explicit_failure() -> None:
+    request = NativeDecisionPipelineScenario(
+        project_name="Unsupported Isotope",
+        target_patients_per_day=10,
+        radionuclide_mix={"C-11": 1.0},
+        activity_distribution_by_radionuclide={
+            "C-11": ActivityDemandModel("fixed", fixed_activity_mbq=200.0),
+        },
+        cyclotron_capability=CyclotronProductionCapability(
+            cyclotron_id="F18-ONLY",
+            supported_radionuclides=("F-18",),
+            max_simultaneous_production_streams=1,
+            production_cycle_minutes_by_radionuclide={"F-18": 30.0},
+        ),
+        conventional=_conventional_pathway(),
+        mrt=_mrt_pathway(),
+        planner_assumptions=_planner_assumptions(),
+        shared_network_assumptions=SharedNetworkAssumptions(),
+        day_type="typical",
+        seed=20260904,
+        operating_day_minutes=1080.0,
+        batch_target_patients_per_batch=20,
+    )
+    with pytest.raises(ValueError, match="RADIONUCLIDE_NOT_SUPPORTED_BY_INSTALLED_FLEET"):
+        run_native_decision_pipeline(request)
+
+
+def test_requirement_derived_multi_radionuclide_production_is_separate_by_isotope() -> None:
+    request = NativeDecisionPipelineScenario(
+        project_name="Multi Isotope Requirement",
+        target_patients_per_day=40,
+        radionuclide_mix={"F-18": 0.5, "C-11": 0.5},
+        activity_distribution_by_radionuclide={
+            "F-18": ActivityDemandModel("fixed", fixed_activity_mbq=200.0),
+            "C-11": ActivityDemandModel("fixed", fixed_activity_mbq=220.0),
+        },
+        cyclotron_capability=CyclotronProductionCapability(
+            cyclotron_id="DUAL",
+            supported_radionuclides=("F-18", "C-11"),
+            max_simultaneous_production_streams=2,
+            production_cycle_minutes_by_radionuclide={"F-18": 30.0, "C-11": 20.0},
+            calibrated_eob_activity_mbq_by_radionuclide={"F-18": 10_000.0, "C-11": 6_000.0},
+            simultaneously_compatible_radionuclide_sets=(frozenset({"F-18", "C-11"}),),
+        ),
+        conventional=_conventional_pathway(),
+        mrt=_mrt_pathway(),
+        planner_assumptions=replace(_planner_assumptions(), default_clinical_administration_cohorts_per_day=1),
+        shared_network_assumptions=SharedNetworkAssumptions(),
+        day_type="typical",
+        seed=20260905,
+        operating_day_minutes=1080.0,
+        production_start_time_minutes=500.0,
+        batch_target_patients_per_batch=20,
+    )
+    result = run_native_decision_pipeline(request)
+    isotopes = {batch.radionuclide for batch in result.demand_result.batch_demands}
+    assert isotopes == {"F-18", "C-11"}
+    assert result.demand_result.requested_batch_count_by_radionuclide["F-18"] > 0
+    assert result.demand_result.requested_batch_count_by_radionuclide["C-11"] > 0
+
+
+def test_requirement_derived_explicit_daily_capacity_limits_feasible_throughput() -> None:
+    base = NativeDecisionPipelineScenario(
+        project_name="Explicit Capacity",
+        target_patients_per_day=30,
+        radionuclide_mix={"F-18": 1.0},
+        activity_distribution_by_radionuclide={
+            "F-18": ActivityDemandModel("fixed", fixed_activity_mbq=300.0),
+        },
+        cyclotron_capability=CyclotronProductionCapability(
+            cyclotron_id="F18-CAP",
+            supported_radionuclides=("F-18",),
+            max_simultaneous_production_streams=1,
+            production_cycle_minutes_by_radionuclide={"F-18": 30.0},
+            calibrated_eob_activity_mbq_by_radionuclide={"F-18": 20_000.0},
+            site_eob_capacity_mbq_per_day=3_000.0,
+        ),
+        conventional=_conventional_pathway(),
+        mrt=_mrt_pathway(),
+        planner_assumptions=replace(_planner_assumptions(), default_clinical_administration_cohorts_per_day=1),
+        shared_network_assumptions=SharedNetworkAssumptions(),
+        day_type="typical",
+        seed=20260906,
+        operating_day_minutes=1080.0,
+        batch_target_patients_per_batch=20,
+    )
+    constrained = run_native_decision_pipeline(base)
+    unconstrained = run_native_decision_pipeline(
+        replace(
+            base,
+            cyclotron_capability=replace(base.cyclotron_capability, site_eob_capacity_mbq_per_day=300_000.0),
+        )
+    )
+    assert constrained.conventional.operational_result.primary_unmet_demand_cause == "PRODUCTION_ACTIVITY_CAPACITY"
+    assert unconstrained.conventional.operational_result.patients_completed >= constrained.conventional.operational_result.patients_completed
+
+
+def test_pathway_fairness_uses_same_patient_demand_and_can_differ_in_upstream_activity_due_to_timing() -> None:
+    result = run_native_decision_pipeline(_request())
+    assert result.conventional.operational_result.demand_result is result.mrt.operational_result.demand_result
+    assert result.conventional.decay_summary.total_prescribed_activity_mbq_by_isotope == result.mrt.decay_summary.total_prescribed_activity_mbq_by_isotope
+    any_difference = any(
+        not math.isclose(
+            result.conventional.decay_summary.total_required_activity_at_eob_mbq_by_isotope[iso],
+            result.mrt.decay_summary.total_required_activity_at_eob_mbq_by_isotope[iso],
+            rel_tol=0.0,
+            abs_tol=1e-9,
+        )
+        for iso in result.conventional.decay_summary.total_required_activity_at_eob_mbq_by_isotope
+    )
+    assert any_difference

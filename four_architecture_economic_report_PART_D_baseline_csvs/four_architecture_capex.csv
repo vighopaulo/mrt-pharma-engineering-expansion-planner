@@ -1,0 +1,10 @@
+CapEx Component,MANUAL_CONVENTIONAL,AUTOMATED_CONVENTIONAL,MRT,HYBRID
+transport_equipment,0.0,N/A,N/A,N/A
+cyclotron_capex,3000000.0,3000000.0,3000000.0,3000000.0
+production_equipment_capex,2000000.0,2000000.0,2000000.0,2000000.0
+agv_fleet_capex,N/A,450000.0,N/A,N/A
+pts_network_capex,N/A,345000.0,N/A,N/A
+carrier_hardware_fleet_capex,N/A,N/A,11000.0,11000.0
+room_endpoint_capex,N/A,N/A,170000.0,170000.0
+guideway_capex,N/A,N/A,0.0,0.0
+controls_installation_capex,N/A,N/A,0.0,0.0

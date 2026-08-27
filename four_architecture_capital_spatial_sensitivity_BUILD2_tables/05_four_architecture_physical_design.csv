@@ -1,0 +1,15 @@
+Metric,Manual Conventional,Automated Conventional,MRT (Dominant),Hybrid (zone-level),Authority/Notes
+Active buildings,1,1,1,1,Whole-oncology single-building benchmark (zone-level)
+Active floors,8,8,8,8,all floors in scope
+Clinical rooms (nuclear),n/a (see nuclear detail),n/a,n/a,n/a,resolved internally by evaluate_hybrid_zone_candidate
+Injection/uptake resources,shared,shared,shared,shared,"candidate.injection_resources/uptake_resources, fixed at 6/12 (whole-oncology _nuclear_result)"
+Scanners,6,6,6,6,_nuclear_result HybridZoneCandidate(scanners=6)
+Manual/CLUSTER porter FTE,33.00,34.00,0.00 (MRT_DOMINANT),61.00,compute_porter_resource_requirement
+Automation/MRT support FTE,0.00,0.30,3.00,3.00,"AGV/PTS residual_supervision_fte (Automated); MRT support labor ledger row (MRT/Hybrid, Build 2 binding)"
+"MRT carriers (nuclear, full-MRT case)",0,0,2,"n/a (partial coverage, see hybrid detail)",hybrid_optimization adaptive carrier search
+"MRT horizontal guideway (m, full-MRT case)",0.0,0.0,90.0,n/a,compute_inbound_room_guideway_extension
+"MRT vertical guideway (m, full-MRT case)",0.0,0.0,24.0,n/a,compute_inbound_room_guideway_extension
+MRT transitions (full-MRT case),0,0,12,n/a,compute_inbound_room_guideway_extension
+New study CapEx (transport+general logistics),0.00,"270,000.00","31,300,000.00","27,430,000.00",combined_capex / general logistics capex
+Nuclear total CapEx,"20,575,000.00","20,575,000.00","31,300,000.00","27,430,000.00",_nuclear_result.total_capex
+Nuclear qualified completed (patients/day),19,19,19,19,retention-qualified completed count

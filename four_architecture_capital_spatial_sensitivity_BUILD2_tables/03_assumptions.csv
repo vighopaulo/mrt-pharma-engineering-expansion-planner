@@ -1,0 +1,37 @@
+Category,Assumption,Value,Unit,Architecture Applicability,Provenance,Confidence/Status
+Project,project mode,Whole-Oncology controlled benchmark (build_common_project_baseline),-,All four,CONTROLLED_ENGINEERING_ASSUMPTION,high
+Project,development context (per-arch evaluated),RETROFIT,-,All four,caller-supplied,high
+Geometry,floor_count,8,floors,All four (zone-level),spatial_benchmark.build_benchmark_geometry,CALIBRATED (synthetic)
+Geometry,rooms_per_floor,10,rooms,All four (zone-level),spatial_benchmark.build_benchmark_geometry,CALIBRATED (synthetic)
+Geometry,"campus separation (Building A-B, default)",500.0,m,Building-level Hybrid campus,campus_retrofit_benchmark.CAMPUS_SEPARATION_M (now resolvable from canonical geometry via Build 2),CONTROLLED_ENGINEERING_ASSUMPTION
+Demand,inpatients,170,patients,All four,oncology_pet_spect_scenario,CALIBRATED (synthetic population)
+Demand,total patients (incl. outpatient),230,patients,All four,oncology_pet_spect_scenario,CALIBRATED (synthetic population)
+Radionuclide,radionuclide,F-18,-,All four,campus_retrofit_benchmark.RADIONUCLIDE / production_basis,CALIBRATED
+Retention,minimum_release_to_administration_retention_fraction,0.9,fraction,All four,PlannerAssumptions,CONTROLLED_ENGINEERING_ASSUMPTION
+Operating,operating_days_per_year,300,days/yr,All four,PlannerAssumptions,CONTROLLED_ENGINEERING_ASSUMPTION
+Operating,operating_hours_per_day,18.0,hours,All four,PlannerAssumptions,CONTROLLED_ENGINEERING_ASSUMPTION
+Manual transport,loaded_hand_carry_speed_m_per_s,1.1,m/s,"Manual, Automated (CLUSTER + last-mile)",conventional_transport_authority.PorterOperatingPolicy,CONTROLLED_ENGINEERING_ASSUMPTION
+Manual transport,elevator_wait_minutes,2.0,min/transition,"Manual, Automated",PorterOperatingPolicy,CONTROLLED_ENGINEERING_ASSUMPTION
+Manual transport,base_wage_per_hour,17.0,USD/hr,"Manual, Automated (residual labor)",PorterOperatingPolicy,CONTROLLED_ENGINEERING_ASSUMPTION
+Manual transport,loaded_employer_cost_multiplier,1.3,x,"Manual, Automated",PorterOperatingPolicy,CONTROLLED_ENGINEERING_ASSUMPTION
+AGV,payload_capacity_kg,150.0,kg,Automated Conventional,DEFAULT_AGV_MODEL,CONTROLLED_ENGINEERING_ASSUMPTION (~$100k vehicle evidence point + generic integration/maint/energy)
+AGV,vehicle_capex + system_integration_capex,"150,000.0",USD/unit,Automated Conventional,DEFAULT_AGV_MODEL,PARTIAL_EVIDENCE
+PTS,station_capex_per_unit,"45,000.0",USD/station,Automated Conventional,DEFAULT_PTS_NETWORK,CONTROLLED_ENGINEERING_ASSUMPTION
+PTS,capsule_payload_kg,2.0,kg,Automated Conventional,DEFAULT_PTS_NETWORK,CONTROLLED_ENGINEERING_ASSUMPTION
+Automated Conventional,AUTOMATED_CONVENTIONAL_CLUSTER_MAX_VERTICAL_TRANSITIONS,1,vertical transitions,Automated Conventional,conventional_transport_authority (Build 1),"DISCLOSED_POLICY_THRESHOLD, not arbitrary floor count"
+Automated Conventional,LANDING_POINT_LAST_MILE_DISTANCE_M,15.0,m,Automated Conventional,conventional_transport_authority (Build 1),CONTROLLED_ENGINEERING_ASSUMPTION
+MRT,mrt_horizontal_speed_m_per_s,3.0,m/s,"MRT, Hybrid",PlannerAssumptions,CONTROLLED_ENGINEERING_ASSUMPTION
+MRT,mrt_vertical_speed_m_per_s,1.5,m/s,"MRT, Hybrid",PlannerAssumptions,CONTROLLED_ENGINEERING_ASSUMPTION
+MRT,mrt_transition_time_seconds,8.0,s,"MRT, Hybrid",PlannerAssumptions,CONTROLLED_ENGINEERING_ASSUMPTION
+MRT,mrt_carrier_capex_per_installed_unit,"10,000.0",USD/carrier,"MRT, Hybrid",PlannerAssumptions,CONTROLLED_ENGINEERING_ASSUMPTION
+MRT,mrt_guideway_capex_per_m,"5,000.0",USD/m,"MRT, Hybrid",PlannerAssumptions,CONTROLLED_ENGINEERING_ASSUMPTION
+MRT,mrt_support_staff_fte,3.0,FTE,"MRT, Hybrid",spatial_benchmark._build_request,"CONTROLLED_ENGINEERING_ASSUMPTION (fixed, not carrier-count-scaled)"
+MRT,mrt_support_staff_loaded_cost_per_fte,"105,000.0",USD/FTE-yr,"MRT, Hybrid",spatial_benchmark._build_request,CONTROLLED_ENGINEERING_ASSUMPTION
+Economics,discount_rate_pct,8.0 (whole-oncology) / 10.0 (campus benchmark),%,All four,PlannerAssumptions / SharedNetworkAssumptions,CONTROLLED_ENGINEERING_ASSUMPTION
+Economics,analysis_years,10,years,All four,PlannerAssumptions,CONTROLLED_ENGINEERING_ASSUMPTION
+Economics,revenue_per_scan,2000.0 (whole-oncology) / 300.0 (campus benchmark),USD,All four,PlannerAssumptions / SharedNetworkAssumptions,CONTROLLED_ENGINEERING_ASSUMPTION
+Economics,inpatient_episode_value,CONTROLLED_ONCOLOGY_INPATIENT_EPISODE_VALUE_2026,USD/episode,Whole-oncology revenue,patient_economics.py,PARTIAL_EVIDENCE (prior session research phase)
+Production,cyclotron_purchase_capex + installation,"5,000,000.0",USD,All four (shared),PlannerAssumptions,CONTROLLED_ENGINEERING_ASSUMPTION
+NOT_CALIBRATED,cyclotron_eob_capacity_mbq_per_day,None (NOT_CALIBRATED),MBq/day,All four,PlannerAssumptions,NOT_CALIBRATED -- never converted to zero
+NOT_CALIBRATED,generator_purchase_capex / installation / maintenance,None (NOT_CALIBRATED),USD,SPECT-related,PlannerAssumptions,NOT_CALIBRATED -- never converted to zero
+NOT_CALIBRATED,spect_scanner_capex / incremental_opex,None (NOT_CALIBRATED),USD,SPECT-related,PlannerAssumptions,NOT_CALIBRATED -- never converted to zero

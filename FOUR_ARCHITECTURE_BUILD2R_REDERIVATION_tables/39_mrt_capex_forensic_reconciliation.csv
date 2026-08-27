@@ -1,0 +1,9 @@
+Component,Old Build-2 Value,Correct Authority,Quantity,Unit Cost,Correct Cost
+Scanner/injection/uptake (shared/common),included in $31.3M undisclosed,PlannerAssumptions.scanner_capex/additional_room_capex,6/6/12,$2.5M/$25k/$25k,"$15,450,000"
+Cyclotron (shared/common),"included, undisclosed",PlannerAssumptions.cyclotron_purchase/installation_capex,1,-,"$5,000,000"
+MRT base infrastructure,"included, undisclosed",PlannerAssumptions.mrt_infrastructure_capex,1,"$6,000,000","$6,000,000"
+Vertical transitions (dominant driver),"included, undisclosed",SharedNetworkAssumptions.vertical_transition_capex,12,"$350,000","$4,200,000"
+Guideway length,"included, undisclosed",PlannerAssumptions.mrt_guideway_capex_per_m,114.0m,"$5,000/m","$570,000"
+MRT endpoints,"$60,000 assumed",PlannerAssumptions.endpoint_capex,~6 rooms,"$10,000/endpoint","~$60,000"
+"MRT carriers (homogeneous, no hardware-class split)","$20,000",PlannerAssumptions.mrt_carrier_capex_per_installed_unit,2,"$10,000","$20,000"
+TOTAL,"$31,300,000 (reported without decomposition)",sum of above,-,-,"$31,300,000"

@@ -1,0 +1,26 @@
+{
+  "artifact_filename": "mrt_pharma_yc_demo.usda",
+  "engineering_time_unit": "MINUTES",
+  "entity_count": 4,
+  "entity_ids": [
+    "MRT-CARRIER-001",
+    "PATIENT-001",
+    "PORTER-001",
+    "RGHT-VEH-001"
+  ],
+  "mission_ids": [
+    "M-YC-MRT",
+    "M-YC-PATIENT",
+    "M-YC-PORTER",
+    "M-YC-RGHT"
+  ],
+  "scene_end_time_minutes": 2.698277361506749,
+  "scene_id": "YC-DEMO-DAY-1",
+  "scene_start_time_minutes": 0.0,
+  "stage_units": {
+    "metersPerUnit": 1.0,
+    "upAxis": "Z"
+  },
+  "usd_frames_per_second": 24.0,
+  "usd_time_codes_per_second": 1.0
+}

@@ -1,0 +1,6 @@
+Labor/Resource,Manual Conventional,Automated Conventional,MRT (Dominant),Hybrid (zone-level),Calculation,Provenance
+CLUSTER/Manual porter FTE,33.00,34.00,0.00,61.00,compute_porter_resource_requirement (sweep-line peak concurrency + workload hours),"Build 1, unchanged authority"
+Automation/MRT support FTE,0.00,0.30,3.00,3.00,AGV residual_supervision_fte + PTS residual_labor_fte (Automated); MRT support labor ledger row (MRT/Hybrid),Automated: Build 1; MRT/Hybrid: Build 2 binding fix (was dead arithmetic)
+Last-mile residual manual labor (Automated only),n/a,included in porter_fte above (CLUSTER + last-mile combined),n/a,n/a,compute_porter_resource_requirement with last-mile timing,Build 1 CLUSTER+DISTRIBUTION closure
+Clinical labor (injection/uptake/scanner),shared across all 4 (nuclear side),shared,shared,shared,radiopharm_workflow_staffing.compute_radiopharm_workflow_staffing (real joint-schedule-derived),"hybrid_optimization, unchanged"
+Unresolved staffing quantities,none flagged,none flagged,none flagged (Build 2 closed the dead-code gap),none flagged,-,-

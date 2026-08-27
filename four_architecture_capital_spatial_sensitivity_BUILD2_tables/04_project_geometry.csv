@@ -1,0 +1,8 @@
+Object,Building,Floor,Local Coordinate,Global Coordinate,Orientation,Geometry Source,Status
+CAMPUS-BLDG-A,CAMPUS-BLDG-A,-,"(0,0,0)","(0.0, 0.0, 0.0)",0 deg,build_default_campus_canonical_registry (Build 2),CALIBRATED (synthetic benchmark)
+CAMPUS-BLDG-B (default),CAMPUS-BLDG-B,-,"(500,0,0) rel. to facility","(500.0, 0.0, 0.0)",0 deg,build_default_campus_canonical_registry (Build 2),CALIBRATED (synthetic benchmark)
+"CAMPUS-BLDG-B (translated, sensitivity test)",CAMPUS-BLDG-B,-,"(800,0,0) rel. to facility","(800.0, 0.0, 0.0)",0 deg,spatial sensitivity What-If (Build 2),CONTROLLED_TEST_TRANSFORM
+"CAMPUS-BLDG-B (rotated 90deg, sensitivity test)",CAMPUS-BLDG-B,-,"(500,0,0) rel. to facility","(500.0, 0.0, 0.0)",90 deg (Z),spatial sensitivity What-If (Build 2),CONTROLLED_TEST_TRANSFORM -- origin invariant under rotation about itself
+ROOM-X (before relocation),BLDG-1,F3,"(12.0, 8.0, 0.0)","(12.0, 8.0, 0.0)",0 deg,controlled room-relocation test registry (Build 2),CONTROLLED_TEST_TRANSFORM
+ROOM-X (after relocation),BLDG-1,F3,"(48.0, 8.0, 0.0)","(48.0, 8.0, 0.0)",0 deg,controlled room-relocation test registry (Build 2),CONTROLLED_TEST_TRANSFORM
+Whole-oncology zone-level benchmark,single building,8 floors,spatial_benchmark.BenchmarkGeometry (per-room coordinates),"n/a (zone-level, not canonical-registry-backed in this build)",n/a,spatial_benchmark.build_benchmark_geometry,"CALIBRATED (synthetic benchmark, unchanged from Build 1)"

@@ -1,0 +1,9 @@
+floor,sample_room,horizontal_m,vertical_m,distance_m,manual_minutes,retained_fraction,retention_pass,geometrically_reachable,retention_feasible,active,reason
+1,F1-R01,23.0,4.0,27.0,2.8861,0.9819,True,True,True,True,"PASS: retention-feasible, economically selected (no CapEx ceiling configured)"
+2,F2-R01,23.0,8.0,31.0,2.9528,0.9815,True,True,True,True,"PASS: retention-feasible, economically selected (no CapEx ceiling configured)"
+3,F3-R01,23.0,12.0,35.0,3.0194,0.9811,True,True,True,True,"PASS: retention-feasible, economically selected (no CapEx ceiling configured)"
+4,F4-R01,23.0,16.0,39.0,3.0861,0.9807,True,True,True,True,"PASS: retention-feasible, economically selected (no CapEx ceiling configured)"
+5,F5-R01,23.0,20.0,43.0,3.1528,0.9803,True,True,True,True,"PASS: retention-feasible, economically selected (no CapEx ceiling configured)"
+6,F6-R01,23.0,24.0,47.0,3.2194,0.9799,True,True,True,True,"PASS: retention-feasible, economically selected (no CapEx ceiling configured)"
+7,F7-R01,23.0,28.0,51.0,3.2861,0.9795,True,True,True,True,"PASS: retention-feasible, economically selected (no CapEx ceiling configured)"
+8,F8-R01,23.0,32.0,55.0,3.3528,0.9791,True,True,True,True,"PASS: retention-feasible, economically selected (no CapEx ceiling configured)"

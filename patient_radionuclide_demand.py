@@ -3,9 +3,11 @@ from __future__ import annotations
 from collections import OrderedDict
 from dataclasses import dataclass
 from functools import lru_cache
-from typing import Mapping
+from typing import Literal, Mapping
 
 from diagnostics import load_radionuclide_half_lives
+
+ClinicalResourceMode = Literal["OUTPATIENT_SHARED", "INBOUND_CENTRALIZED", "INBOUND_INTEGRATED"]
 
 
 @lru_cache(maxsize=1)
@@ -51,11 +53,18 @@ class PatientRadionuclideDemand:
     patient_id: str
     radionuclide: str
     prescribed_activity_mbq: float
+    clinical_resource_mode: ClinicalResourceMode = "OUTPATIENT_SHARED"
+    inbound_room_id: str | None = None
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "patient_id", _validate_patient_identity(self.patient_id))
         object.__setattr__(self, "radionuclide", _validate_radionuclide(self.radionuclide))
         object.__setattr__(self, "prescribed_activity_mbq", _validate_activity(self.prescribed_activity_mbq))
+        requires_room = self.clinical_resource_mode in ("INBOUND_CENTRALIZED", "INBOUND_INTEGRATED")
+        if requires_room and not self.inbound_room_id:
+            raise ValueError(f"{self.clinical_resource_mode} requires inbound_room_id")
+        if not requires_room and self.inbound_room_id is not None:
+            raise ValueError("OUTPATIENT_SHARED must not carry an inbound_room_id (section 43/68)")
 
 
 @dataclass(frozen=True)

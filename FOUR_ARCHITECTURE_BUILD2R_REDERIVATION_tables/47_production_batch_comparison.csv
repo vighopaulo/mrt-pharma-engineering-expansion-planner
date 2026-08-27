@@ -1,0 +1,5 @@
+architecture,cyclotron_id,manufacturer,model,radionuclide,patients_requiring_radionuclide,administered_activity_mbq,required_eob_activity_mbq,batches_per_day,patients_per_batch,release_processing_minutes,avg_release_to_admin_minutes,capacity_utilization_status
+MANUAL_CONVENTIONAL,CY-001,GE HealthCare,PETtrace 890,F-18,19,370.0,377.31,9,2.11,71.0,3.1,"NOT_CALIBRATED (fleet_capacity_status=CALIBRATED_PER_CYCLE_ONLY, no explicit site daily capacity)"
+AUTOMATED_CONVENTIONAL,CY-001,GE HealthCare,PETtrace 890,F-18,19,370.0,377.31,9,2.11,71.0,3.1,"NOT_CALIBRATED (fleet_capacity_status=CALIBRATED_PER_CYCLE_ONLY, no explicit site daily capacity)"
+MRT_DOMINANT,CY-001,GE HealthCare,PETtrace 890,F-18,19,370.0,376.99,9,2.11,71.0,2.97,"NOT_CALIBRATED (fleet_capacity_status=CALIBRATED_PER_CYCLE_ONLY, no explicit site daily capacity)"
+HYBRID_MRT,CY-001,GE HealthCare,PETtrace 890,F-18,19,370.0,375.46,9,2.11,71.0,2.32,"NOT_CALIBRATED (fleet_capacity_status=CALIBRATED_PER_CYCLE_ONLY, no explicit site daily capacity)"

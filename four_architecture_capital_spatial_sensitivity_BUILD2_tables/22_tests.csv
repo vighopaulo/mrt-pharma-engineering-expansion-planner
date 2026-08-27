@@ -1,0 +1,6 @@
+Test Group,Tests Run,Passed,Failed,Deselected,Runtime,Result/Notes
+Focused: canonical global position closure,17,17,0,0,0.31s,test_canonical_global_position_closure.py -- translation/rotation/identity/scanner-causal-separation
+Focused: conventional route spatial sensitivity,7,7,0,0,n/a (fast),test_conventional_route_spatial_sensitivity.py -- Manual/Automated Conventional route-length sensitivity
+Focused: whole-oncology four-architecture optimization,48,48,0,0,2.86s,test_whole_oncology_four_architecture_optimization.py -- includes campus canonical geometry + dead-code binding tests
+Directly affected regression (14 files),682,682,0,0,36.39s,"spatial authority, campus benchmark, patient identity, MRT multistream, conventional transport, live engineering impact binding, etc."
+Full repository regression,2361,2361,0,3 (known pre-existing),2368.25s (0:39:28),Zero new failures from Build 2; captured from terminal completion notification (no log file redirection used)

@@ -1,0 +1,24 @@
+metric,manual_conventional,automated_conventional,mrt_dominant,hybrid_mrt
+active_floors,8,8,8,8
+active_rooms,80,80,80,80
+served_demands_general,680,680,680,680
+unserved_demands_general,0,0,0,0
+qualified_nuclear_patients,19,19,19,19
+worker_hours_per_day_manual_zone,16.0,16.0,,16.0
+porter_fte,33.0,34.0,0.0,21.0
+automation_or_mrt_fte,0.0,0.30000000000000004,3.0,3.0
+agv_fleet_size,0,1,0,0
+pts_station_count,0,1,0,0
+nuclear_mrt_carriers,0,0,4,3
+general_light_mrt_carriers,0,0,51,
+mrt_guideway_h_m,0.0,0.0,198.0,165.0
+mrt_guideway_v_m,0.0,0.0,24.0,24.0
+mrt_transitions,0,0,12,10
+mrt_ordinary_endpoints,0,0,6,
+cyclotron_linked_vestibules,0,0,1,1
+batches_per_day,9,9,9,9
+required_eob_activity_mbq_avg,377.31,377.31,376.99,375.46
+new_study_capex,0.0,270000.0,31941000.0,31171000.0
+annual_opex,1750320.0,1826272.0,5074930.0,6262320.0
+lifecycle_cost_10yr,11744789.674195182,12524433.776607584,65994193.393929884,73191676.94621897
+primary_constraint,"labor-intensive, 0 CapEx",AGV/PTS CapEx + residual labor,highest CapEx (guideway/transitions/vestibule),lowest lifecycle cost of the 4

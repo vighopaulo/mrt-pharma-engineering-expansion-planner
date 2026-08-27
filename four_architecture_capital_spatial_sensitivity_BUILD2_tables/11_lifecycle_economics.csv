@@ -1,0 +1,7 @@
+Metric,Manual Conventional,Automated Conventional,MRT (Dominant),Hybrid (zone-level),Calibration Status,Notes
+New study CapEx,0.00,"270,000.00","31,300,000.00","27,430,000.00",CALIBRATED,-
+Annual OPEX (known),"1,750,320.00","1,826,272.00","5,058,730.00","8,502,570.00",CALIBRATED,-
+Lifecycle cost (present value of costs),"11,744,789.67","12,524,433.78","65,244,490.08","84,482,936.80",CALIBRATED,apply_study_scope operating_horizon_present_value (negated)
+Cost-only ranking (lower is better),1st (lowest),2nd,3rd,4th (highest),"CALIBRATED, NOT FORCED","Ranking emerges from real computed lifecycle_cost, no architecture is forced to win"
+ROI,ROI_NOT_AUTHORIZED_OR_NOT_CALIBRATED,ROI_NOT_AUTHORIZED_OR_NOT_CALIBRATED,ROI_NOT_AUTHORIZED_OR_NOT_CALIBRATED,ROI_NOT_AUTHORIZED_OR_NOT_CALIBRATED,NOT_CALIBRATED,No authoritative ROI formula found in the repository for this comparison; NPV/payback are used instead where applicable (campus benchmark)
+Break-even,not computed at this evaluator level,not computed,not computed,not computed,NOT_CALIBRATED (this level),campus benchmark level (chart 18) has NPV via lifecycle_economics.evaluate_lifecycle_economics
