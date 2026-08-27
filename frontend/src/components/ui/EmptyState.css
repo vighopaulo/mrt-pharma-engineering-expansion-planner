@@ -1,0 +1,32 @@
+.empty-state {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    justify-content: center;
+    gap: var(--space-2);
+    max-width: 480px;
+    margin: auto;
+    text-align: left;
+    padding: var(--space-6);
+}
+
+.empty-state__title {
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--color-text-secondary);
+}
+
+.empty-state__description {
+    font-size: 13px;
+    color: var(--color-text-tertiary);
+    line-height: 1.6;
+}
+
+.empty-state__footnote {
+    font-size: 11px;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+    color: var(--color-text-tertiary);
+    margin-top: var(--space-2);
+}

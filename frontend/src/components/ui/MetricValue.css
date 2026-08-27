@@ -1,0 +1,35 @@
+.metric-value {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-1);
+    min-width: 0;
+}
+
+.metric-value__label {
+    font-size: 11px;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--color-text-tertiary);
+}
+
+.metric-value__value {
+    font-size: 18px;
+    font-weight: 600;
+    color: var(--color-text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.metric-value__value--not-connected {
+    font-size: 13px;
+    font-weight: 400;
+    font-style: italic;
+    color: var(--color-text-tertiary);
+}
+
+.metric-value__unit {
+    font-size: 12px;
+    font-weight: 400;
+    color: var(--color-text-secondary);
+}

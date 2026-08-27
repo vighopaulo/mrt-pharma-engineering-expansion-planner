@@ -1,0 +1,25 @@
+.section-heading {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+}
+
+.section-heading__eyebrow {
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--brand-red);
+}
+
+.section-heading__title {
+    font-size: 22px;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    color: var(--color-text-primary);
+}
+
+.section-heading__description {
+    font-size: 13px;
+    color: var(--color-text-secondary);
+    max-width: 640px;
+}

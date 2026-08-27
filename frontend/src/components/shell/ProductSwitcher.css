@@ -1,0 +1,28 @@
+.product-switcher {
+    display: inline-flex;
+    gap: var(--space-1);
+    padding: 3px;
+    background: var(--color-surface-sunken);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+}
+
+.product-switcher__item {
+    padding: var(--space-2) var(--space-5);
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--color-text-secondary);
+    border-radius: var(--radius-sm);
+    transition: background-color var(--transition-fast), color var(--transition-fast);
+}
+
+.product-switcher__item:hover {
+    color: var(--color-text-primary);
+}
+
+.product-switcher__item--active {
+    background: var(--color-surface-raised);
+    color: var(--color-text-primary);
+    border: 1px solid var(--brand-red-border);
+    box-shadow: inset 2px 0 0 var(--brand-red);
+}

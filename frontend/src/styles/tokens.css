@@ -1,0 +1,66 @@
+/* MRT Pharma design foundation — tokens.
+   Precise, calm, engineered. Restraint over ornament. */
+
+:root {
+    /* Surfaces */
+    --color-bg: #101214;
+    --color-surface: #16181b;
+    --color-surface-raised: #1c1f22;
+    --color-surface-sunken: #0c0d0f;
+
+    /* Borders */
+    --color-border: #2a2d31;
+    --color-border-subtle: #212327;
+    --color-border-strong: #3a3e43;
+
+    /* Text */
+    --color-text-primary: #edeef0;
+    --color-text-secondary: #9aa0a6;
+    --color-text-tertiary: #6b7075;
+    --color-text-on-accent: #ffffff;
+
+    /* MRT Pharma brand red — the ONE principal accent. Used sparingly:
+       active product/nav selection, primary actions, focus, emphasis.
+       Never floods large surfaces (section 3). */
+    --brand-red: #c4122f;
+    --brand-red-hover: #e0233f;
+    --brand-red-soft: rgba(196, 18, 47, 0.14);
+    --brand-red-border: rgba(196, 18, 47, 0.5);
+
+    /* Centralized surface/text aliases (section 5 naming) */
+    --surface-black: var(--color-bg);
+    --surface-graphite: var(--color-surface);
+    --surface-elevated: var(--color-surface-raised);
+    --text-primary: var(--color-text-primary);
+    --text-secondary: var(--color-text-secondary);
+    --text-muted: var(--color-text-tertiary);
+
+    /* Status -- semantic engineering state, deliberately distinct from brand
+       red so an alarm is never mistaken for brand emphasis (section 10). */
+    --color-status-feasible: #4caf7d;
+    --color-status-warning: #d9a441;
+    --color-status-violated: #c1554a;
+    --color-status-neutral: #6b7075;
+
+    /* Typography */
+    --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Helvetica, Arial, sans-serif;
+    --font-mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, monospace;
+
+    /* Spacing scale */
+    --space-1: 4px;
+    --space-2: 8px;
+    --space-3: 12px;
+    --space-4: 16px;
+    --space-5: 24px;
+    --space-6: 32px;
+    --space-7: 48px;
+    --space-8: 64px;
+
+    /* Radius */
+    --radius-sm: 3px;
+    --radius-md: 6px;
+
+    /* Motion */
+    --transition-fast: 120ms cubic-bezier(0.2, 0, 0, 1);
+    --transition-medium: 200ms cubic-bezier(0.2, 0, 0, 1);
+}
