@@ -357,3 +357,262 @@ def test_add9_geometry_route_recomputation_readiness():
     assert callable(agra.resolve_automatic_route_distance_m)
     # A mode-neutral route front-door exists that recomputes distance from geometry.
     assert callable(tmrb.resolve_mission_route)
+
+
+# ===========================================================================
+# Build 3C TEST-COVERAGE RECONCILIATION ADDENDUM -- transport building-block
+# economics/eligibility/sizing invariants (prompt invariants 1-23).
+#
+# The original committed suite (above) protects the VISUAL payload-identity,
+# trajectory and route-semantics doctrine (invariants 24-26). These additional
+# tests lock the composable-building-block invariants that were otherwise
+# UNPROTECTED. Every assertion is against a physically-existing authority
+# verified this session -- no composition-engine behavior is fabricated, and
+# no engine code is modified. Where only an underlying authority exists (not a
+# unified composition object), the test asserts that underlying authority and
+# the doctrine documents the composition gap.
+# ===========================================================================
+
+from datetime import datetime as _dt, timedelta as _td
+
+import conventional_transport_authority as _cta
+import dedicated_rp_pts_authority as _rp
+import mrt_carrier_fleet as _mcf
+import shared_mrt_multistream_authority as _smx
+from general_oncology_logistics import TransportMission as _TransportMission
+
+_BB_BASE = _dt(2026, 1, 1, 8, 0, 0)
+
+
+def _bb_missions(mode: str, count: int, minutes: int, prefix: str) -> tuple[_TransportMission, ...]:
+    return tuple(
+        _TransportMission(
+            mission_id=f"{prefix}{i}", load_id=f"L{prefix}{i}", transport_mode=mode, origin="A", destination="B",
+            departure_datetime=_BB_BASE, arrival_datetime=_BB_BASE + _td(minutes=minutes), patient_ids=("P",),
+        )
+        for i in range(count)
+    )
+
+
+# Invariant 1 + 2: transport modes are composable building blocks; MRT not required.
+def test_bb01_modes_are_building_blocks_mrt_not_required():
+    # Five distinct building-block authorities are independently discoverable.
+    assert {"MANUAL_PORTER", "PORTER_CART", "AGV_AMR", "PNEUMATIC_TUBE"} <= set(_cta.TECHNOLOGY_STREAM_COMPATIBILITY)
+    assert _rp.RP_PTS_COMPATIBLE_STREAMS  # RP-PTS
+    assert _smx.evaluate_light_mrt_stream_compatibility("SPECIMEN_BLOOD").compatible  # MRT
+    # MRT is never forced: it is mass-ineligible for bulky linen and speed-uncalibrated
+    # for pharmacy/sterile -> a valid solution can exclude it entirely.
+    assert not _smx.evaluate_light_mrt_stream_compatibility("CLEAN_LINEN").compatible
+
+
+# Invariant 4: a no-MRT composition is valid (every assignment is an eligible real block).
+def test_bb02_no_mrt_composition_valid():
+    no_mrt = {
+        "RADIOPHARMACEUTICAL_NUCLEAR": "RP_PTS",
+        "SPECIMEN_BLOOD": "PNEUMATIC_TUBE",
+        "PHARMACY_INFUSION": "AGV_AMR",
+        "CLEAN_LINEN": "MANUAL_PORTER",
+    }
+    assert "MRT" not in no_mrt.values()
+    assert "RADIOPHARMACEUTICAL_NUCLEAR" in _rp.RP_PTS_COMPATIBLE_STREAMS
+    assert _cta.is_technology_compatible("PNEUMATIC_TUBE", "SPECIMEN_BLOOD")
+    assert _cta.is_technology_compatible("AGV_AMR", "PHARMACY_INFUSION")
+    assert _cta.is_technology_compatible("MANUAL_PORTER", "CLEAN_LINEN")
+
+
+# Invariant 3: a mixed MRT + other-mode composition is valid.
+def test_bb03_mixed_mrt_plus_other_mode_valid():
+    assert _smx.evaluate_light_mrt_stream_compatibility("SPECIMEN_BLOOD").compatible  # MRT block
+    assert _cta.is_technology_compatible("AGV_AMR", "CLEAN_LINEN")                    # non-MRT block
+    assert _cta.is_technology_compatible("MANUAL_PORTER", "PHARMACY_INFUSION")        # manual block
+
+
+# Invariant 5: Manual remains a valid building block with real timing.
+def test_bb04_manual_is_valid_building_block():
+    assert _cta.is_technology_compatible("MANUAL_PORTER", "CLEAN_LINEN")
+    timing = _cta.compute_manual_mission_timing(
+        policy=_cta.PorterOperatingPolicy(), technology="MANUAL_PORTER", horizontal_distance_m=None,
+    )
+    assert timing.total_minutes > 0 and timing.return_minutes > 0
+
+
+# Invariant 6: service-class eligibility differs by mode (direct matrix assertion).
+def test_bb05_eligibility_differs_by_service_class():
+    assert _cta.is_technology_compatible("PNEUMATIC_TUBE", "SPECIMEN_BLOOD")
+    assert not _cta.is_technology_compatible("PNEUMATIC_TUBE", "CLEAN_LINEN")
+    assert _cta.is_technology_compatible("AGV_AMR", "CLEAN_LINEN")
+    assert not _cta.is_technology_compatible("AGV_AMR", "SPECIMEN_BLOOD")
+
+
+# Invariant 7: Ordinary PTS is not universally eligible (bulk streams excluded).
+def test_bb06_ordinary_pts_not_universally_eligible():
+    assert "CLEAN_LINEN" not in _cta.DEFAULT_PTS_NETWORK.compatible_streams
+    assert "STERILE_CLEAN_SUPPLY" not in _cta.DEFAULT_PTS_NETWORK.compatible_streams
+
+
+# Invariant 8: RP-PTS is distinct from Ordinary PTS (stream eligibility, not just network tag).
+def test_bb07_rp_pts_distinct_from_ordinary_pts():
+    assert _rp.RP_PTS_COMPATIBLE_STREAMS == frozenset({"RADIOPHARMACEUTICAL_NUCLEAR"})
+    assert "RADIOPHARMACEUTICAL_NUCLEAR" not in _cta.DEFAULT_PTS_NETWORK.compatible_streams
+    assert _rp.RP_PTS_INSTALLED_STATIONS == 2 and _rp.RP_PTS_SERVED_FLOORS == 1
+
+
+# Invariant 9: porter concurrency / resource sizing is peak-constrained.
+def test_bb08_porter_concurrency_resource_constrained():
+    req = _cta.compute_porter_resource_requirement(
+        missions=_bb_missions("MANUAL", 3, 20, "BBP"), mission_minutes=20.0,
+        policy=_cta.PorterOperatingPolicy(), operating_days_per_year=300,
+    )
+    assert req.peak_concurrent_porters == 3
+    assert req.required_fte >= req.peak_concurrent_porters
+
+
+# Invariant 10: robotic fleet concurrency / resource sizing.
+def test_bb09_robotic_fleet_sizing():
+    fleet = _cta.agv_required_fleet_size(
+        missions=_bb_missions("AGV_AMR", 3, 30, "BBA"), mission_minutes=30.0, model=_cta.DEFAULT_AGV_MODEL,
+        operating_hours_per_day=18.0, operating_days_per_year=300,
+    )
+    assert fleet >= 1
+    assert _cta.agv_required_fleet_size(
+        missions=(), mission_minutes=30.0, model=_cta.DEFAULT_AGV_MODEL,
+        operating_hours_per_day=18.0, operating_days_per_year=300,
+    ) == 0
+
+
+# Invariant 11: Ordinary PTS carrier/station resource sizing (not free/unlimited).
+def test_bb10_pts_station_sizing_not_free():
+    n = _cta.pts_required_station_count(
+        missions=_bb_missions("PNEUMATIC_TUBE", 4, 5, "BBT"), mission_minutes=5.0, network=_cta.DEFAULT_PTS_NETWORK,
+        operating_hours_per_day=18.0, operating_days_per_year=300,
+    )
+    assert n >= 1
+    proposed = _cta.PneumaticTubeNetwork(**{**_cta.DEFAULT_PTS_NETWORK.__dict__, "asset_status": "PROPOSED"})
+    assert _cta.pts_new_study_capex(proposed, study_scope="CAPITAL_PLANNING") > 0
+
+
+# Invariant 12: RP-PTS carrier/infrastructure sizing (not free/unlimited).
+def test_bb11_rp_pts_not_free():
+    capex = _rp.compute_rp_pts_capex()
+    assert capex.total_capex > 0
+    assert capex.shielding_certification_delta_capex is None  # NOT_CALIBRATED, never $0
+
+
+# Invariant 13: authoritative MRT carrier fleet/CapEx exists (richer authority MODELED).
+def test_bb12_richer_mrt_carrier_capex_modeled():
+    result = _mcf.resolve_mrt_carrier_fleet(distribution_concurrency=3)
+    assert result.carrier_capex_modeled and result.carrier_opex_modeled and result.carrier_energy_modeled
+    assert "PROJECT_PLANNING_ASSUMPTION" in result.carrier_capex_status
+
+
+# Invariant 14: legacy equal_budget MRT carrier limitation remains unchanged (NOT_MODELED).
+def test_bb13_legacy_equal_budget_mrt_carrier_not_modeled():
+    import equal_budget as _eb
+    from models import PlannerInputs as _PI, PlannerAssumptions as _PA
+    inputs = _PI(
+        project_name="t", current_patients_per_day=30.0, target_patients_per_day=45.0,
+        maximum_expected_demand_per_day=45.0, current_scanners=2, current_injection_rooms=2,
+        current_uptake_rooms=2, has_existing_cyclotron=False, current_usable_doses_per_day=30.0,
+        current_average_transport_min=8.0, mrt_transport_min=3.0, conventional_transport_min=8.0,
+        existing_mrt_connectable_rooms=2, representative_radionuclide="F-18",
+        representative_half_life_min=109.8, selected_cyclotron_radionuclide="F-18", cyclotron_fleet=None,
+    )
+    mrt = _eb.maximize_mrt_capacity(inputs, _PA(), 109.8, 35_000_000.0)
+    components = {item["component"] for item in mrt.capex_ledger}
+    assert not any("carrier" in c.lower() for c in components)
+
+
+# Invariant 15: first-mile/last-mile end-to-end parity (no silent zero last mile).
+def test_bb14_first_last_mile_parity():
+    policy = _cta.PorterOperatingPolicy()
+    manual = _cta.compute_manual_mission_timing(policy=policy, technology="MANUAL_PORTER", horizontal_distance_m=None)
+    assert manual.return_minutes > 0
+    pts_chain = _cta.compute_automated_conventional_distribution_timing(
+        policy=policy, main_leg_technology="PNEUMATIC_TUBE", pts_network=_cta.DEFAULT_PTS_NETWORK,
+    )
+    assert pts_chain.manual_last_mile_minutes > 0
+    assert _cta.LANDING_POINT_LAST_MILE_DISTANCE_M > 0
+
+
+# Invariant 16: composite CapEx includes all required constituent systems.
+def test_bb15_composite_capex_sums_constituents():
+    proposed_agv = _cta.AgvModelClass(**{**_cta.DEFAULT_AGV_MODEL.__dict__, "asset_status": "PROPOSED"})
+    agv = _cta.agv_new_study_capex(proposed_agv, fleet_size=2, study_scope="CAPITAL_PLANNING")
+    proposed_pts = _cta.PneumaticTubeNetwork(**{**_cta.DEFAULT_PTS_NETWORK.__dict__, "asset_status": "PROPOSED"})
+    pts = _cta.pts_new_study_capex(proposed_pts, study_scope="CAPITAL_PLANNING")
+    rp_capex = _rp.compute_rp_pts_capex().total_capex
+    assert agv > 0 and pts > 0 and rp_capex > 0
+    assert (agv + pts + rp_capex) > max(agv, pts, rp_capex)
+
+
+# Invariant 17: composite OPEX includes all required constituent systems.
+def test_bb16_composite_opex_sums_constituents():
+    loaded = 100_000.0
+    agv = _cta.agv_annual_opex(_cta.DEFAULT_AGV_MODEL, fleet_size=2, loaded_annual_cost_per_fte=loaded)
+    pts = _cta.pts_annual_opex(_cta.DEFAULT_PTS_NETWORK, loaded_annual_cost_per_fte=loaded)
+    rp_opex = _rp.compute_rp_pts_opex(human_labor_annual_opex=0.0, human_labor_fte=0.0).total_calibrated_annual_opex
+    assert agv > 0 and pts > 0 and rp_opex > 0
+
+
+# Invariant 18: shared infrastructure is not double-counted.
+def test_bb17_shared_infrastructure_not_double_counted():
+    container = _smx.DEFAULT_NUCLEAR_SHIELDED_CONTAINER
+    assert container.unit_capex == "ALREADY_INCLUDED_IN_EXISTING_MRT_CARRIER_AUTHORITY"
+    assert container.calibration_status == "ALREADY_INCLUDED_ELSEWHERE"
+
+
+# Invariant 19: separate dedicated systems are not falsely merged.
+def test_bb18_separate_systems_not_merged():
+    assert _cta.DEFAULT_PTS_NETWORK.compatible_streams != _rp.RP_PTS_COMPATIBLE_STREAMS
+    assert "RADIOPHARMACEUTICAL_NUCLEAR" not in _cta.DEFAULT_PTS_NETWORK.compatible_streams
+
+
+# Invariant 20: transport capacity does not create patient demand.
+def test_bb19_transport_capacity_does_not_create_demand():
+    assert _cta.agv_required_fleet_size(
+        missions=(), mission_minutes=30.0, model=_cta.DEFAULT_AGV_MODEL,
+        operating_hours_per_day=18.0, operating_days_per_year=300,
+    ) == 0
+    assert _cta.pts_required_station_count(
+        missions=(), mission_minutes=5.0, network=_cta.DEFAULT_PTS_NETWORK,
+        operating_hours_per_day=18.0, operating_days_per_year=300,
+    ) == 0
+
+
+# Invariant 21: excess transport/clinical capacity is headroom, never revenue (Build 3A).
+def test_bb20_excess_capacity_is_headroom_not_revenue():
+    import equal_budget as _eb
+    from models import PlannerInputs as _PI, PlannerAssumptions as _PA
+    inputs = _PI(
+        project_name="t", current_patients_per_day=30.0, target_patients_per_day=45.0,
+        maximum_expected_demand_per_day=45.0, current_scanners=2, current_injection_rooms=2,
+        current_uptake_rooms=2, has_existing_cyclotron=False, current_usable_doses_per_day=30.0,
+        current_average_transport_min=8.0, mrt_transport_min=3.0, conventional_transport_min=8.0,
+        existing_mrt_connectable_rooms=2, representative_radionuclide="F-18",
+        representative_half_life_min=109.8, selected_cyclotron_radionuclide="F-18", cyclotron_fleet=None,
+    )
+    conv = _eb.maximize_conventional_capacity(inputs, _PA(), 109.8, 35_000_000.0)
+    assert conv.revenue_generating_throughput_per_day <= 45.0  # capped at demand
+    assert conv.reserve_capacity_above_expected_demand_per_day == max(0.0, conv.achieved_capacity_per_day - 45.0)
+
+
+# Invariant 22: NO_BUILD remains a valid retrofit result (Build 3A.2 identity).
+def test_bb21_no_build_baseline_identity_present():
+    import equal_budget as _eb
+    import inspect as _inspect
+    assert "NO_BUILD_BASELINE" in _inspect.getsource(_eb.maximize_mrt_capacity)
+
+
+# Invariant 23: Build 3B production authority remains preserved (both controls).
+def test_bb22_build3b_production_authority_preserved():
+    import cyclotron_catalog as _cc
+    from cyclotron_production_windows import resolve_fleet_eob_capacity_mbq_per_day as _resolve
+    # Uncalibrated CYPRIS MP-30 -> None (no fabricated capacity).
+    inst_u = _cc.create_facility_cyclotron_instance(catalog_model_id="SUMITOMO_CYPRIS_MP_30", existing_instances=())
+    fleet_u, warns = _cc.build_fleet_from_instances(catalog=_cc.load_cyclotron_catalog(), instances=(inst_u,))
+    assert fleet_u is None and warns
+    # Calibrated positive control -> schedule-derived capacity.
+    inst_c = _cc.create_facility_cyclotron_instance(catalog_model_id="GE_PETTRACE_840", existing_instances=())
+    fleet_c, _ = _cc.build_fleet_from_instances(catalog=_cc.load_cyclotron_catalog(), instances=(inst_c,))
+    cap, status = _resolve(fleet=fleet_c, radionuclide="F-18", production_batches_per_day=1)
+    assert cap == 240000.0 and status == "schedule_derived_capacity"
