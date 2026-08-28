@@ -249,18 +249,45 @@ Canonical direction (production does NOT generate patient demand):
   trace records `batch_id` but the physical batch is scheduled independently by
   cyclotron capacity/windows). Physical batch count is never fabricated.
 
-### 2.9 Future Cyclotron Production Estimation Authority
+### 2.9 Cyclotron Production Estimation Authority
 
-- **Authority Type:** C (PLANNED_REQUIREMENT). **Implementation Status:**
-  PLANNED — **does not exist in the repository.**
-- **Intended future role:** numerical engineering estimates for a
-  model × radionuclide combination that is SUPPORTED but whose manufacturer/site
-  output is NOT_CALIBRATED. Future evidence hierarchy: `SITE_CALIBRATED` >
+- **Canonical Authority:** numerical cyclotron production-estimation layer.
+- **Primary File:** `cyclotron_production_estimation_authority.py`.
+- **Primary Symbols:** `estimate_cyclotron_production`,
+  `CyclotronProductionEstimate`, `estimate_required_physical_cycles`,
+  `CyclotronBatchCycleEstimate`, `resolve_simulation_production_basis`,
+  `stronger_basis`; `EvidenceClass`, `EstimationStatus`, `ConfidenceClass`.
+- **Primary Tests:** `test_cyclotron_production_estimation_authority.py`
+  (37 tests: 30 invariants + control proofs A–F + unknown-model raise).
+- **Documentation:** `CYCLOTRON_PRODUCTION_ESTIMATION_AUTHORITY.md`.
+- **Authority Type:** B (IMPLEMENTED_REPOSITORY_AUTHORITY).
+- **Implementation Status:** IMPLEMENTED (estimation layer). Sits BETWEEN Build
+  3B production evidence and downstream batch/capacity planning; creates no
+  second catalog / radionuclide authority / capacity resolver.
+- **Evidence hierarchy (runtime precedence):** `SITE_CALIBRATED` >
   `MANUFACTURER_CALIBRATED` > `MODELED_ESTIMATE` > `CONTROLLED_ASSUMPTION` >
-  `NOT_AVAILABLE`. Today, SUPPORTED-but-uncalibrated returns NOT_CALIBRATED;
-  there is no `MODELED_ESTIMATE` authority. **Do NOT mark MODELED_ESTIMATE as
-  implemented.**
-- **Open-Gap Ref:** OG-CYC-1.
+  `NOT_AVAILABLE`. The result preserves BOTH the evidence status AND the
+  numerical value; `MODELED_ESTIMATE` never overwrites calibration status.
+- **Methodology:** the sole modeled relationship is the saturation activation
+  form `A_EOB = K·I·(1−exp(−λt))` (reused from
+  `cyclotron_catalog.calculate_eob_activity_from_calibrated_record`), with `K`
+  fit from the pair's OWN manufacturer-calibrated anchor — never borrowed across
+  models or radionuclides. Radionuclide-specific throughout; no patient identity;
+  no legacy 10% production blocks; no usable-doses fallback; no revenue.
+- **Doctrine preserved:** SUPPORTED ≠ CALIBRATED ≠ NUMERICALLY ESTIMABLE.
+  `SUMITOMO_CYPRIS_MP_30` + F-18 = SUPPORTED / NOT_CALIBRATED / estimation
+  NOT_AVAILABLE (no GE PETtrace 890 / 648000 MBq borrowing). Tc-99m and other
+  generator daughters = `OUT_OF_CYCLOTRON_SCOPE`.
+- **Part 3D integration:** additive `RadionuclideProductionGate.
+  simulation_production_basis` (default `UNRESOLVED`) records the modeled basis
+  for a SUPPORTED-but-NOT_CALIBRATED installed model **without** changing the
+  `PRODUCTION_NOT_CALIBRATED` evidence verdict.
+- **Known Limitations:** many pairs remain `NOT_AVAILABLE` for lack of physical
+  evidence; no `SITE_CALIBRATED` cyclotron record and no approved
+  `CONTROLLED_ASSUMPTION` currently exist; Cu-64/Zr-89/I-123/I-124 lack canonical
+  half-life physics.
+- **Open-Gap Ref:** OG-CYC-1 (now PARTIAL — authority exists; remaining
+  model × radionuclide evidence gaps documented).
 
 ### 2.10 Generator authority
 

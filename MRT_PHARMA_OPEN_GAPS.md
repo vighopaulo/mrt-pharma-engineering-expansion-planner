@@ -77,15 +77,38 @@ authority each gap references.
 
 ## Cyclotron / production
 
-### OG-CYC-1 — Cyclotron Production Estimation Authority — PLANNED
-- **Today:** a model × radionuclide pair that is SUPPORTED but whose
-  manufacturer/site output is not calibrated returns `NOT_CALIBRATED` (e.g.
-  `SUMITOMO_CYPRIS_MP_30` + F-18). There is **no** authority that produces a
-  numerical `MODELED_ESTIMATE`.
-- **Closed would require:** a future estimation authority with the evidence
-  hierarchy `SITE_CALIBRATED > MANUFACTURER_CALIBRATED > MODELED_ESTIMATE >
-  CONTROLLED_ASSUMPTION > NOT_AVAILABLE`. **Do not mark MODELED_ESTIMATE as
-  implemented until such an authority physically exists.**
+### OG-CYC-1 — Cyclotron Production Estimation Authority — PARTIAL (authority now exists)
+- **Today:** the Cyclotron Production Estimation Authority physically exists
+  (`cyclotron_production_estimation_authority.py`, focused test
+  `test_cyclotron_production_estimation_authority.py`, doc
+  `CYCLOTRON_PRODUCTION_ESTIMATION_AUTHORITY.md`). It implements the full
+  evidence hierarchy `SITE_CALIBRATED > MANUFACTURER_CALIBRATED >
+  MODELED_ESTIMATE > CONTROLLED_ASSUMPTION > NOT_AVAILABLE` and produces a
+  defensible numerical `MODELED_ESTIMATE` **only** as an irradiation-time
+  response `A_EOB = K·I·(1−exp(−λt))` with `K` fit from the pair's OWN
+  manufacturer-calibrated anchor (never borrowed). It is radionuclide-specific,
+  accepts no patient identity, and reuses the Build 3B catalog + normalization.
+  `SUMITOMO_CYPRIS_MP_30` + F-18 remains `SUPPORTED = YES`,
+  `CALIBRATION_STATUS = NOT_CALIBRATED`, `ESTIMATION_STATUS = NOT_AVAILABLE`
+  (no beam-current anchor; no GE PETtrace borrowing). The Part 3D per-radionuclide
+  gate exposes an additive `simulation_production_basis` that never alters the
+  `PRODUCTION_NOT_CALIBRATED` evidence verdict.
+- **Still open (why PARTIAL):** many catalog pairs cannot yet produce a numerical
+  estimate for lack of physical evidence — CYPRIS MP-30/HM-12/HM-20 (no beam
+  current), GE PETtrace 800 (null-yield records), IBA IKON/30XP (empty records),
+  IBA KIUBE irradiation-time response (no published beam current), Siemens
+  Eclipse HP / RDS-111, ACSI TR-19/TR-24, BEST 14p (no calibrated EOB anchor),
+  and Cu-64/Zr-89/I-123/I-124 on any model (absent from the canonical half-life
+  table). Site-calibrated production performance records and additional
+  manufacturer EOB evidence are not yet present.
+- **Closed would require:** manufacturer/site production evidence (beam current +
+  irradiation time + normalized EOB, or an explicitly-approved
+  `CONTROLLED_ASSUMPTION`) for the remaining pairs, and canonical half-life
+  physics for Cu-64/Zr-89/I-123/I-124. **Do not mark a pair as modeled unless a
+  defensible estimator can actually be constructed from physical evidence.**
+- **Generator boundary preserved:** cyclotron estimation never absorbs the
+  generator pathway (Tc-99m → `OUT_OF_CYCLOTRON_SCOPE`); Ge-68/Ga-68 generator
+  remains `NOT_MODELED` (OG-GEN-1).
 
 ### OG-SYNTH-1 — Synthetic-patient source-capability constraint — PLANNED / PARTIAL
 - **Today:** the CAPITAL PROJECT synthetic patient generator produces radionuclide

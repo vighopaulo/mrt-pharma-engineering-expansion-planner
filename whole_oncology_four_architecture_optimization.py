@@ -1244,6 +1244,15 @@ class RadionuclideProductionGate:
     capacity_status: str
     required_eob_activity_mbq_per_day: float | None
     installed_eob_capacity_mbq_per_day: float | None
+    simulation_production_basis: str = "UNRESOLVED"
+    """Cyclotron Production Estimation Authority seam (OG-CYC-1). The runtime
+    production basis a simulation may use for a SUPPORTED-but-NOT_CALIBRATED
+    cyclotron pair, resolved via `cyclotron_production_estimation_authority`.
+    One of SITE_CALIBRATED / MANUFACTURER_CALIBRATED / MODELED_ESTIMATE /
+    CONTROLLED_ASSUMPTION / NOT_AVAILABLE, or the additive default `UNRESOLVED`
+    (calibrated/generator/no-source gates leave it UNRESOLVED). Populating this
+    NEVER changes `status`/`capacity_status`: PRODUCTION_NOT_CALIBRATED remains
+    an evidence statement even when a MODELED_ESTIMATE numerical basis exists."""
 
 
 def _resolve_radionuclide_production_gate(
@@ -1360,10 +1369,31 @@ def _resolve_radionuclide_production_gate(
                     supporting_models.append(model)
             if supporting_models:
                 identity = "/".join(sorted(m.model for m in supporting_models))
+                # Cyclotron Production Estimation Authority seam (Sections 20/41):
+                # a SUPPORTED-but-NOT_CALIBRATED installed model still resolves its
+                # OWN simulation production basis (MODELED_ESTIMATE where a defensible
+                # estimator exists, else NOT_AVAILABLE). This NEVER changes the
+                # calibration evidence verdict below -- status stays
+                # PRODUCTION_NOT_CALIBRATED (Section 41). CYPRIS MP-30 + F-18 has no
+                # anchor -> NOT_AVAILABLE (never borrows GE PETtrace capacity).
+                sim_basis = "NOT_AVAILABLE"
+                try:
+                    import cyclotron_production_estimation_authority as _cpea
+                    resolved = "NOT_AVAILABLE"
+                    for model_id in installed_cyclotron_model_ids:
+                        try:
+                            candidate = _cpea.resolve_simulation_production_basis(model_id, radionuclide)
+                        except Exception:
+                            continue
+                        resolved = _cpea.stronger_basis(resolved, candidate)
+                    sim_basis = resolved
+                except Exception:
+                    sim_basis = "NOT_AVAILABLE"
                 return RadionuclideProductionGate(
                     radionuclide=radionuclide, source_type="CYCLOTRON", source_identity=identity,
                     status="PRODUCTION_NOT_CALIBRATED", capacity_status="not_calibrated",
                     required_eob_activity_mbq_per_day=required_eob, installed_eob_capacity_mbq_per_day=None,
+                    simulation_production_basis=sim_basis,
                 )
 
     # 3. Generator path (distinct source; catalog daughter radionuclide match).

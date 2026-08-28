@@ -345,19 +345,25 @@ def test_authority_first_no_duplicate_rule_appears(corpus):
 # PLANNED requirements must remain PLANNED
 # --------------------------------------------------------------------------
 
-def test_cyclotron_production_estimation_authority_is_planned(corpus):
-    # The future estimation authority must be named and remain PLANNED, and the
-    # docs must explicitly prohibit claiming MODELED_ESTIMATE as implemented.
+def test_cyclotron_production_estimation_authority_is_implemented(corpus):
+    # The estimation authority now physically exists (OG-CYC-1 closure). The docs
+    # must name it, its canonical file, and preserve the evidence-honesty doctrine
+    # that a MODELED_ESTIMATE is distinct from calibrated evidence and that the
+    # CYPRIS MP-30 + F-18 control stays NOT_CALIBRATED.
     _assert_in(corpus, "Cyclotron Production Estimation Authority")
-    _assert_in(corpus, "PLANNED")
+    _assert_in(corpus, "cyclotron_production_estimation_authority.py")
     _assert_any(
         corpus,
         [
-            "do not mark MODELED_ESTIMATE as implemented",
-            "never mark MODELED_ESTIMATE as implemented",
-            "do NOT mark MODELED_ESTIMATE as implemented",
+            "MODELED_ESTIMATE != MANUFACTURER_CALIBRATED",
+            "MODELED_ESTIMATE ≠ MANUFACTURER_CALIBRATED",
+            "MODELED_ESTIMATE never overwrites",
+            "MODELED_ESTIMATE never changes calibration status",
         ],
     )
+    # OG-CYC-1 remains PARTIAL (authority exists; evidence gaps remain), never
+    # silently promoted to fully closed.
+    _assert_in(corpus, "OG-CYC-1")
 
 
 def test_part_3e_composition_optimizer_is_planned(corpus):

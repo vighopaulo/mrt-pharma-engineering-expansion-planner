@@ -28,7 +28,8 @@ This document changes **no** production-engine behavior.
 | Build 3C coverage closure | `85b10a7` | (same 3C doc) | `test_build3c_transport_authority.py` | 45 |
 | Build 3C.1 | `95040d5` | `SPATIAL_ROUTE_NETWORK_AUTHORITY_BUILD_3C1.md` | `test_build3c1_spatial_route_authority.py` | 34 |
 | Part 3D | `07e861d` | `PHYSICAL_FEASIBILITY_AUTHORITY_PART_3D.md` | `test_part3d_physical_feasibility_closure.py` | 46 |
-| Authority Consolidation | uncommitted (current working tree) | this ledger + INDEX/DOCTRINE/PRODUCT/INTEGRATION/OPEN_GAPS | `test_mrt_pharma_authority_index.py` | (this build) |
+| Authority Consolidation | `b8e759e` | this ledger + INDEX/DOCTRINE/PRODUCT/INTEGRATION/OPEN_GAPS | `test_mrt_pharma_authority_index.py` | (governance) |
+| Cyclotron Production Estimation | uncommitted (current working tree) | `CYCLOTRON_PRODUCTION_ESTIMATION_AUTHORITY.md` | `test_cyclotron_production_estimation_authority.py` | 37 |
 
 > **Note on test counts:** the count is the number of test functions physically
 > present in the file. It is a recoverable structural measure, not a re-run pass
@@ -162,14 +163,13 @@ This document changes **no** production-engine behavior.
 - **SUPERSEDES / SUPERSEDED BY:** supersedes the hardcoded `feasible=True` in the
   four canonical evaluators; not superseded.
 
-## 8. Authority Consolidation — current uncommitted build
+## 8. Authority Consolidation — governance / traceability layer
 
-- **BUILD:** MRT Pharma Authority Consolidation (this build).
+- **BUILD:** MRT Pharma Authority Consolidation.
 - **PURPOSE:** governance / traceability layer — a master authority index, product
   doctrine, integration architecture, this build ledger, open-gaps register,
   governance doctrine, and governance tests. **No engine behavior change.**
-- **COMMIT SHA:** uncommitted (current working tree; not committed per
-  instructions).
+- **COMMIT SHA:** `b8e759e`.
 - **DOCUMENTATION:** `MRT_PHARMA_AUTHORITY_INDEX.md`,
   `MRT_PHARMA_PRODUCT_DOCTRINE.md`, `MRT_PHARMA_INTEGRATION_ARCHITECTURE.md`,
   `MRT_PHARMA_BUILD_LEDGER.md`, `MRT_PHARMA_OPEN_GAPS.md`,
@@ -185,7 +185,42 @@ This document changes **no** production-engine behavior.
   Optimizer remain PLANNED.
 - **SUPERSEDES / SUPERSEDED BY:** supersedes nothing (additive governance layer).
 
+## 9. Cyclotron Production Estimation — current uncommitted build
+
+- **BUILD:** Cyclotron Production Estimation Authority (OG-CYC-1 closure/refinement).
+- **PURPOSE:** create the explicit numerical estimation layer for cyclotron
+  model × radionuclide production where manufacturer/site output is
+  NOT_CALIBRATED — distinguishing SUPPORTED vs CALIBRATED vs NUMERICALLY
+  ESTIMABLE, with the evidence hierarchy `SITE_CALIBRATED >
+  MANUFACTURER_CALIBRATED > MODELED_ESTIMATE > CONTROLLED_ASSUMPTION >
+  NOT_AVAILABLE`. Reuses Build 3B catalog/normalization + generator daughter set
+  + canonical half-lives; no second catalog/resolver.
+- **COMMIT SHA:** uncommitted (current working tree; not committed per
+  instructions).
+- **DOCUMENTATION:** `CYCLOTRON_PRODUCTION_ESTIMATION_AUTHORITY.md`.
+- **FOCUSED TEST:** `test_cyclotron_production_estimation_authority.py`.
+- **TEST EVIDENCE:** 37 `def test_` functions (30 invariants + control proofs
+  A–F + unknown-model raise).
+- **FILES:** new `cyclotron_production_estimation_authority.py`; narrow additive
+  seam in `whole_oncology_four_architecture_optimization.py`
+  (`RadionuclideProductionGate.simulation_production_basis`, default
+  `UNRESOLVED`); new doc + test; governance updates (this ledger, INDEX §2.9,
+  OPEN_GAPS OG-CYC-1).
+- **MAJOR AUTHORITY ESTABLISHED:** `estimate_cyclotron_production`,
+  `CyclotronProductionEstimate`, `estimate_required_physical_cycles`,
+  `resolve_simulation_production_basis`, `stronger_basis`; the saturation
+  irradiation-time response `A_EOB = K·I·(1−exp(−λt))` with K fit from the pair's
+  own manufacturer-calibrated anchor (never borrowed); MODELED_ESTIMATE never
+  changes calibration status; CYPRIS MP-30 + F-18 = SUPPORTED / NOT_CALIBRATED /
+  estimation NOT_AVAILABLE; generator daughters OUT_OF_CYCLOTRON_SCOPE.
+- **KNOWN CARRIED-FORWARD GAPS:** OG-CYC-1 now PARTIAL (remaining
+  model × radionuclide evidence gaps); OG-GEN-1 (Ge-68/Ga-68 generator) unchanged;
+  OG-SYNTH-1 unchanged (randomizer untouched).
+- **SUPERSEDES / SUPERSEDED BY:** builds on Build 3B + Part 3D; supersedes the
+  §2.9 PLANNED placeholder in the authority index; not superseded.
+
 ---
 
 *This ledger is a governance / traceability artifact reconstructed from physical
-git history. It introduces no production-engine behavior.*
+git history. It introduces no production-engine behavior beyond the additive
+estimation authority and its narrow Part 3D seam recorded above.*
