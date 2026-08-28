@@ -35,7 +35,7 @@ from typing import Literal, Mapping, Sequence
 
 from models import SharedNetworkAssumptions
 from spatial_benchmark import build_benchmark_geometry, build_production_basis, _base_assumptions, compute_retention_envelope, _route_metrics_for_rooms
-from multi_isotope_decay import retained_fraction
+from multi_isotope_decay import retained_fraction, required_upstream_activity
 from diagnostics import load_radionuclide_half_lives
 from hybrid_optimization import HybridZoneCandidate, HybridEvaluationResult, evaluate_hybrid_zone_candidate
 
@@ -123,6 +123,7 @@ from dedicated_rp_pts_authority import (
     RP_PTS_SERVED_FLOORS,
     RP_PTS_SHIELDING_STATUS,
     compute_rp_pts_mission_cycle,
+    RpPtsMissionCycle,
     compute_rp_pts_capex,
     compute_rp_pts_opex,
     compute_rp_pts_labor,
@@ -463,6 +464,62 @@ class ArchitectureResult:
     pts_opex_component: float = 0.0
     """Automated Conventional only: PTS network maintenance/energy OPEX
     sub-component (0.0 for the other three)."""
+
+    # ---------------------------------------------------------------------
+    # Part 3D physical-feasibility closure (additive, default-safe). These
+    # fields expose the derived physical gates so `feasible` is no longer an
+    # unconditional literal. Defaults reproduce the pre-3D benchmark posture
+    # for any legacy caller that does not populate them.
+    # ---------------------------------------------------------------------
+    physical_feasibility_status: str = "NOT_EVALUATED"
+    """Part 3D: one of FEASIBLE / INFEASIBLE /
+    FEASIBLE_WITH_UNCALIBRATED_PRODUCTION_CAPACITY / NOT_FULLY_QUALIFIED /
+    NOT_EVALUATED. Derived from the physical gates below, never hardcoded."""
+    qualification_status: str = "NOT_EVALUATED"
+    """Part 3D: QUALIFIED / QUALIFIED_WITH_LIMITATIONS / NOT_QUALIFIED /
+    NOT_EVALUATED -- mirrors qualify_architecture but derived from physical gates."""
+    binding_physical_constraint: str = "none"
+    """Part 3D: the binding CALIBRATED physical constraint
+    (scanner/injection/uptake/transport/production) or 'none'. Never set to
+    'production' merely because production capacity is NOT_CALIBRATED."""
+    # Scanner gate
+    scanner_available: int = 0
+    scanner_peak_occupancy: int = 0
+    scanner_feasible: bool = True
+    scanner_resource_source: str = "NOT_EVALUATED"
+    # Injection gate
+    injection_available: int = 0
+    injection_peak_occupancy: int = 0
+    injection_feasible: bool = True
+    injection_resource_source: str = "NOT_EVALUATED"
+    # Uptake gate
+    uptake_available: int = 0
+    uptake_peak_occupancy: int = 0
+    uptake_feasible: bool = True
+    uptake_resource_source: str = "NOT_EVALUATED"
+    # Transport gate (peak occupancy vs available where an authority exists)
+    transport_feasible: bool = True
+    transport_gate_status: str = "NOT_EVALUATED"
+    # Production gate (Build 3B authority): required vs installed EOB, with
+    # NOT_CALIBRATED preserved (never zero, never automatic INFEASIBLE).
+    production_gate_status: str = "NOT_EVALUATED"
+    """Part 3D: PRODUCTION_SUFFICIENT / PRODUCTION_INSUFFICIENT /
+    PRODUCTION_NOT_CALIBRATED / NOT_EVALUATED (Build 3B production authority)."""
+    production_capacity_status: str = "not_calibrated"
+    required_eob_activity_mbq_per_day: float | None = None
+    installed_eob_capacity_mbq_per_day: float | None = None
+    unqualified_physical_constraints: tuple[str, ...] = ()
+    """Part 3D: constraints that could not be qualified (e.g. production
+    NOT_CALIBRATED) -- kept distinct from the binding CALIBRATED constraint."""
+    transport_mode_gates: tuple["TransportModeGate", ...] = ()
+    """Part 3D final transport closure (Section 10): the per-mode transport
+    component gates (MANUAL/RGHT/ORDINARY_PTS/RP_PTS/MRT) that produced
+    `transport_gate_status`, preserved so the aggregate transport verdict is
+    explainable and never a single universal scalar."""
+    per_radionuclide_production_gates: tuple["RadionuclideProductionGate", ...] = ()
+    """Part 3D (Section 11/22): the per-radionuclide production breakdown that
+    produced `production_gate_status`, propagated so the architecture verdict is
+    never a single collapsed radionuclide verdict."""
 
 
 @dataclass(frozen=True)
@@ -926,7 +983,39 @@ def resolve_nuclear_floor_envelopes(
     return mrt_classification, conv_classification
 
 
-def _nuclear_result(baseline: WholeOncologyBaseline, *, mrt_floors: frozenset[int], demand: int | None = None) -> HybridEvaluationResult:
+# Part 3D: the historical controlled benchmark clinical-resource counts, made
+# EXPLICIT (previously buried inline literals in _nuclear_result). Benchmark
+# mode is preserved exactly (6/6/12) but is now an auditable named authority,
+# never silently treated as customer facility truth.
+BENCHMARK_SCANNERS: int = 6
+BENCHMARK_INJECTION_RESOURCES: int = 6
+BENCHMARK_UPTAKE_RESOURCES: int = 12
+
+
+@dataclass(frozen=True)
+class ClinicalResourceInputs:
+    """Part 3D clinical-resource input authority (Section 5-6). Explicit
+    scanner/injection/uptake counts plus their provenance. When counts are
+    omitted the controlled 6/6/12 benchmark is used with
+    resource_source=CONTROLLED_BENCHMARK -- never a hidden default."""
+
+    scanners: int = BENCHMARK_SCANNERS
+    injection_resources: int = BENCHMARK_INJECTION_RESOURCES
+    uptake_resources: int = BENCHMARK_UPTAKE_RESOURCES
+    resource_source: Literal["PROJECT_SUPPLIED", "FACILITY_DERIVED", "CONTROLLED_BENCHMARK"] = "CONTROLLED_BENCHMARK"
+
+
+BENCHMARK_CLINICAL_RESOURCES = ClinicalResourceInputs()
+"""The explicit controlled 6/6/12 benchmark, resource_source=CONTROLLED_BENCHMARK."""
+
+
+def _nuclear_result(
+    baseline: WholeOncologyBaseline,
+    *,
+    mrt_floors: frozenset[int],
+    demand: int | None = None,
+    clinical_resources: ClinicalResourceInputs | None = None,
+) -> HybridEvaluationResult:
     """Section 38/94: ONE nuclear evaluation authority for all 4
     architectures -- MRT floor coverage is the only thing that varies.
     Returns a result whose `patient_traces` carry validated
@@ -938,7 +1027,14 @@ def _nuclear_result(baseline: WholeOncologyBaseline, *, mrt_floors: frozenset[in
     is first gated through `resolve_nuclear_floor_envelopes`'s real
     retention-envelope authority (`spatial_benchmark.compute_retention_envelope`),
     so a floor is only ACTIVE if it is genuinely retention-feasible, never
-    merely because it exists in the building or was requested by the caller."""
+    merely because it exists in the building or was requested by the caller.
+
+    Part 3D (Section 5-6): `clinical_resources` makes the scanner/injection/
+    uptake counts an EXPLICIT input authority. None -> the controlled 6/6/12
+    benchmark (CONTROLLED_BENCHMARK provenance), preserving every existing
+    benchmark test exactly. Project/facility-supplied counts flow straight
+    into the HybridZoneCandidate so the clinical gates react to them."""
+    resources = clinical_resources if clinical_resources is not None else BENCHMARK_CLINICAL_RESOURCES
     canonical_subset = resolve_canonical_inpatient_pet_subset(baseline)
     resolved_demand = len(canonical_subset) if demand is None else demand
     resolved_demand = max(1, resolved_demand)
@@ -947,7 +1043,10 @@ def _nuclear_result(baseline: WholeOncologyBaseline, *, mrt_floors: frozenset[in
     conv_active = conv_classification.active_floors
     candidate = HybridZoneCandidate(
         candidate_id=f"WHOLE-ONCOLOGY-MRT{sorted(mrt_active)}", mrt_floors=mrt_active,
-        conventional_floors=conv_active, scanners=6, injection_resources=6, uptake_resources=12,
+        conventional_floors=conv_active,
+        scanners=resources.scanners,
+        injection_resources=resources.injection_resources,
+        uptake_resources=resources.uptake_resources,
     )
     raw_result = evaluate_hybrid_zone_candidate(
         geometry=baseline.geometry, candidate=candidate, demand=resolved_demand, production_basis=baseline.production_basis,
@@ -1037,6 +1136,554 @@ def compute_clinical_resource_peak_occupancy(
     )
 
 
+# ===========================================================================
+# Part 3D: unified physical-feasibility derivation.
+#
+# This is the ONE shared contract every architecture consumes. It composes
+# the EXISTING authorities -- never a second engine:
+#   - clinical gates: compute_clinical_resource_peak_occupancy (above)
+#   - production gate: Build 3B production status carried on the nuclear
+#     traces / production basis (cyclotron_activity_capacity_status)
+#   - transport gate: caller-supplied transport occupancy (per architecture)
+#
+# NOT_CALIBRATED production is NEVER converted to zero and NEVER converted to
+# automatic INFEASIBLE (Section 10). It yields a qualified status
+# (FEASIBLE_WITH_UNCALIBRATED_PRODUCTION_CAPACITY) when all CALIBRATED gates
+# pass. The binding constraint is derived only from CALIBRATED failures
+# (Section 25) -- an uncalibrated production capacity is reported as an
+# unqualified constraint, never as the binding physical limit.
+# ===========================================================================
+
+
+ProductionSourceType = Literal["CYCLOTRON", "GENERATOR", "NONE"]
+
+
+TransportModeGateStatus = Literal[
+    "TRANSPORT_SUFFICIENT", "TRANSPORT_INSUFFICIENT", "TRANSPORT_NOT_CALIBRATED", "TRANSPORT_NOT_APPLICABLE",
+]
+"""Part 3D final transport-gate closure (Sections 2-10). A mode-specific
+verdict, NEVER a single universal transport scalar. A mode that carries NO
+required workload for an architecture is TRANSPORT_NOT_APPLICABLE (never
+FAILED, Section 2). A mode with a required workload but no defensible
+calibrated sizing authority is TRANSPORT_NOT_CALIBRATED (never silently
+SUFFICIENT, never automatic INFEASIBLE, Section 9)."""
+
+
+@dataclass(frozen=True)
+class TransportModeGate:
+    """Part 3D final transport-gate closure (Sections 3-10): one required
+    transport component's gate, preserving its INDIVIDUAL identity so the
+    aggregate transport verdict is explainable (Section 10). Reuses the
+    Build 3C mode-specific sizing authorities (via the nuclear result's
+    per-mode `ResourceSearchDiagnostic`s where they exist); never invents a
+    fleet count or a universal scalar."""
+
+    mode: str
+    """MANUAL / RGHT / ORDINARY_PTS / RP_PTS / MRT (Build 3C canonical modes)."""
+    status: TransportModeGateStatus
+    required_resources: int | None
+    """The Build-3C-sized minimum-feasible resource count for this mode's
+    assigned nuclear workload, when a calibrated sizing authority produced one;
+    None when NOT_APPLICABLE (no workload) or NOT_CALIBRATED (no authority)."""
+    available_resources: int | None
+    """Installed/selected resources for this mode when represented; None when
+    NOT_APPLICABLE or the search sizes minimum-feasible (selected == required)."""
+    sizing_stop_reason: str
+    """The underlying Build 3C `ResourceSearchDiagnostic.stop_reason`
+    (DEMAND_SATURATED / NO_QUALIFIED_THROUGHPUT_GAIN / PHYSICAL_LIMIT /
+    SEARCH_BOUND_REACHED / NO_WORKLOAD), or a documented sentinel."""
+    note: str = ""
+
+
+@dataclass(frozen=True)
+class PhysicalFeasibilityResult:
+    physical_feasibility_status: str
+    qualification_status: str
+    binding_physical_constraint: str
+    scanner_available: int
+    scanner_peak_occupancy: int
+    scanner_feasible: bool
+    scanner_resource_source: str
+    injection_available: int
+    injection_peak_occupancy: int
+    injection_feasible: bool
+    injection_resource_source: str
+    uptake_available: int
+    uptake_peak_occupancy: int
+    uptake_feasible: bool
+    uptake_resource_source: str
+    transport_feasible: bool
+    transport_gate_status: str
+    production_gate_status: str
+    production_capacity_status: str
+    required_eob_activity_mbq_per_day: float | None
+    installed_eob_capacity_mbq_per_day: float | None
+    unqualified_physical_constraints: tuple[str, ...]
+    per_radionuclide_production_gates: tuple["RadionuclideProductionGate", ...] = ()
+    transport_mode_gates: tuple["TransportModeGate", ...] = ()
+    """Part 3D final transport closure (Section 10): the per-mode transport
+    component gates that produced `transport_gate_status`, preserved so the
+    aggregate transport verdict is explainable and never a single scalar."""
+
+
+@dataclass(frozen=True)
+class RadionuclideProductionGate:
+    """Part 3D per-radionuclide production gate (Sections 9-11). RESOLVED
+    strictly per radionuclide against its OWN compatible source -- a
+    calibrated F-18 record never qualifies C-11/N-13/O-15/Ga-68/Tc-99m or
+    any other radionuclide. Reuses the Build 3B catalog + fleet resolver +
+    generator catalog authorities; never fabricates capacity, cycle, EOB, or
+    a production record."""
+
+    radionuclide: str
+    source_type: ProductionSourceType
+    source_identity: str
+    status: str
+    """PRODUCTION_SUFFICIENT / PRODUCTION_INSUFFICIENT /
+    PRODUCTION_NOT_CALIBRATED / NO_COMPATIBLE_SOURCE."""
+    capacity_status: str
+    required_eob_activity_mbq_per_day: float | None
+    installed_eob_capacity_mbq_per_day: float | None
+
+
+def _resolve_radionuclide_production_gate(
+    radionuclide: str,
+    fleet: "CyclotronFleet",
+    required_eob: float | None,
+    *,
+    installed_cyclotron_model_ids: tuple[str, ...] = (),
+) -> RadionuclideProductionGate:
+    """Resolve ONE radionuclide against its own compatible production source.
+
+    Order (Build 3B authority, radionuclide-specific throughout):
+      1. Calibrated/schedulable cyclotron fleet supporting this radionuclide ->
+         resolve_fleet_eob_capacity_mbq_per_day (calibrated per-cycle/site EOB
+         only; NEVER borrows another isotope's record).
+      2. SEAM (Part 3D): a selected INSTALLED cyclotron model that DECLARES this
+         radionuclide as supported but lacks calibrated cycle/EOB data (e.g.
+         SUMITOMO_CYPRIS_MP_30 + F-18) forms no schedulable fleet
+         (build_fleet_from_instances returns None). The gate still recognises
+         the REAL equipment identity from the catalog (Build 3B
+         supported_radionuclides) and reports PRODUCTION_NOT_CALIBRATED --
+         carrying the real model id, fabricating no cycle/EOB/record.
+      3. Else generator-supplied daughter radionuclide (e.g. Tc-99m from a
+         Mo-99/Tc-99m generator) -> distinct source type; generator supply is
+         NOT_CALIBRATED in the catalog (Build 3B) -> PRODUCTION_NOT_CALIBRATED.
+      4. Else NO_COMPATIBLE_SOURCE (reported explicitly).
+    Never converts NOT_CALIBRATED into 0 or automatic infeasibility.
+    """
+    from cyclotron_production_windows import resolve_fleet_eob_capacity_mbq_per_day, CyclotronFleet
+    import cyclotron_catalog as _cc
+    import generator_catalog as _gc
+
+    # Part 3D binding correction: when the caller declares an explicit INSTALLED
+    # equipment selection (`installed_cyclotron_model_ids`), that selection is
+    # AUTHORITATIVE. A calibrated fleet asset may qualify this radionuclide via
+    # path 1 ONLY if its model corresponds to the selected equipment; otherwise a
+    # leftover benchmark asset (e.g. GE PETtrace 890 F-18) would silently SHADOW
+    # the real selection (e.g. an installed CYPRIS MP-30) and borrow another
+    # model's calibrated capacity. We resolve each selected catalog id to its
+    # human model string and only trust fleet assets whose model_identifier matches.
+    selected_model_names: set[str] = set()
+    if installed_cyclotron_model_ids:
+        try:
+            _sel_catalog = _cc.load_cyclotron_catalog()
+        except Exception:
+            _sel_catalog = None
+        if _sel_catalog is not None:
+            for _mid in installed_cyclotron_model_ids:
+                try:
+                    selected_model_names.add(_sel_catalog.by_id(_mid).model)
+                except Exception:
+                    continue
+
+    def _asset_is_selected(a: "CyclotronAsset") -> bool:
+        # No explicit selection -> every fleet asset is in scope (benchmark path).
+        if not installed_cyclotron_model_ids:
+            return True
+        return a.model_identifier in selected_model_names
+
+    # 1. Calibrated/schedulable cyclotron fleet path (radionuclide-specific).
+    qualifying_assets = tuple(
+        a for a in fleet.assets
+        if radionuclide in a.capability.supported_radionuclides and _asset_is_selected(a)
+    )
+    fleet_supports = bool(qualifying_assets)
+    if fleet_supports:
+        source_identity = "/".join(
+            sorted({(a.model_identifier or a.capability_provenance or a.cyclotron_id) for a in qualifying_assets})
+        )
+        _qualifying_ids = {a.cyclotron_id for a in qualifying_assets}
+        _scoped_fleet = (
+            fleet if not installed_cyclotron_model_ids
+            else CyclotronFleet(
+                assets=tuple(a for a in fleet.assets if a.cyclotron_id in _qualifying_ids),
+                fleet_id=fleet.fleet_id,
+            )
+        )
+        installed_eob, capacity_status = resolve_fleet_eob_capacity_mbq_per_day(
+            fleet=_scoped_fleet, radionuclide=radionuclide, production_batches_per_day=1,
+        )
+        if installed_eob is None or capacity_status == "not_calibrated":
+            return RadionuclideProductionGate(
+                radionuclide=radionuclide, source_type="CYCLOTRON", source_identity=source_identity,
+                status="PRODUCTION_NOT_CALIBRATED", capacity_status="not_calibrated",
+                required_eob_activity_mbq_per_day=required_eob, installed_eob_capacity_mbq_per_day=None,
+            )
+        if required_eob is not None and required_eob > float(installed_eob) + 1e-9:
+            return RadionuclideProductionGate(
+                radionuclide=radionuclide, source_type="CYCLOTRON", source_identity=source_identity,
+                status="PRODUCTION_INSUFFICIENT", capacity_status=capacity_status,
+                required_eob_activity_mbq_per_day=required_eob, installed_eob_capacity_mbq_per_day=float(installed_eob),
+            )
+        return RadionuclideProductionGate(
+            radionuclide=radionuclide, source_type="CYCLOTRON", source_identity=source_identity,
+            status="PRODUCTION_SUFFICIENT", capacity_status=capacity_status,
+            required_eob_activity_mbq_per_day=required_eob, installed_eob_capacity_mbq_per_day=float(installed_eob),
+        )
+
+    # 2. SEAM: a selected INSTALLED cyclotron model declaring this radionuclide
+    # as supported but not schedulable/calibrated (e.g. CYPRIS MP-30 + F-18).
+    if installed_cyclotron_model_ids:
+        try:
+            catalog = _cc.load_cyclotron_catalog()
+        except Exception:
+            catalog = None
+        if catalog is not None:
+            supporting_models = []
+            for model_id in installed_cyclotron_model_ids:
+                try:
+                    model = catalog.by_id(model_id)
+                except Exception:
+                    continue
+                if radionuclide in model.supported_radionuclides:
+                    supporting_models.append(model)
+            if supporting_models:
+                identity = "/".join(sorted(m.model for m in supporting_models))
+                return RadionuclideProductionGate(
+                    radionuclide=radionuclide, source_type="CYCLOTRON", source_identity=identity,
+                    status="PRODUCTION_NOT_CALIBRATED", capacity_status="not_calibrated",
+                    required_eob_activity_mbq_per_day=required_eob, installed_eob_capacity_mbq_per_day=None,
+                )
+
+    # 3. Generator path (distinct source; catalog daughter radionuclide match).
+    try:
+        gcat = _gc.load_generator_catalog()
+    except Exception:
+        gcat = None
+    if gcat is not None:
+        gen = next((m for m in gcat.models if m.daughter_radionuclide == radionuclide), None)
+        if gen is not None:
+            # Generator supply capacity is NOT_CALIBRATED in the catalog (Build 3B) --
+            # never a cyclotron EOB figure, never fabricated.
+            return RadionuclideProductionGate(
+                radionuclide=radionuclide, source_type="GENERATOR", source_identity=gen.catalog_model_id,
+                status="PRODUCTION_NOT_CALIBRATED", capacity_status="not_calibrated",
+                required_eob_activity_mbq_per_day=required_eob, installed_eob_capacity_mbq_per_day=None,
+            )
+
+    # 4. No compatible source for this radionuclide.
+    return RadionuclideProductionGate(
+        radionuclide=radionuclide, source_type="NONE", source_identity="none",
+        status="NO_COMPATIBLE_SOURCE", capacity_status="no_compatible_source",
+        required_eob_activity_mbq_per_day=required_eob, installed_eob_capacity_mbq_per_day=None,
+    )
+
+
+def _required_radionuclides(nuclear: HybridEvaluationResult, baseline: WholeOncologyBaseline) -> tuple[str, ...]:
+    """The set of radionuclides actual patient demand requires (Section 11/22).
+    Derived from the nuclear patient population where available, else the
+    production basis radionuclide. Heterogeneous demand is evaluated PER
+    radionuclide, never collapsed into a single F-18 verdict."""
+    radionuclides: list[str] = []
+    patients = getattr(baseline, "patients", ())
+    for p in patients:
+        proc = getattr(p, "nuclear_procedure", None)
+        if proc is not None and getattr(proc, "radionuclide", None):
+            if proc.radionuclide not in radionuclides:
+                radionuclides.append(proc.radionuclide)
+    if not radionuclides:
+        radionuclides.append(baseline.production_basis.radionuclide)
+    return tuple(radionuclides)
+
+
+def _resolve_production_gate(
+    nuclear: HybridEvaluationResult,
+    baseline: WholeOncologyBaseline,
+    *,
+    installed_cyclotron_model_ids: tuple[str, ...] = (),
+) -> tuple[str, str, float | None, float | None, tuple[RadionuclideProductionGate, ...]]:
+    """Part 3D production gate (Sections 9-11) -- radionuclide-specific.
+
+    Resolves EVERY required radionuclide against its own compatible source
+    via `_resolve_radionuclide_production_gate`, then aggregates:
+      - any PRODUCTION_INSUFFICIENT / NO_COMPATIBLE_SOURCE -> insufficient
+      - else any PRODUCTION_NOT_CALIBRATED -> not calibrated (qualified)
+      - else all sufficient -> sufficient.
+    Returns (aggregate_gate_status, aggregate_capacity_status,
+    aggregate_required_eob, aggregate_installed_eob, per_radionuclide_gates).
+    The aggregate scalars are for the (common) single-radionuclide benchmark;
+    the per-radionuclide tuple carries the full multi-radionuclide detail.
+
+    `installed_cyclotron_model_ids` (Part 3D seam) lets a caller pass the real
+    selected equipment identity (e.g. ('SUMITOMO_CYPRIS_MP_30',)) so a
+    supported-but-uncalibrated model that forms no schedulable fleet still
+    resolves NOT_CALIBRATED with its real identity, never NO_COMPATIBLE_SOURCE."""
+    fleet = baseline.production_basis.cyclotron_fleet
+    required_eob = getattr(nuclear, "required_eob_activity_mbq_per_day", None)
+
+    gates = tuple(
+        _resolve_radionuclide_production_gate(
+            r, fleet, required_eob, installed_cyclotron_model_ids=installed_cyclotron_model_ids,
+        )
+        for r in _required_radionuclides(nuclear, baseline)
+    )
+
+    if any(g.status in ("PRODUCTION_INSUFFICIENT", "NO_COMPATIBLE_SOURCE") for g in gates):
+        agg_status = "PRODUCTION_INSUFFICIENT"
+    elif any(g.status == "PRODUCTION_NOT_CALIBRATED" for g in gates):
+        agg_status = "PRODUCTION_NOT_CALIBRATED"
+    else:
+        agg_status = "PRODUCTION_SUFFICIENT"
+
+    # Aggregate scalars reflect the primary (production_basis) radionuclide's
+    # gate for backward-compatible single-radionuclide reporting.
+    primary = next((g for g in gates if g.radionuclide == baseline.production_basis.radionuclide), gates[0] if gates else None)
+    agg_capacity_status = primary.capacity_status if primary else "not_calibrated"
+    agg_required = primary.required_eob_activity_mbq_per_day if primary else required_eob
+    agg_installed = primary.installed_eob_capacity_mbq_per_day if primary else None
+    return agg_status, agg_capacity_status, agg_required, agg_installed, gates
+
+
+_TRANSPORT_SUFFICIENT_STOP_REASONS = frozenset({"DEMAND_SATURATED", "NO_QUALIFIED_THROUGHPUT_GAIN"})
+_TRANSPORT_NOT_APPLICABLE_STOP_REASONS = frozenset({"NO_WORKLOAD"})
+_TRANSPORT_INSUFFICIENT_STOP_REASONS = frozenset({"PHYSICAL_LIMIT", "SEARCH_BOUND_REACHED"})
+
+
+def _transport_mode_gate_from_search(
+    mode: str, diag: "ResourceSearchDiagnostic | None",
+) -> TransportModeGate:
+    """Map ONE Build 3C mode-specific `ResourceSearchDiagnostic` (already sized
+    by `_adaptive_transport_resource_search`) onto a Part 3D `TransportModeGate`,
+    preserving the mode's INDIVIDUAL identity (Sections 3-10). The
+    minimum-feasible search sizes `selected_value` to meet the assigned
+    workload, so required == available for a saturated mode; a mode with no
+    assigned workload is TRANSPORT_NOT_APPLICABLE (never FAILED)."""
+    reason = getattr(diag, "stop_reason", None)
+    selected = getattr(diag, "selected_value", None)
+    if reason is None or reason in _TRANSPORT_NOT_APPLICABLE_STOP_REASONS:
+        return TransportModeGate(
+            mode=mode, status="TRANSPORT_NOT_APPLICABLE", required_resources=None,
+            available_resources=None, sizing_stop_reason=reason or "NO_WORKLOAD",
+            note=f"{mode} carries no required nuclear workload for this architecture (Section 2).",
+        )
+    if reason in _TRANSPORT_SUFFICIENT_STOP_REASONS:
+        return TransportModeGate(
+            mode=mode, status="TRANSPORT_SUFFICIENT", required_resources=selected,
+            available_resources=selected, sizing_stop_reason=reason,
+            note=f"{mode} minimum-feasible fleet sized by Build 3C authority meets assigned workload.",
+        )
+    if reason in _TRANSPORT_INSUFFICIENT_STOP_REASONS:
+        return TransportModeGate(
+            mode=mode, status="TRANSPORT_INSUFFICIENT", required_resources=selected,
+            available_resources=selected, sizing_stop_reason=reason,
+            note=f"{mode} could not saturate assigned workload within the Build 3C search bound.",
+        )
+    # An undocumented stop reason is preserved as NOT_CALIBRATED (never a silent
+    # SUFFICIENT, never automatic INFEASIBLE -- Section 9).
+    return TransportModeGate(
+        mode=mode, status="TRANSPORT_NOT_CALIBRATED", required_resources=selected,
+        available_resources=None, sizing_stop_reason=reason,
+        note=f"{mode} sizing stop reason '{reason}' has no calibrated gate mapping.",
+    )
+
+
+def _resolve_transport_gate(
+    nuclear: HybridEvaluationResult, *, architecture: str = "",
+) -> tuple[str, bool, tuple[str, ...], tuple[TransportModeGate, ...]]:
+    """Part 3D FINAL transport gate: the architecture's ACTUAL assigned nuclear
+    transport modes are evaluated as INDIVIDUAL Build 3C mode-specific gates,
+    then aggregated -- NEVER a single universal transport scalar, and never one
+    generic 'conventional transporter' standing in for all modes (Sections
+    2-10).
+
+    The nuclear-payload transport modes the `nuclear` result actually sized are
+    carried as per-mode `ResourceSearchDiagnostic`s: the shielded conventional
+    nuclear leg (Build 3C: nuclear is ELIGIBLE on MANUAL shielded porter,
+    INELIGIBLE on RGHT and ordinary PTS) and the MRT carrier leg. Each is mapped
+    to its real Build 3C mode identity and a per-mode `TransportModeGate`.
+
+    Aggregation (Section 9):
+      * any REQUIRED mode INSUFFICIENT  -> TRANSPORT_INSUFFICIENT (feasible=False)
+      * else any REQUIRED mode NOT_CALIBRATED -> feasible=True, mode name added
+        to unqualified constraints (QUALIFIED_WITH_LIMITATIONS upstream); never
+        silently SUFFICIENT, never automatic INFEASIBLE
+      * else >=1 REQUIRED mode SUFFICIENT -> TRANSPORT_SUFFICIENT
+      * else (all NOT_APPLICABLE)          -> TRANSPORT_NOT_EVALUATED
+    A NOT_APPLICABLE mode (no assigned workload) is never FAILED (Section 2).
+
+    Returns (transport_gate_status, transport_feasible, unqualified_transport_constraints, transport_mode_gates)."""
+    # The shielded conventional nuclear leg is human-carried (MANUAL/PORTER):
+    # Build 3C makes nuclear ELIGIBLE on MANUAL shielded porter and INELIGIBLE
+    # on RGHT / ordinary PTS, so the nuclear conventional transporter IS the
+    # MANUAL mode -- never a generic 'conventional' catch-all for AGV/PTS.
+    manual_gate = _transport_mode_gate_from_search("MANUAL", getattr(nuclear, "conventional_transporter_search", None))
+    mrt_gate = _transport_mode_gate_from_search("MRT", getattr(nuclear, "mrt_carrier_search", None))
+    mode_gates: tuple[TransportModeGate, ...] = (manual_gate, mrt_gate)
+
+    required_gates = [g for g in mode_gates if g.status != "TRANSPORT_NOT_APPLICABLE"]
+    unqualified: list[str] = []
+    failures = [g for g in required_gates if g.status == "TRANSPORT_INSUFFICIENT"]
+    not_calibrated = [g for g in required_gates if g.status == "TRANSPORT_NOT_CALIBRATED"]
+    for g in not_calibrated:
+        unqualified.append(f"transport_gate_not_calibrated:{g.mode}")
+
+    if failures:
+        return "TRANSPORT_INSUFFICIENT", False, tuple(unqualified), mode_gates
+    if not required_gates:
+        # No assigned nuclear transport mode carried required workload with an
+        # applicable gate -- genuinely not evaluated (never a shortcut pass).
+        return "TRANSPORT_NOT_EVALUATED", True, tuple(unqualified), mode_gates
+    if not_calibrated and not any(g.status == "TRANSPORT_SUFFICIENT" for g in required_gates):
+        # Every required mode is uncalibrated -- feasible but limited, honestly.
+        return "TRANSPORT_QUALIFIED_WITH_LIMITATIONS", True, tuple(unqualified), mode_gates
+    return "TRANSPORT_SUFFICIENT", True, tuple(unqualified), mode_gates
+
+
+def derive_physical_feasibility(
+    nuclear: HybridEvaluationResult,
+    baseline: WholeOncologyBaseline,
+    *,
+    architecture: str = "",
+    clinical_resources: "ClinicalResourceInputs | None" = None,
+    installed_cyclotron_model_ids: tuple[str, ...] = (),
+) -> PhysicalFeasibilityResult:
+    """The common physical-feasibility contract (Sections 1-2, 23-25).
+
+    T_achievable is gated by min over the CALIBRATED physical constraints
+    (scanner/injection/uptake/transport/production). Feasibility is DERIVED,
+    never hardcoded. NOT_CALIBRATED production is preserved honestly (Section
+    10): all-calibrated-gates-pass with uncalibrated production yields
+    FEASIBLE_WITH_UNCALIBRATED_PRODUCTION_CAPACITY, not a false FEASIBLE and
+    not an automatic INFEASIBLE.
+
+    The transport gate is derived from the architecture's ACTUAL assigned
+    transport modes/resources (Build 3C mode-specific authorities), aggregated
+    across every assigned mode via `_resolve_transport_gate` -- never a single
+    universal transport scalar (transport-gate clarification)."""
+    resources = clinical_resources if clinical_resources is not None else BENCHMARK_CLINICAL_RESOURCES
+    # Clinical occupancy gate (scanner/injection/uptake). Transport is gated
+    # separately via the mode-specific authority below, so no transport scalar
+    # is passed here (the occ.transport_* fields default to not-evaluated).
+    occ = compute_clinical_resource_peak_occupancy(nuclear)
+    prod_gate, prod_capacity_status, required_eob, installed_eob, per_radionuclide_gates = _resolve_production_gate(
+        nuclear, baseline, installed_cyclotron_model_ids=installed_cyclotron_model_ids,
+    )
+
+    transport_gate_status, transport_feasible, transport_unqualified, transport_mode_gates = _resolve_transport_gate(
+        nuclear, architecture=architecture,
+    )
+
+    # Calibrated gate failures determine the binding constraint (Section 25).
+    calibrated_failures: list[tuple[str, int, int]] = []
+    if not occ.scanner_feasible:
+        calibrated_failures.append(("scanner", occ.scanner_peak_occupancy, occ.scanner_available))
+    if not occ.injection_feasible:
+        calibrated_failures.append(("injection", occ.injection_peak_occupancy, occ.injection_available))
+    if not occ.uptake_feasible:
+        calibrated_failures.append(("uptake", occ.uptake_peak_occupancy, occ.uptake_available))
+    if transport_gate_status == "TRANSPORT_INSUFFICIENT":
+        calibrated_failures.append(("transport", 0, 0))
+    # A CALIBRATED-insufficient production gate, or a required radionuclide with
+    # NO compatible source at all, is a genuine physical failure (Section 10/11).
+    # A merely NOT_CALIBRATED production capacity is NOT a failure (below).
+    if prod_gate == "PRODUCTION_INSUFFICIENT":
+        calibrated_failures.append(("production", 0, 0))
+
+    unqualified: list[str] = list(transport_unqualified)
+    if prod_gate == "PRODUCTION_NOT_CALIBRATED":
+        # Section 11/22: name each radionuclide whose production is uncalibrated,
+        # never a single generic F-18 verdict.
+        prod_unqualified: list[str] = []
+        for g in per_radionuclide_gates:
+            if g.status == "PRODUCTION_NOT_CALIBRATED":
+                prod_unqualified.append(f"production_capacity_not_calibrated:{g.radionuclide}")
+        if not prod_unqualified:
+            prod_unqualified.append("production_capacity_not_calibrated")
+        unqualified.extend(prod_unqualified)
+
+    if calibrated_failures:
+        # Binding constraint = the first CALIBRATED failure in gate order.
+        binding = calibrated_failures[0][0]
+        physical_status = "INFEASIBLE"
+        qualification = "NOT_QUALIFIED"
+    elif unqualified:
+        binding = "none"
+        physical_status = "FEASIBLE_WITH_UNCALIBRATED_PRODUCTION_CAPACITY"
+        qualification = "QUALIFIED_WITH_LIMITATIONS"
+    else:
+        binding = "none"
+        physical_status = "FEASIBLE"
+        qualification = "QUALIFIED"
+
+    return PhysicalFeasibilityResult(
+        physical_feasibility_status=physical_status,
+        qualification_status=qualification,
+        binding_physical_constraint=binding,
+        scanner_available=occ.scanner_available, scanner_peak_occupancy=occ.scanner_peak_occupancy,
+        scanner_feasible=occ.scanner_feasible, scanner_resource_source=resources.resource_source,
+        injection_available=occ.injection_available, injection_peak_occupancy=occ.injection_peak_occupancy,
+        injection_feasible=occ.injection_feasible, injection_resource_source=resources.resource_source,
+        uptake_available=occ.uptake_available, uptake_peak_occupancy=occ.uptake_peak_occupancy,
+        uptake_feasible=occ.uptake_feasible, uptake_resource_source=resources.resource_source,
+        transport_feasible=transport_feasible, transport_gate_status=transport_gate_status,
+        production_gate_status=prod_gate, production_capacity_status=prod_capacity_status,
+        required_eob_activity_mbq_per_day=required_eob, installed_eob_capacity_mbq_per_day=installed_eob,
+        unqualified_physical_constraints=tuple(unqualified),
+        per_radionuclide_production_gates=per_radionuclide_gates,
+        transport_mode_gates=transport_mode_gates,
+    )
+
+
+def _physical_feasibility_result_fields(pf: PhysicalFeasibilityResult) -> dict:
+    """Part 3D: map a derived `PhysicalFeasibilityResult` onto the additive
+    `ArchitectureResult` physical-contract kwargs, including the DERIVED
+    `feasible` flag (was hardcoded `True` before Part 3D).
+
+    `feasible` is True unless the physical status is INFEASIBLE -- an
+    all-calibrated-gates-pass result with merely NOT_CALIBRATED production
+    (FEASIBLE_WITH_UNCALIBRATED_PRODUCTION_CAPACITY) remains feasible, honestly
+    qualified with limitations (Section 10). This is the single seam through
+    which every canonical architecture consumes the common contract."""
+    return {
+        "feasible": pf.physical_feasibility_status != "INFEASIBLE",
+        "physical_feasibility_status": pf.physical_feasibility_status,
+        "qualification_status": pf.qualification_status,
+        "binding_physical_constraint": pf.binding_physical_constraint,
+        "scanner_available": pf.scanner_available,
+        "scanner_peak_occupancy": pf.scanner_peak_occupancy,
+        "scanner_feasible": pf.scanner_feasible,
+        "scanner_resource_source": pf.scanner_resource_source,
+        "injection_available": pf.injection_available,
+        "injection_peak_occupancy": pf.injection_peak_occupancy,
+        "injection_feasible": pf.injection_feasible,
+        "injection_resource_source": pf.injection_resource_source,
+        "uptake_available": pf.uptake_available,
+        "uptake_peak_occupancy": pf.uptake_peak_occupancy,
+        "uptake_feasible": pf.uptake_feasible,
+        "uptake_resource_source": pf.uptake_resource_source,
+        "transport_feasible": pf.transport_feasible,
+        "transport_gate_status": pf.transport_gate_status,
+        "production_gate_status": pf.production_gate_status,
+        "production_capacity_status": pf.production_capacity_status,
+        "required_eob_activity_mbq_per_day": pf.required_eob_activity_mbq_per_day,
+        "installed_eob_capacity_mbq_per_day": pf.installed_eob_capacity_mbq_per_day,
+        "unqualified_physical_constraints": pf.unqualified_physical_constraints,
+        "per_radionuclide_production_gates": pf.per_radionuclide_production_gates,
+        "transport_mode_gates": pf.transport_mode_gates,
+    }
+
+
 def evaluate_dedicated_rp_pts_nuclear_transport(
     baseline: WholeOncologyBaseline, *, network_length_override_m: float | None = None,
 ) -> DedicatedRpPtsNuclearEvaluation:
@@ -1119,6 +1766,141 @@ def evaluate_dedicated_rp_pts_nuclear_transport(
             "no defensible public/internal maximum shielded-carrier mass exists -- never invented as 2kg/5kg).",
         ) + labor.notes,
     )
+
+
+@dataclass(frozen=True)
+class RpPtsPatientRadioactiveTiming:
+    """Part 3D final RP-PTS radioactive-timing closure (Sections 12-17): one
+    patient's RP-PTS delivery decay, bound to the AUTHORITATIVE release ->
+    administration decay timeline via a SINGLE interval. Never a second decay
+    equation, never a double count."""
+
+    patient_id: str
+    release_anchor_minutes: float
+    """Production/hot-lab release completion (the decay anchor). Reused from the
+    canonical nuclear trace -- NOT recomputed."""
+    rp_pts_delivery_minutes: float
+    """RP-PTS DELIVERY legs only (dispatch + source-handling + tube-transit +
+    destination-handling), i.e. `RpPtsMissionCycle.total_minutes`. The RP-PTS
+    cycle deliberately EXCLUDES carrier return/reavailability, so return time is
+    NOT in this delivery interval (Section 15)."""
+    rp_pts_administration_minutes: float
+    """release_anchor + rp_pts_delivery_minutes -- the administration time the
+    RP-PTS route actually produces (transport folded in ONCE, Section 14)."""
+    elapsed_release_to_administration_minutes: float
+    """The SINGLE governing decay interval = administration - release_anchor =
+    rp_pts_delivery_minutes. Transport influences it exactly once."""
+    retained_fraction_at_administration: float
+    required_upstream_activity_mbq: float | None
+
+
+@dataclass(frozen=True)
+class RpPtsRadioactiveTimingResult:
+    """Part 3D final RP-PTS radioactive-timing closure aggregate. Binds the
+    existing RP-PTS route/mission timing (`compute_rp_pts_mission_cycle`) to the
+    existing decay authority (`multi_isotope_decay.retained_fraction`/
+    `required_upstream_activity`) -- reusing both, inventing neither."""
+
+    radionuclide: str
+    half_life_minutes: float
+    network_length_m: float
+    rp_pts_delivery_minutes: float
+    return_time_included_in_payload_decay: bool
+    """Always False: carrier return/reposition affects resource occupancy only,
+    never the delivered payload's decay interval (Section 15)."""
+    per_patient: tuple[RpPtsPatientRadioactiveTiming, ...]
+    mean_retained_fraction: float
+
+
+def derive_rp_pts_radioactive_timing(
+    nuclear: HybridEvaluationResult,
+    cycle: "RpPtsMissionCycle",
+    *,
+    half_life_minutes: float,
+    network_length_m: float,
+    prescribed_administration_activity_mbq: float | None = None,
+) -> RpPtsRadioactiveTimingResult:
+    """Part 3D final closure (Sections 12-17): CONNECT the RP-PTS route-derived
+    transport time to the authoritative EOB/release -> administration decay
+    timeline, WITHOUT a second decay equation and WITHOUT double counting.
+
+    Doctrine (Section 14, single interval): the governing decay interval is
+    `administration - release_anchor`, where the RP-PTS DELIVERY time
+    (`cycle.total_minutes` = dispatch + source-handling + tube-transit +
+    destination-handling) is the transport delay folded into `administration`
+    exactly ONCE. We therefore compute
+        elapsed = rp_pts_delivery_minutes          (= admin - release_anchor)
+        retained = retained_fraction(elapsed, half_life)
+    reusing the SAME `multi_isotope_decay.retained_fraction` every other mode
+    uses -- never `decay(full interval) x decay(RP-PTS again)`.
+
+    The RP-PTS cycle EXCLUDES carrier return/reavailability by construction
+    (`compute_rp_pts_mission_cycle` docstring), so the return leg is absent from
+    `rp_pts_delivery_minutes` and cannot inflate payload decay (Section 15). The
+    release anchor is reused from the canonical nuclear trace, never recomputed.
+
+    A longer RP-PTS route (larger `network_length_m`) yields a larger
+    `cycle.total_minutes`, hence a larger elapsed interval and a SMALLER retained
+    fraction (Section 16) -- and, via `required_upstream_activity`, a LARGER
+    required upstream activity."""
+    delivery_minutes = float(cycle.total_minutes)
+    per_patient: list[RpPtsPatientRadioactiveTiming] = []
+    for trace in sorted(nuclear.patient_traces, key=lambda t: t.patient_id):
+        release_anchor = float(trace.release_time_minutes)
+        administration = release_anchor + delivery_minutes
+        elapsed = administration - release_anchor  # == delivery_minutes; single interval
+        retained = retained_fraction(elapsed, half_life_minutes)
+        required_upstream = (
+            required_upstream_activity(prescribed_administration_activity_mbq, retained)
+            if prescribed_administration_activity_mbq is not None else None
+        )
+        per_patient.append(
+            RpPtsPatientRadioactiveTiming(
+                patient_id=trace.patient_id,
+                release_anchor_minutes=release_anchor,
+                rp_pts_delivery_minutes=delivery_minutes,
+                rp_pts_administration_minutes=administration,
+                elapsed_release_to_administration_minutes=elapsed,
+                retained_fraction_at_administration=retained,
+                required_upstream_activity_mbq=required_upstream,
+            )
+        )
+    mean_retained = (
+        sum(p.retained_fraction_at_administration for p in per_patient) / len(per_patient)
+        if per_patient else retained_fraction(delivery_minutes, half_life_minutes)
+    )
+    return RpPtsRadioactiveTimingResult(
+        radionuclide=nuclear.radionuclide,
+        half_life_minutes=float(half_life_minutes),
+        network_length_m=float(network_length_m),
+        rp_pts_delivery_minutes=delivery_minutes,
+        return_time_included_in_payload_decay=False,
+        per_patient=tuple(per_patient),
+        mean_retained_fraction=mean_retained,
+    )
+
+
+def evaluate_dedicated_rp_pts_nuclear_transport_with_decay(
+    baseline: WholeOncologyBaseline, *, network_length_override_m: float | None = None,
+    prescribed_administration_activity_mbq: float | None = None,
+) -> tuple[DedicatedRpPtsNuclearEvaluation, RpPtsRadioactiveTimingResult]:
+    """Part 3D final closure: composes the UNCHANGED Build 3C RP-PTS evaluator
+    (`evaluate_dedicated_rp_pts_nuclear_transport`, economics/labor/concurrency)
+    with the new `derive_rp_pts_radioactive_timing` decay binding -- so the same
+    RP-PTS route length now BOTH sizes labor/concurrency AND drives the payload
+    decay timeline (previously disconnected). Reuses the same nuclear demand and
+    the same `compute_rp_pts_mission_cycle`; adds no economics change."""
+    evaluation = evaluate_dedicated_rp_pts_nuclear_transport(
+        baseline, network_length_override_m=network_length_override_m,
+    )
+    nuclear = _nuclear_result(baseline, mrt_floors=frozenset())
+    half_life = float(load_radionuclide_half_lives()[nuclear.radionuclide]) if nuclear.radionuclide else float(nuclear.half_life_minutes)
+    timing = derive_rp_pts_radioactive_timing(
+        nuclear, evaluation.cycle, half_life_minutes=half_life,
+        network_length_m=evaluation.network_length_m,
+        prescribed_administration_activity_mbq=prescribed_administration_activity_mbq,
+    )
+    return evaluation, timing
 
 
 def _loaded_annual_cost_per_fte(policy: PorterOperatingPolicy, operating_days_per_year: int) -> float:
@@ -1436,8 +2218,14 @@ def evaluate_manual_conventional(
     )
     lifecycle_cost = -result.operating_horizon_present_value
     inpatients = baseline.census.inpatients
+    # Part 3D: physical feasibility is DERIVED from the common gate contract, not
+    # hardcoded. Transport is gated per assigned mode from `nuclear`'s own
+    # mode-specific transport searches (Build 3C authorities) via
+    # `_resolve_transport_gate` -- never a universal transport scalar.
+    _pf = derive_physical_feasibility(nuclear, baseline, architecture="MANUAL_CONVENTIONAL")
     return ArchitectureResult(
-        architecture="MANUAL_CONVENTIONAL", development_context=development_context, study_scope=study_scope, feasible=True,
+        architecture="MANUAL_CONVENTIONAL", development_context=development_context, study_scope=study_scope,
+        **_physical_feasibility_result_fields(_pf),
         new_study_capex=result.study_capex, annual_opex=general_opex, lifecycle_cost=lifecycle_cost, npv_or_metric=-lifecycle_cost,
         porter_fte=porter_fte, automation_or_mrt_fte=0.0, nuclear_qualified_completed=nuclear.retention_qualified_completed,
         nuclear_total_capex=nuclear.total_capex, nuclear_annual_opex=nuclear.total_annual_opex, stream_metrics=stream_metrics,
@@ -1692,8 +2480,15 @@ def evaluate_automated_conventional(
     lifecycle_cost = -result.operating_horizon_present_value
     inpatients = baseline.census.inpatients
     distribution_note = ", ".join(f"{s}:{main_leg_tech_by_stream[s]}({distribution_floor_counts.get(s, 0)} floors)" for s in STREAMS)
+    # Part 3D: DERIVED physical feasibility. The AGV/PTS nuclear zone falls back to
+    # 100% Manual (identical nuclear ledger), so there is no distinct nuclear
+    # transport-channel occupancy to gate beyond general logistics. Transport
+    # feasibility derives from `nuclear`'s mode-specific transport searches
+    # (Build 3C authorities) via `_resolve_transport_gate`; no fabricated scalar.
+    _pf = derive_physical_feasibility(nuclear, baseline, architecture="AUTOMATED_CONVENTIONAL")
     return ArchitectureResult(
-        architecture="AUTOMATED_CONVENTIONAL", development_context=development_context, study_scope=study_scope, feasible=True,
+        architecture="AUTOMATED_CONVENTIONAL", development_context=development_context, study_scope=study_scope,
+        **_physical_feasibility_result_fields(_pf),
         new_study_capex=result.study_capex, annual_opex=total_opex, lifecycle_cost=lifecycle_cost, npv_or_metric=-lifecycle_cost,
         porter_fte=total_fte, automation_or_mrt_fte=automation_fte, nuclear_qualified_completed=nuclear.retention_qualified_completed,
         nuclear_total_capex=nuclear.total_capex, nuclear_annual_opex=nuclear.total_annual_opex, stream_metrics=tuple(stream_metrics),
@@ -1913,8 +2708,15 @@ def _evaluate_mrt_style_architecture(
         (row.quantity for row in combined_result.combined_opex_ledger if row.component == "MRT support labor"),
         0.0,
     )
+    # Part 3D: DERIVED physical feasibility. The MRT radioactive route-time is
+    # already bound to decay inside `nuclear` (arrival-based injection_start ->
+    # retained_fraction; single interval, no double-count -- lineage A). Transport
+    # feasibility derives from `nuclear`'s mode-specific transport searches
+    # (Build 3C authorities) via `_resolve_transport_gate`; no fabricated scalar.
+    _pf = derive_physical_feasibility(nuclear, baseline, architecture=architecture)
     return ArchitectureResult(
-        architecture=architecture, development_context=development_context, study_scope=study_scope, feasible=True,
+        architecture=architecture, development_context=development_context, study_scope=study_scope,
+        **_physical_feasibility_result_fields(_pf),
         new_study_capex=result.study_capex, annual_opex=combined_opex,
         lifecycle_cost=lifecycle_cost, npv_or_metric=-lifecycle_cost, porter_fte=fallback_fte,
         automation_or_mrt_fte=mrt_support_staff_fte,
