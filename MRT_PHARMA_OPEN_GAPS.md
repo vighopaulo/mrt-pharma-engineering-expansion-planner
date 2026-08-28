@@ -93,14 +93,35 @@ authority each gap references.
   (no beam-current anchor; no GE PETtrace borrowing). The Part 3D per-radionuclide
   gate exposes an additive `simulation_production_basis` that never alters the
   `PRODUCTION_NOT_CALIBRATED` evidence verdict.
-- **Still open (why PARTIAL):** many catalog pairs cannot yet produce a numerical
-  estimate for lack of physical evidence — CYPRIS MP-30/HM-12/HM-20 (no beam
-  current), GE PETtrace 800 (null-yield records), IBA IKON/30XP (empty records),
-  IBA KIUBE irradiation-time response (no published beam current), Siemens
-  Eclipse HP / RDS-111, ACSI TR-19/TR-24, BEST 14p (no calibrated EOB anchor),
-  and Cu-64/Zr-89/I-123/I-124 on any model (absent from the canonical half-life
-  table). Site-calibrated production performance records and additional
-  manufacturer EOB evidence are not yet present.
+- **Evidence extension (Cyclotron Production Evidence & Calibration Extension):**
+  a traceable evidence registry (`cyclotron_production_evidence.json`, sources
+  doc `CYCLOTRON_PRODUCTION_EVIDENCE_SOURCES.md`) was added and the estimator
+  gained a narrow additive seam (`load_production_evidence_registry`,
+  `resolve_evidence_record`, `_try_registry_modeled_estimate`) to consume it. It
+  carries only `MODELED_ESTIMATE` reaction-physics evidence (the `18O(p,n)18F`
+  F-18 thick-target saturation yield, 8.3 GBq/µA measured), applied **only** with
+  a model's OWN published beam current. This **closed two model × radionuclide
+  pairs**: **SIEMENS Eclipse HP + F-18** and **SIEMENS RDS-111 + F-18** are each
+  now a numerical `MODELED_ESTIMATE` (LOW confidence; ≈264 528 MBq at 120 min).
+  Each pair uses its OWN published 60 µA beam current with the shared reaction
+  saturation yield — the two values coincide because both Siemens/CTI models
+  publish the same 60 µA current, not because any capacity was borrowed. Both are
+  below GE PETtrace 890's 648 000 MBq (no borrow). Calibration status is
+  unchanged; the registry never becomes manufacturer/site calibrated.
+- **CYPRIS MP-30 + F-18 SPECIFICALLY REMAINS `NOT_AVAILABLE`** (evidence-honest):
+  the model publishes no OWN beam current, so the reaction-yield path cannot
+  apply without fabricating/borrowing a current (forbidden). No GE capacity is
+  borrowed.
+- **Still open (why PARTIAL):** most catalog pairs still cannot produce a
+  numerical estimate for lack of physical evidence — CYPRIS MP-30/HM-12/HM-20 (no
+  OWN beam current for the reaction-yield path), GE PETtrace 800 (null-yield
+  records, no OWN current in `field_provenance`), IBA IKON/30XP (empty records),
+  IBA KIUBE irradiation-time response (no published beam current), ACSI
+  TR-19/TR-24, BEST 14p (no calibrated EOB anchor), and Cu-64/Zr-89/I-123/I-124
+  on any model (absent from the canonical half-life table — no decay physics).
+  Site-calibrated production performance records and additional manufacturer EOB
+  evidence are not yet present. **Focused test:**
+  `test_cyclotron_production_evidence_extension.py`.
 - **Closed would require:** manufacturer/site production evidence (beam current +
   irradiation time + normalized EOB, or an explicitly-approved
   `CONTROLLED_ASSUMPTION`) for the remaining pairs, and canonical half-life

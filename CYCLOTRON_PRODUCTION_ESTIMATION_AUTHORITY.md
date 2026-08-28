@@ -305,3 +305,100 @@ These gaps are recorded in `MRT_PHARMA_OPEN_GAPS.md` (OG-CYC-1 refinement).
   `model × radionuclide × evidence/production basis`.
 - The estimator never creates patient demand and excess production is headroom,
   not revenue.
+
+---
+
+# Addendum — Cyclotron Production Evidence & Calibration Extension
+
+**Nature:** an **additive** extension of this authority. No estimator physics was
+redesigned; no second catalog/resolver was created. A separate, traceable
+evidence registry was added and the estimator gained a narrow seam to consume it.
+
+## P. Cyclotron Production Evidence Registry
+
+- **File:** `cyclotron_production_evidence.json` (canonical, machine-readable).
+- **Provenance doc:** `CYCLOTRON_PRODUCTION_EVIDENCE_SOURCES.md`.
+- **Loader:** `load_production_evidence_registry()` — cached; a missing/malformed
+  file yields an **empty** registry (never raises), so the estimator degrades to
+  its pre-extension behavior when no external evidence is present.
+- **Record type:** `ProductionEvidenceRecord` (raw value/unit preserved verbatim
+  alongside the normalized canonical MBq / MBq-per-µA form).
+- **Boundary:** the registry holds **only** `MODELED_ESTIMATE` evidence
+  (external literature / reaction physics). It never holds manufacturer/site
+  calibrated output (that stays in Build 3B `cyclotron_equipment_catalog.json`)
+  and **never changes a model's `production_calibration_status`**.
+
+Two record kinds are supported:
+
+- `REACTION_SATURATION_YIELD` — a reaction's thick-target saturation yield
+  (`saturation_yield_mbq_per_ua`, the coefficient `K` in `A_EOB = K·I·(1−e^(−λt))`).
+  Applied **only** with a machine's OWN published beam current (never borrowed).
+- `MACHINE_SPECIFIC_EOB` — a machine-specific normalized EOB (used directly).
+  (None present in this build; the path is future-proofed and test-covered.)
+
+## Q. Estimator seam (additive)
+
+In `estimate_cyclotron_production(...)`, the SUPPORTED-but-no-manufacturer-anchor
+branch now consults the registry **before** returning `NOT_AVAILABLE`
+(`_try_registry_modeled_estimate`). For a `REACTION_SATURATION_YIELD` record it
+produces a `MODELED_ESTIMATE` **only if** the model publishes its OWN beam
+current (`_model_own_beam_current_ua`, read from Build 3B `field_provenance`) and
+canonical half-life physics exists; otherwise it defers to honest
+`NOT_AVAILABLE`. This seam can never outrank a manufacturer/site anchor (resolved
+earlier) and never alters `calibration_status`.
+
+New additive result fields on `CyclotronProductionEstimate` (Section 28):
+`evidence_record_id` and `source_reference` identify the registry record behind a
+`MODELED_ESTIMATE` (both `None` for calibrated / NOT_AVAILABLE / NO_COMPATIBLE_
+SOURCE / OUT_OF_CYCLOTRON_SCOPE results).
+
+## R. Multi-evidence resolution (no silent averaging)
+
+`resolve_evidence_record(model, radionuclide)` → `EvidenceResolution(chosen,
+selection_reason, competing_record_ids)`. Deterministic ranking: evidence-class
+precedence (`stronger_basis`) → machine-specific over reaction-level →
+confidence (HIGH > MEDIUM > LOW) → stable id. Competing raw records are preserved
+and the choice is explained; records are never averaged.
+
+## S. New modeled pairs (evidence-enabled)
+
+| Model × radionuclide | Before | After | Basis | Confidence |
+|---|---|---|---|---|
+| SIEMENS Eclipse HP + F-18 | NOT_AVAILABLE | numerical estimate | `MODELED_ESTIMATE` | LOW |
+| SIEMENS RDS-111 + F-18 | NOT_AVAILABLE | numerical estimate | `MODELED_ESTIMATE` | LOW |
+
+`A_EOB = 8300 MBq/µA · 60 µA · (1 − e^(−λ·t))` (each model's OWN 60 µA current;
+`λ = ln2/109.8`). ≈ **264 528 MBq at t = 120 min**; monotone increasing in `t`;
+below GE PETtrace 890's 648 000 MBq (no capacity borrowed). **Two** modeled pairs
+are enabled: SIEMENS Eclipse HP + F-18 and SIEMENS RDS-111 + F-18. Their EOB
+values are identical because both Siemens/CTI models publish the same 60 µA own
+beam current and share the same reaction-level saturation-yield evidence — the
+coincidence is physical, not a borrow.
+
+## T. CYPRIS MP-30 outcome (unchanged, honest)
+
+`SUMITOMO_CYPRIS_MP_30` + F-18 (and Cu-64/Ga-68/…) **remain `NOT_AVAILABLE`**: the
+model publishes no OWN beam current, so a reaction-level yield cannot be applied
+without fabricating or borrowing a current. No GE PETtrace capacity is borrowed.
+This is the accepted evidence-honest outcome (the build permits retaining
+`NOT_AVAILABLE`).
+
+## U. Remaining NOT_AVAILABLE pairs (still gap; OG-CYC-1 stays PARTIAL)
+
+Unchanged from the base authority except SIEMENS Eclipse HP / RDS-111 + F-18 (now
+`MODELED_ESTIMATE`). Still `NOT_AVAILABLE`: CYPRIS MP-30 / HM-12 / HM-20 (no OWN
+current for the reaction-yield path); GE PETtrace 800 (null-yield records, no OWN
+current in `field_provenance`); IBA IKON / 30XP; IBA KIUBE irradiation-time
+response; ACSI TR-19 / TR-24; BEST 14p; and **all** Cu-64 / Zr-89 / I-123 / I-124
+pairs (absent from the canonical half-life table — no decay physics; not
+fabricated). Cu-64/Zr-89/I-123/I-124 half-life physics and further
+manufacturer/site EOB evidence remain the open work in OG-CYC-1.
+
+## V. Regression
+
+`test_cyclotron_production_evidence_extension.py` (34 Section-38 invariants + 2
+additional) passes, and the base `test_cyclotron_production_estimation_authority.py`
+(37) plus Build 3B / Part 3D / cyclotron catalog·windows·fleet / decay /
+generator / equal_budget / authority-index / capital_project_api suites all pass
+unchanged. The GE PETtrace 890 calibrated control and the Part 3D CYPRIS gate
+control remain green.

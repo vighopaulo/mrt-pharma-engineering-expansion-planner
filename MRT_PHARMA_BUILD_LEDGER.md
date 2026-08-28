@@ -29,7 +29,8 @@ This document changes **no** production-engine behavior.
 | Build 3C.1 | `95040d5` | `SPATIAL_ROUTE_NETWORK_AUTHORITY_BUILD_3C1.md` | `test_build3c1_spatial_route_authority.py` | 34 |
 | Part 3D | `07e861d` | `PHYSICAL_FEASIBILITY_AUTHORITY_PART_3D.md` | `test_part3d_physical_feasibility_closure.py` | 46 |
 | Authority Consolidation | `b8e759e` | this ledger + INDEX/DOCTRINE/PRODUCT/INTEGRATION/OPEN_GAPS | `test_mrt_pharma_authority_index.py` | (governance) |
-| Cyclotron Production Estimation | uncommitted (current working tree) | `CYCLOTRON_PRODUCTION_ESTIMATION_AUTHORITY.md` | `test_cyclotron_production_estimation_authority.py` | 37 |
+| Cyclotron Production Estimation | `9570308` | `CYCLOTRON_PRODUCTION_ESTIMATION_AUTHORITY.md` | `test_cyclotron_production_estimation_authority.py` | 37 |
+| Cyclotron Production Evidence & Calibration Extension | uncommitted (current working tree) | `CYCLOTRON_PRODUCTION_EVIDENCE_SOURCES.md` (+ ESTIMATION_AUTHORITY addendum) | `test_cyclotron_production_evidence_extension.py` | 36 |
 
 > **Note on test counts:** the count is the number of test functions physically
 > present in the file. It is a recoverable structural measure, not a re-run pass
@@ -224,3 +225,49 @@ This document changes **no** production-engine behavior.
 *This ledger is a governance / traceability artifact reconstructed from physical
 git history. It introduces no production-engine behavior beyond the additive
 estimation authority and its narrow Part 3D seam recorded above.*
+
+## 10. Cyclotron Production Evidence & Calibration Extension — current uncommitted build
+
+- **BUILD:** Cyclotron Production Evidence & Calibration Extension.
+- **PURPOSE:** close missing model × radionuclide production *evidence* (not
+  estimator architecture). Add a traceable evidence registry the existing
+  Cyclotron Production Estimation Authority consumes, so SUPPORTED-but-
+  NOT_CALIBRATED pairs can gain a defensible numerical `MODELED_ESTIMATE` where
+  real physics/literature evidence exists. Evidence honesty over numerical
+  completeness.
+- **COMMIT SHA:** uncommitted (current working tree; not committed per
+  instructions — do not invent a SHA).
+- **STARTING AUTHORITY:** HEAD `9570308`, `origin/main == 9570308`, clean, 0/0.
+- **DOCUMENTATION:** `CYCLOTRON_PRODUCTION_EVIDENCE_SOURCES.md` (new); addendum
+  in `CYCLOTRON_PRODUCTION_ESTIMATION_AUTHORITY.md`; updates to this ledger,
+  `MRT_PHARMA_AUTHORITY_INDEX.md` §2.9, `MRT_PHARMA_OPEN_GAPS.md` (OG-CYC-1).
+- **FOCUSED TEST:** `test_cyclotron_production_evidence_extension.py` (36 `def
+  test_` functions: 34 Section-38 invariants + unknown-model raise +
+  missing-registry graceful degradation).
+- **FILES CREATED:** `cyclotron_production_evidence.json`,
+  `CYCLOTRON_PRODUCTION_EVIDENCE_SOURCES.md`,
+  `test_cyclotron_production_evidence_extension.py`.
+- **FILES CHANGED (additive only):** `cyclotron_production_estimation_authority.py`
+  (evidence-registry seam + additive `evidence_record_id`/`source_reference`),
+  `CYCLOTRON_PRODUCTION_ESTIMATION_AUTHORITY.md`, `MRT_PHARMA_AUTHORITY_INDEX.md`,
+  `MRT_PHARMA_OPEN_GAPS.md`, this ledger.
+- **ENGINE FILES CHANGED:** only `cyclotron_production_estimation_authority.py`
+  (no catalog/radionuclide/fleet/transport/scanner/synthetic-generator change).
+- **MAJOR AUTHORITY ESTABLISHED:** `cyclotron_production_evidence.json` registry +
+  `ProductionEvidenceRecord`, `load_production_evidence_registry`,
+  `resolve_evidence_registry_records`, `resolve_evidence_record` /
+  `EvidenceResolution` (multi-evidence resolver, no silent averaging),
+  `_try_registry_modeled_estimate` seam. Two evidence-closed pairs: **SIEMENS
+  Eclipse HP + F-18** and **SIEMENS RDS-111 + F-18**, each → `MODELED_ESTIMATE`
+  (LOW; reaction saturation yield 8.3 GBq/µA applied to each model's OWN 60 µA
+  current; ≈264 528 MBq at 120 min — identical because both publish 60 µA, not a
+  borrow; below GE PETtrace 890 648 000 MBq).
+- **EVIDENCE HONESTY:** CYPRIS MP-30 + F-18 **retained `NOT_AVAILABLE`** (no OWN
+  beam current; no GE borrowing). Literature/reaction evidence is `MODELED_
+  ESTIMATE` only, never manufacturer/site calibrated; calibration status
+  unchanged.
+- **KNOWN CARRIED-FORWARD GAPS:** OG-CYC-1 stays PARTIAL (most pairs still
+  NOT_AVAILABLE; Cu-64/Zr-89/I-123/I-124 lack half-life physics); OG-GEN-1
+  unchanged; **OG-SYNTH-1 remains OPEN** (randomizer untouched).
+- **SUPERSEDES / SUPERSEDED BY:** extends build 9 (Cyclotron Production
+  Estimation); supersedes nothing; not superseded.

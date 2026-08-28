@@ -253,13 +253,25 @@ Canonical direction (production does NOT generate patient demand):
 
 - **Canonical Authority:** numerical cyclotron production-estimation layer.
 - **Primary File:** `cyclotron_production_estimation_authority.py`.
+- **Evidence Registry:** `cyclotron_production_evidence.json` (traceable external
+  / reaction-physics `MODELED_ESTIMATE` evidence; sources doc
+  `CYCLOTRON_PRODUCTION_EVIDENCE_SOURCES.md`). NEVER holds manufacturer/site
+  calibrated output and never changes `production_calibration_status`.
 - **Primary Symbols:** `estimate_cyclotron_production`,
-  `CyclotronProductionEstimate`, `estimate_required_physical_cycles`,
+  `CyclotronProductionEstimate` (now with additive `evidence_record_id` /
+  `source_reference`), `estimate_required_physical_cycles`,
   `CyclotronBatchCycleEstimate`, `resolve_simulation_production_basis`,
-  `stronger_basis`; `EvidenceClass`, `EstimationStatus`, `ConfidenceClass`.
+  `stronger_basis`; `EvidenceClass`, `EstimationStatus`, `ConfidenceClass`;
+  evidence-registry seam: `ProductionEvidenceRecord`,
+  `load_production_evidence_registry`, `resolve_evidence_registry_records`,
+  `resolve_evidence_record` / `EvidenceResolution`.
 - **Primary Tests:** `test_cyclotron_production_estimation_authority.py`
-  (37 tests: 30 invariants + control proofs A–F + unknown-model raise).
-- **Documentation:** `CYCLOTRON_PRODUCTION_ESTIMATION_AUTHORITY.md`.
+  (37 tests: 30 invariants + control proofs A–F + unknown-model raise);
+  `test_cyclotron_production_evidence_extension.py` (34 Section-38 invariants + 2
+  additional: unknown-model raise, missing-registry graceful degradation).
+- **Documentation:** `CYCLOTRON_PRODUCTION_ESTIMATION_AUTHORITY.md` (with the
+  Cyclotron Production Evidence & Calibration Extension addendum),
+  `CYCLOTRON_PRODUCTION_EVIDENCE_SOURCES.md`.
 - **Authority Type:** B (IMPLEMENTED_REPOSITORY_AUTHORITY).
 - **Implementation Status:** IMPLEMENTED (estimation layer). Sits BETWEEN Build
   3B production evidence and downstream batch/capacity planning; creates no
@@ -282,12 +294,22 @@ Canonical direction (production does NOT generate patient demand):
   simulation_production_basis` (default `UNRESOLVED`) records the modeled basis
   for a SUPPORTED-but-NOT_CALIBRATED installed model **without** changing the
   `PRODUCTION_NOT_CALIBRATED` evidence verdict.
-- **Known Limitations:** many pairs remain `NOT_AVAILABLE` for lack of physical
+- **Evidence extension:** the Cyclotron Production Evidence & Calibration
+  Extension added the registry above and enabled **two** new numerical pairs —
+  **SIEMENS Eclipse HP + F-18** and **SIEMENS RDS-111 + F-18** are each now a
+  `MODELED_ESTIMATE` (LOW confidence) from the `18O(p,n)18F` reaction saturation
+  yield applied to each model's OWN 60 µA current (identical values because both
+  Siemens/CTI models publish the same 60 µA, not a borrow).
+  **CYPRIS MP-30 + F-18 remains `NOT_AVAILABLE`**
+  (no OWN beam current; no GE borrowing). Calibrated controls (GE PETtrace 890 =
+  648 000 MBq) and the Part 3D CYPRIS gate control unchanged.
+- **Known Limitations:** most pairs remain `NOT_AVAILABLE` for lack of physical
   evidence; no `SITE_CALIBRATED` cyclotron record and no approved
   `CONTROLLED_ASSUMPTION` currently exist; Cu-64/Zr-89/I-123/I-124 lack canonical
   half-life physics.
-- **Open-Gap Ref:** OG-CYC-1 (now PARTIAL — authority exists; remaining
-  model × radionuclide evidence gaps documented).
+- **Open-Gap Ref:** OG-CYC-1 (still PARTIAL — authority + evidence registry
+  exist; two pairs evidence-closed; remaining model × radionuclide evidence gaps
+  documented).
 
 ### 2.10 Generator authority
 

@@ -1,0 +1,84 @@
+{
+  "schema_version": "1.0",
+  "description": "Cyclotron Production Evidence Registry (Cyclotron Production Evidence & Calibration Extension). A traceable store of external / physics production evidence that the Cyclotron Production Estimation Authority may consume as a MODELED_ESTIMATE basis where no manufacturer/site-calibrated production record exists. This registry NEVER holds manufacturer-calibrated or site-calibrated production output: those live in cyclotron_equipment_catalog.json (Build 3B). Literature / reaction-physics evidence here is classified MODELED_ESTIMATE only and never promoted. Raw evidence values are preserved verbatim alongside their normalized (MBq / MBq-per-uA) forms; the raw catalog is never mutated.",
+  "governance": {
+    "evidence_hierarchy": "SITE_CALIBRATED > MANUFACTURER_CALIBRATED > MODELED_ESTIMATE > CONTROLLED_ASSUMPTION > NOT_AVAILABLE",
+    "no_cross_model_borrowing": "A record whose catalog_model_id is null carries REACTION-LEVEL nuclear physics (a property of the reaction, not of any machine). It may be applied ONLY together with a specific machine's OWN published beam energy + beam current; it is never a borrowed machine capacity. A record naming a catalog_model_id applies ONLY to that model.",
+    "no_cross_radionuclide_borrowing": "Each record qualifies exactly one radionuclide via its own reaction/half-life; an F-18 record never qualifies C-11/N-13/O-15/Ga-68/Cu-64/Zr-89/I-123/I-124/Tc-99m.",
+    "calibration_status_unchanged": "Consuming a MODELED_ESTIMATE record NEVER changes a model's Build 3B production_calibration_status.",
+    "generator_boundary": "Generator daughters (e.g. Tc-99m) are OUT_OF_CYCLOTRON_SCOPE and never appear here."
+  },
+  "evidence_records": [
+    {
+      "evidence_record_id": "EV-F18-18OPN-SAT-001",
+      "evidence_kind": "REACTION_SATURATION_YIELD",
+      "catalog_model_id": null,
+      "radionuclide": "F-18",
+      "reaction": "18O(p,n)18F",
+      "target_material": "enriched [18O]H2O (liquid target)",
+      "beam_particle": "proton",
+      "beam_energy_mev": null,
+      "beam_current_ua": null,
+      "irradiation_minutes": null,
+      "raw_value": 8.3,
+      "raw_unit": "GBq/uA",
+      "normalized": {
+        "saturation_yield_mbq_per_ua": 8300.0
+      },
+      "normalization_method": "GBq/uA -> MBq/uA (x1000). Saturation (t->inf, EOB) yield of the 18O(p,n)18F reaction; equals the coefficient K such that A_EOB(I,t) = (saturation_yield_mbq_per_ua) * I * (1 - exp(-lambda*t)).",
+      "evidence_class": "MODELED_ESTIMATE",
+      "confidence": "MEDIUM",
+      "reference_irradiation_minutes": 120.0,
+      "source": {
+        "title": "Measurement of the 18F saturation yield from the 18O(p,n)18F reaction (thick liquid target)",
+        "author": "Mirzaii et al.",
+        "publisher": "Iranian Journal of Radiation Research",
+        "url": "http://ijrr.com/article-1-16-en.pdf",
+        "date": null,
+        "source_type": "peer_reviewed_publication"
+      },
+      "limitations": [
+        "REACTION-LEVEL physics (a property of the 18O(p,n)18F reaction), NOT a machine-specific EOB measurement.",
+        "Reported as ~80% of theoretical yield; applies to enriched [18O]water liquid targets above the reaction threshold.",
+        "When applied to a specific cyclotron model it is combined ONLY with that model's OWN published beam current/energy; it is never a borrowed machine capacity.",
+        "MODELED_ESTIMATE only: never manufacturer-calibrated or site-calibrated.",
+        "reference_irradiation_minutes=120 is the standard FDG production irradiation used as the default modeling condition; the estimator honors a caller-supplied irradiation time for the response curve."
+      ]
+    },
+    {
+      "evidence_record_id": "EV-F18-18OPN-SAT-002",
+      "evidence_kind": "REACTION_SATURATION_YIELD",
+      "catalog_model_id": null,
+      "radionuclide": "F-18",
+      "reaction": "18O(p,n)18F",
+      "target_material": "in-house recycled [18O]H2O (~93% enrichment)",
+      "beam_particle": "proton",
+      "beam_energy_mev": null,
+      "beam_current_ua": null,
+      "irradiation_minutes": null,
+      "raw_value": 7.8,
+      "raw_unit": "GBq/uA",
+      "normalized": {
+        "saturation_yield_mbq_per_ua": 7800.0
+      },
+      "normalization_method": "GBq/uA -> MBq/uA (x1000). Reported ~7.8 GBq/uA (210 mCi/uA) calculated saturation yield with ~93% enriched [18O]water.",
+      "evidence_class": "MODELED_ESTIMATE",
+      "confidence": "LOW",
+      "reference_irradiation_minutes": 120.0,
+      "source": {
+        "title": "Cyclotron production of 18F (calculated saturation yield with recycled [18O]water)",
+        "author": null,
+        "publisher": "Deutsche Nationalbibliothek (archived technical record)",
+        "url": "https://d-nb.info/1220508144/34",
+        "date": null,
+        "source_type": "technical_literature"
+      },
+      "limitations": [
+        "REACTION-LEVEL physics, NOT a machine-specific EOB measurement.",
+        "Calculated (not directly measured) saturation yield; enrichment-dependent.",
+        "Corroborating record for EV-F18-18OPN-SAT-001; competing raw values are preserved and resolved by the documented multi-evidence resolver (never silently averaged).",
+        "MODELED_ESTIMATE only: never manufacturer-calibrated or site-calibrated."
+      ]
+    }
+  ]
+}

@@ -176,6 +176,17 @@ class CyclotronProductionEstimate:
     limitations: tuple[str, ...]
     estimation_status: EstimationStatus
 
+    evidence_record_id: str | None = None
+    """The stable id of the Cyclotron Production Evidence Registry record used to
+    build a MODELED_ESTIMATE from external/physics evidence (Section 28). None for
+    calibrated / NOT_AVAILABLE / NO_COMPATIBLE_SOURCE / OUT_OF_CYCLOTRON_SCOPE
+    results, which are resolved without the registry."""
+
+    source_reference: str | None = None
+    """A human-readable citation for the evidence record used (title + url), so a
+    consumer can identify the provenance of a MODELED_ESTIMATE without re-reading
+    the registry. None when no registry record was used."""
+
     def has_numerical_value(self) -> bool:
         return self.estimated_or_calibrated_eob_mbq is not None and self.estimation_status == "AVAILABLE"
 
@@ -272,6 +283,171 @@ def _fit_yield_constant(
 
 
 # ---------------------------------------------------------------------------
+# Cyclotron Production Evidence Registry (external / physics evidence seam)
+# ---------------------------------------------------------------------------
+#
+# The registry is a SEPARATE, additive store of external/physics production
+# evidence (`cyclotron_production_evidence.json`) that the estimator may consume
+# ONLY as a MODELED_ESTIMATE basis where no manufacturer/site-calibrated
+# production record exists. It NEVER holds manufacturer/site-calibrated output
+# (that stays in Build 3B `cyclotron_equipment_catalog.json`) and NEVER changes a
+# model's calibration status. Missing/malformed file -> empty registry (the
+# estimator's behavior is then byte-identical to before this seam existed).
+
+_EVIDENCE_REGISTRY_FILENAME = "cyclotron_production_evidence.json"
+
+# Confidence ranking for the multi-evidence resolver (Section 27). This orders
+# competing records; it never changes SUPPORTED or CALIBRATION status.
+_CONFIDENCE_RANK: dict[str, int] = {"HIGH": 3, "MEDIUM": 2, "LOW": 1, "NOT_ASSESSED": 0}
+
+
+@dataclass(frozen=True)
+class ProductionEvidenceRecord:
+    """One traceable registry record. Raw evidence is preserved verbatim
+    (`raw_value`/`raw_unit`) alongside the normalized canonical form."""
+
+    evidence_record_id: str
+    evidence_kind: str  # REACTION_SATURATION_YIELD | MACHINE_SPECIFIC_EOB
+    catalog_model_id: str | None  # None => reaction-level physics (machine-agnostic)
+    radionuclide: str
+    reaction: str | None
+    beam_current_ua: float | None
+    raw_value: float | None
+    raw_unit: str | None
+    saturation_yield_mbq_per_ua: float | None
+    eob_activity_mbq: float | None
+    evidence_class: EvidenceClass
+    confidence: ConfidenceClass
+    reference_irradiation_minutes: float | None
+    normalization_method: str | None
+    source_title: str | None
+    source_url: str | None
+    source_type: str | None
+    limitations: tuple[str, ...]
+
+    @property
+    def source_reference(self) -> str:
+        title = self.source_title or "unattributed"
+        return f"{title}" + (f" <{self.source_url}>" if self.source_url else "")
+
+
+def _coerce_float(value: object) -> float | None:
+    return None if value is None else float(value)  # type: ignore[arg-type]
+
+
+def _parse_evidence_record(payload: dict) -> ProductionEvidenceRecord:
+    normalized = dict(payload.get("normalized", {}) or {})
+    source = dict(payload.get("source", {}) or {})
+    return ProductionEvidenceRecord(
+        evidence_record_id=str(payload["evidence_record_id"]),
+        evidence_kind=str(payload.get("evidence_kind", "")),
+        catalog_model_id=(None if payload.get("catalog_model_id") is None else str(payload.get("catalog_model_id"))),
+        radionuclide=str(payload.get("radionuclide", "")),
+        reaction=(None if payload.get("reaction") is None else str(payload.get("reaction"))),
+        beam_current_ua=_coerce_float(payload.get("beam_current_ua")),
+        raw_value=_coerce_float(payload.get("raw_value")),
+        raw_unit=(None if payload.get("raw_unit") is None else str(payload.get("raw_unit"))),
+        saturation_yield_mbq_per_ua=_coerce_float(normalized.get("saturation_yield_mbq_per_ua")),
+        eob_activity_mbq=_coerce_float(normalized.get("eob_activity_mbq")),
+        evidence_class=str(payload.get("evidence_class", "NOT_AVAILABLE")),  # type: ignore[assignment]
+        confidence=str(payload.get("confidence", "NOT_ASSESSED")),  # type: ignore[assignment]
+        reference_irradiation_minutes=_coerce_float(payload.get("reference_irradiation_minutes")),
+        normalization_method=(None if payload.get("normalization_method") is None else str(payload.get("normalization_method"))),
+        source_title=(None if source.get("title") is None else str(source.get("title"))),
+        source_url=(None if source.get("url") is None else str(source.get("url"))),
+        source_type=(None if source.get("source_type") is None else str(source.get("source_type"))),
+        limitations=tuple(str(x) for x in (payload.get("limitations", []) or [])),
+    )
+
+
+_EVIDENCE_REGISTRY_CACHE: tuple[ProductionEvidenceRecord, ...] | None = None
+
+
+def load_production_evidence_registry(*, force_reload: bool = False) -> tuple[ProductionEvidenceRecord, ...]:
+    """Load the Cyclotron Production Evidence Registry. Missing/malformed file
+    yields an EMPTY registry (never raises), so the estimator degrades to its
+    pre-seam behavior when no external evidence is present."""
+    global _EVIDENCE_REGISTRY_CACHE
+    if _EVIDENCE_REGISTRY_CACHE is not None and not force_reload:
+        return _EVIDENCE_REGISTRY_CACHE
+    import json
+    from pathlib import Path
+
+    path = Path(__file__).with_name(_EVIDENCE_REGISTRY_FILENAME)
+    records: list[ProductionEvidenceRecord] = []
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+        for raw in payload.get("evidence_records", []):
+            records.append(_parse_evidence_record(dict(raw)))
+    except (FileNotFoundError, ValueError, KeyError, TypeError):
+        records = []
+    _EVIDENCE_REGISTRY_CACHE = tuple(records)
+    return _EVIDENCE_REGISTRY_CACHE
+
+
+def resolve_evidence_registry_records(
+    catalog_model_id: str, radionuclide: str
+) -> tuple[ProductionEvidenceRecord, ...]:
+    """All registry records applicable to (model x radionuclide): machine-specific
+    records naming this model, PLUS reaction-level (catalog_model_id is None)
+    records for this radionuclide. Radionuclide match is exact (no cross-
+    radionuclide borrowing)."""
+    return tuple(
+        r
+        for r in load_production_evidence_registry()
+        if r.radionuclide == radionuclide
+        and (r.catalog_model_id is None or r.catalog_model_id == catalog_model_id)
+    )
+
+
+@dataclass(frozen=True)
+class EvidenceResolution:
+    """The outcome of the multi-evidence resolver (Section 27): the single chosen
+    record, WHY it was chosen, and the competing records (never silently
+    averaged/discarded)."""
+
+    chosen: ProductionEvidenceRecord | None
+    selection_reason: str
+    competing_record_ids: tuple[str, ...]
+
+
+def resolve_evidence_record(catalog_model_id: str, radionuclide: str) -> EvidenceResolution:
+    """Choose ONE evidence record for a pair from possibly several (Section 27).
+    Never silently averages competing records. Deterministic ranking:
+      1. evidence-class precedence (`stronger_basis`);
+      2. machine-specific over reaction-level (more specific wins);
+      3. confidence (HIGH > MEDIUM > LOW);
+      4. stable evidence_record_id (tie-break for reproducibility).
+    The competing records are preserved so a consumer can audit the choice."""
+    candidates = resolve_evidence_registry_records(catalog_model_id, radionuclide)
+    if not candidates:
+        return EvidenceResolution(chosen=None, selection_reason="no applicable evidence records", competing_record_ids=())
+
+    def sort_key(r: ProductionEvidenceRecord) -> tuple:
+        return (
+            _EVIDENCE_PRECEDENCE.get(r.evidence_class, 0),
+            1 if r.catalog_model_id is not None else 0,
+            _CONFIDENCE_RANK.get(r.confidence, 0),
+            r.evidence_record_id,
+        )
+
+    ranked = sorted(candidates, key=sort_key, reverse=True)
+    chosen = ranked[0]
+    reason = (
+        f"selected {chosen.evidence_record_id} "
+        f"(class={chosen.evidence_class}, "
+        f"{'machine-specific' if chosen.catalog_model_id is not None else 'reaction-level'}, "
+        f"confidence={chosen.confidence}) over {len(ranked) - 1} competing record(s) "
+        f"by evidence-class precedence, specificity, then confidence -- competing records preserved, never averaged."
+    )
+    return EvidenceResolution(
+        chosen=chosen,
+        selection_reason=reason,
+        competing_record_ids=tuple(r.evidence_record_id for r in ranked),
+    )
+
+
+# ---------------------------------------------------------------------------
 # Primary authority API
 # ---------------------------------------------------------------------------
 
@@ -312,6 +488,8 @@ def estimate_cyclotron_production(
         raw_ref: str | None,
         limitations: Sequence[str],
         estimation_status: EstimationStatus,
+        evidence_record_id: str | None = None,
+        source_reference: str | None = None,
     ) -> CyclotronProductionEstimate:
         return CyclotronProductionEstimate(
             catalog_model_id=catalog_model_id,
@@ -330,6 +508,8 @@ def estimate_cyclotron_production(
             raw_evidence_reference=raw_ref,
             limitations=tuple(limitations),
             estimation_status=estimation_status,
+            evidence_record_id=evidence_record_id,
+            source_reference=source_reference,
         )
 
     # --- Generator-daughter boundary (Sections 16/17). Tc-99m et al. are not a
@@ -496,10 +676,26 @@ def estimate_cyclotron_production(
             estimation_status="AVAILABLE",
         )
 
-    # --- Supported but NO manufacturer-calibrated anchor with the numerical
-    # inputs required for a defensible estimate (e.g. SUMITOMO_CYPRIS_MP_30 +
-    # F-18: empty records, no beam current). Honest NOT_AVAILABLE. Never borrow
-    # another model's capacity; never fabricate (Section 15). ---
+    # --- Supported but NO manufacturer-calibrated anchor in the catalog. Before
+    # returning NOT_AVAILABLE, consult the Cyclotron Production Evidence Registry
+    # for a defensible MODELED_ESTIMATE basis (external/physics evidence). This is
+    # the additive seam: it can NEVER outrank a manufacturer/site anchor (handled
+    # above) and NEVER changes calibration_status. ---
+    registry_estimate = _try_registry_modeled_estimate(
+        model=model,
+        radionuclide=radionuclide,
+        cycle_minutes=cycle_minutes,
+        decay_lambda=decay_lambda,
+        irradiation_minutes=irradiation_minutes,
+        result=_result,
+    )
+    if registry_estimate is not None:
+        return registry_estimate
+
+    # --- No manufacturer anchor AND no applicable registry evidence (e.g.
+    # SUMITOMO_CYPRIS_MP_30 + F-18: empty records, no OWN published beam current,
+    # no machine-specific evidence). Honest NOT_AVAILABLE. Never borrow another
+    # model's capacity; never fabricate (Section 15). ---
     return _result(
         supported=True,
         production_basis="NOT_AVAILABLE",
@@ -509,8 +705,9 @@ def estimate_cyclotron_production(
         confidence="NOT_ASSESSED",
         provenance=(
             f"{model_name} supports {radionuclide} but the repository holds no "
-            f"manufacturer-calibrated anchor (beam current + irradiation time + normalized "
-            f"EOB) for this pair, so no defensible numerical estimate can be constructed."
+            f"manufacturer-calibrated anchor and no applicable production-evidence-registry "
+            f"record (with this model's own beam current) for this pair, so no defensible "
+            f"numerical estimate can be constructed."
         ),
         raw_ref=None,
         limitations=(
@@ -520,6 +717,126 @@ def estimate_cyclotron_production(
         ),
         estimation_status="NOT_AVAILABLE",
     )
+
+
+def _model_own_beam_current_ua(model: "_cc.CyclotronCatalogModel") -> float | None:
+    """The model's OWN published beam current (from Build 3B `field_provenance`),
+    if any. Used to apply a reaction-level saturation yield to THIS machine
+    without borrowing another model's current. Returns None when the model does
+    not publish its own beam current."""
+    field = model.field_provenance.get("beam_current_ua") if model.field_provenance else None
+    if field is None:
+        return None
+    value = getattr(field, "value", None)
+    try:
+        current = None if value is None else float(value)
+    except (TypeError, ValueError):
+        return None
+    return current if (current is not None and current > 0.0) else None
+
+
+def _try_registry_modeled_estimate(
+    *,
+    model: "_cc.CyclotronCatalogModel",
+    radionuclide: str,
+    cycle_minutes: float | None,
+    decay_lambda: float | None,
+    irradiation_minutes: float | None,
+    result,
+) -> "CyclotronProductionEstimate | None":
+    """Attempt a MODELED_ESTIMATE from the Cyclotron Production Evidence Registry.
+
+    Two evidence kinds are honored:
+      * MACHINE_SPECIFIC_EOB   -> a machine-specific normalized EOB (used directly).
+      * REACTION_SATURATION_YIELD -> reaction physics K applied to THIS model's OWN
+        published beam current: A_EOB = K * I_own * (1 - exp(-lambda*t)).
+
+    Returns None (deferring to NOT_AVAILABLE) whenever a defensible estimate
+    cannot be built -- e.g. no evidence record, or a reaction-yield record with no
+    OWN beam current (SUMITOMO_CYPRIS_MP_30), or missing half-life physics. The
+    registry NEVER fabricates a beam current and NEVER borrows another model's."""
+    resolution = resolve_evidence_record(model.catalog_model_id, radionuclide)
+    record = resolution.chosen
+    if record is None:
+        return None
+
+    # Registry evidence is only ever a MODELED_ESTIMATE (literature/physics).
+    if record.evidence_class != "MODELED_ESTIMATE":
+        return None
+
+    if irradiation_minutes is not None and float(irradiation_minutes) <= 0.0:
+        raise ValueError("irradiation_minutes must be positive when provided")
+
+    # --- Machine-specific EOB record: use the normalized EOB directly. ---
+    if record.evidence_kind == "MACHINE_SPECIFIC_EOB" and record.eob_activity_mbq is not None:
+        return result(
+            supported=True,
+            production_basis="MODELED_ESTIMATE",
+            eob=float(record.eob_activity_mbq),
+            irr=(irradiation_minutes if irradiation_minutes is not None else record.reference_irradiation_minutes),
+            cycle=cycle_minutes,
+            confidence=record.confidence,
+            provenance=(
+                f"MODELED_ESTIMATE for {model.model} + {radionuclide} from machine-specific "
+                f"evidence record {record.evidence_record_id}. {resolution.selection_reason}"
+            ),
+            raw_ref=f"{record.raw_value} {record.raw_unit} ({record.source_reference})",
+            limitations=record.limitations + (
+                "MODELED_ESTIMATE: not manufacturer/site calibration; calibration status unchanged.",
+            ),
+            estimation_status="AVAILABLE",
+            evidence_record_id=record.evidence_record_id,
+            source_reference=record.source_reference,
+        )
+
+    # --- Reaction saturation-yield record: physics K applied to THIS model's OWN
+    # published beam current. No own current -> defer to NOT_AVAILABLE. ---
+    if record.evidence_kind == "REACTION_SATURATION_YIELD" and record.saturation_yield_mbq_per_ua is not None:
+        if decay_lambda is None:
+            # No canonical half-life physics -> cannot model an irradiation-time
+            # response; never fabricate decay physics.
+            return None
+        own_current = _model_own_beam_current_ua(model)
+        if own_current is None:
+            # e.g. SUMITOMO_CYPRIS_MP_30 publishes no OWN beam current -> honest
+            # NOT_AVAILABLE (no borrowing, no fabrication).
+            return None
+        t = float(irradiation_minutes) if irradiation_minutes is not None else record.reference_irradiation_minutes
+        if t is None or t <= 0.0:
+            return None
+        k = float(record.saturation_yield_mbq_per_ua)
+        modeled_eob = k * own_current * (1.0 - math.exp(-decay_lambda * t))
+        # Honest composite confidence: a reaction-level yield applied to a model's
+        # OWN (typically literature-grade) beam current is a two-source physics
+        # synthesis -> capped at LOW, regardless of the yield record's own
+        # (ranking) confidence. Never overstated as MEDIUM/HIGH.
+        return result(
+            supported=True,
+            production_basis="MODELED_ESTIMATE",
+            eob=float(modeled_eob),
+            irr=t,
+            cycle=cycle_minutes,
+            confidence="LOW",
+            provenance=(
+                f"Irradiation-time response A_EOB = Ysat*I*(1-exp(-lambda*t)) for {model.model} + "
+                f"{radionuclide}; Ysat={k:.6g} MBq/uA from reaction-physics evidence "
+                f"{record.evidence_record_id} ({record.reaction}); I={own_current} uA is THIS model's "
+                f"OWN published beam current (never borrowed); t={t} min. {resolution.selection_reason}"
+            ),
+            raw_ref=f"{record.raw_value} {record.raw_unit} ({record.source_reference})",
+            limitations=record.limitations + (
+                f"MODELED_ESTIMATE: reaction-level physics applied to {model.model}'s OWN beam "
+                f"current ({own_current} uA); not a manufacturer/site EOB measurement; "
+                f"calibration status unchanged.",
+                "Assumes the reaction operates above threshold at this model's beam energy; "
+                "single-target, single operating point; not an unlimited capacity curve.",
+            ),
+            estimation_status="AVAILABLE",
+            evidence_record_id=record.evidence_record_id,
+            source_reference=record.source_reference,
+        )
+
+    return None
 
 
 def resolve_simulation_production_basis(
