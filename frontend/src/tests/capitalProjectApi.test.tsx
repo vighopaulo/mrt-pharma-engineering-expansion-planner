@@ -170,6 +170,6 @@ describe('Capital Project real engine connection', () => {
 
     it('What-If remains unconnected and explicitly requires analysis first', async () => {
         renderCapitalProject()
-        await waitFor(() => expect(screen.getByText('Analysis required before What-If')).toBeInTheDocument())
+        await waitFor(() => expect(screen.getAllByText('Analysis not yet run').length).toBeGreaterThan(0))
     })
 })

@@ -41,6 +41,29 @@ class PathwayBudgetResult:
     roi_pct: float = 0.0
     payback_years: float = math.inf
     operating_day_feasible: bool = True
+    # Build 3A: richer production qualification fields.
+    # production_capacity_status mirrors cyclotron_activity_capacity_status semantics:
+    #   "calibrated"      -- physical EOB capacity was applied
+    #   "not_calibrated"  -- no physical EOB capacity; legacy formula was NOT used
+    #                        (capacity is scanner/room-limited only)
+    # production_feasibility_qualified = True only when physical EOB capacity is known
+    # and covers the required throughput. False when not_calibrated (NOT the same as
+    # infeasible -- the budget/clinical model may be valid; production is unverified).
+    production_capacity_status: str = "not_calibrated"
+    production_feasibility_qualified: bool = False
+    # Build 3A.2: candidate identity separates SEARCH PATHWAY (`pathway`) from the
+    # SELECTED PHYSICAL CANDIDATE identity. An MRT investment search may legitimately
+    # conclude no MRT investment is needed (backbone_charged=False) -> NO_BUILD_BASELINE.
+    #   "NO_BUILD_BASELINE"           -- zero-backbone winner; no MRT system built
+    #   "GENERIC_LEGACY_MRT"          -- backbone-charged legacy MRT investment
+    #   "GENERIC_LEGACY_CONVENTIONAL" -- legacy conventional expansion
+    # These legacy identities are deliberately NOT the four-architecture doctrine
+    # (MANUAL_CONVENTIONAL/AUTOMATED_CONVENTIONAL/HYBRID_MRT/MRT_DOMINANT).
+    candidate_identity: str = "GENERIC_LEGACY_CONVENTIONAL"
+    # Build 3A.2 (D-T1): the transport basis ACTUALLY used to compute this candidate's
+    # retention/capacity. A zero-backbone MRT-search winner uses the conventional basis;
+    # a backbone-charged MRT winner uses the MRT basis. Never inferred from pathway name.
+    transport_minutes_basis: float = 0.0
 
 
 @dataclass(frozen=True)
@@ -134,6 +157,11 @@ class MultiBatchPathwayResult:
     score_components: dict[str, float] = field(default_factory=dict)
     score_weights: dict[str, float] = field(default_factory=dict)
     decision_view: str = ""
+    # Build 3A: richer production qualification — mirrors PathwayBudgetResult fields.
+    production_capacity_status: str = "not_calibrated"
+    production_feasibility_qualified: bool = False
+    # Build 3A.2: selected physical candidate identity (distinct from search `pathway`).
+    candidate_identity: str = "GENERIC_LEGACY_CONVENTIONAL"
 
 
 @dataclass(frozen=True)
@@ -611,10 +639,16 @@ def _resolve_physical_eob_capacity_mbq_per_day(
     return None, "not_calibrated"
 
 
-def _candidate_tie(candidate: MultiBatchPathwayResult) -> tuple[float, float, float, float, int, int, int, int, int]:
+def _candidate_tie(candidate: MultiBatchPathwayResult) -> tuple[float, float, float, float, float, int, int, int, int]:
+    # Build 3A (Section 3-4): the ranking benefit is target-bound.
+    # revenue_generating_throughput_per_day is already min(achieved, maximum_expected_demand_per_day),
+    # i.e. served-for-ranking throughput. Once served throughput ties, prefer LOWER CapEx
+    # before raw excess capacity, so the optimizer no longer overbuilds clinical
+    # infrastructure far beyond target demand purely to maximize an unusable capacity ceiling.
+    # achieved_capacity_per_day is retained ONLY as a low-priority tiebreaker (after CapEx,
+    # OPEX and resource counts), so genuine ties still resolve deterministically.
     return (
         candidate.revenue_generating_throughput_per_day,
-        candidate.achieved_capacity_per_day,
         -candidate.capex_used,
         -candidate.total_annual_modelled_opex,
         -candidate.additional_scanners,
@@ -622,6 +656,7 @@ def _candidate_tie(candidate: MultiBatchPathwayResult) -> tuple[float, float, fl
         -candidate.batches_per_day,
         -candidate.guideway_segments,
         -candidate.endpoints,
+        candidate.achieved_capacity_per_day,
     )
 
 
@@ -668,15 +703,19 @@ def maximize_conventional_capacity(
     synthesis_yield = _synthesis_yield_fraction(assumptions)
     synthesis_retention = _synthesis_retention_fraction(assumptions, half_life_min)
     synthesis_factor = max(synthesis_retention * synthesis_yield, 1e-12)
-    physical_eob_capacity_mbq_per_day, _ = _resolve_physical_eob_capacity_mbq_per_day(
+    physical_eob_capacity_mbq_per_day, eob_status = _resolve_physical_eob_capacity_mbq_per_day(
         inputs=inputs,
         assumptions=assumptions,
         batches_per_day=1,
     )
     use_physical_capacity = physical_eob_capacity_mbq_per_day is not None
 
+    # Build 3A (Section 3-4): when physical EOB capacity is NOT calibrated, do NOT iterate
+    # legacy 10% production blocks. Legacy blocks are not a physical production model and must
+    # not drive capacity ceilings or CapEx. Production capacity becomes float("inf")
+    # (scanner/room-limited only).
     max_add_scanners = int(common_budget // assumptions.scanner_capex) + 2
-    max_prod_blocks = 0 if use_physical_capacity else int(common_budget // assumptions.production_expansion_capex_per_10pct) + 2
+    max_prod_blocks = int(common_budget // assumptions.production_expansion_capex_per_10pct) + 2 if use_physical_capacity else 0
 
     max_scanner_capacity = scanner_capacity(
         inputs.current_scanners + max_add_scanners,
@@ -684,12 +723,13 @@ def maximize_conventional_capacity(
         assumptions.scanner_cycle_min,
         assumptions.scanner_availability_pct,
     )
-    max_production_capacity = (
-        float(physical_eob_capacity_mbq_per_day) * synthesis_factor / max(prescribed_activity_mbq, 1e-12) * retained
-        if use_physical_capacity
-        else inputs.current_usable_doses_per_day * (1.0 + 0.1 * max_prod_blocks) * retained
-    )
-    upper_room_target = min(max_scanner_capacity, max_production_capacity)
+    if use_physical_capacity:
+        max_production_capacity = (
+            float(physical_eob_capacity_mbq_per_day) * synthesis_factor / max(prescribed_activity_mbq, 1e-12) * retained
+        )
+    else:
+        max_production_capacity = float("inf")
+    upper_room_target = max_scanner_capacity if math.isinf(max_production_capacity) else min(max_scanner_capacity, max_production_capacity)
 
     required_injection_total = math.ceil(
         upper_room_target * assumptions.injection_cycle_min / (assumptions.operating_hours_per_day * 60.0)
@@ -728,18 +768,22 @@ def maximize_conventional_capacity(
                 )
 
                 for prod_blocks in range(0, max_prod_blocks + 1):
-                    production_expansion_pct = 0.0 if use_physical_capacity else prod_blocks * 10.0
-                    production_cap = (
-                        float(physical_eob_capacity_mbq_per_day) * synthesis_factor / max(prescribed_activity_mbq, 1e-12) * retained
-                        if use_physical_capacity
-                        else inputs.current_usable_doses_per_day * (1.0 + prod_blocks * 0.1) * retained
-                    )
-                    cyclotron_needed = (not inputs.has_existing_cyclotron) and (prod_blocks > 0) and (not use_physical_capacity)
+                    if use_physical_capacity:
+                        production_expansion_pct = prod_blocks * 10.0
+                        production_cap = (
+                            float(physical_eob_capacity_mbq_per_day) * synthesis_factor / max(prescribed_activity_mbq, 1e-12) * retained
+                        )
+                        cyclotron_needed = (not inputs.has_existing_cyclotron) and (prod_blocks > 0)
+                    else:
+                        # Build 3A: not calibrated -> no legacy production ceiling, no production/cyclotron CapEx.
+                        production_expansion_pct = 0.0
+                        production_cap = float("inf")
+                        cyclotron_needed = False
 
                     capex = (
                         add_scanners * assumptions.scanner_capex
                         + (add_injection + add_uptake) * assumptions.additional_room_capex
-                        + prod_blocks * assumptions.production_expansion_capex_per_10pct
+                        + (prod_blocks * assumptions.production_expansion_capex_per_10pct if use_physical_capacity else 0.0)
                         + (
                             assumptions.cyclotron_purchase_capex + assumptions.cyclotron_installation_capex
                             if cyclotron_needed
@@ -751,13 +795,16 @@ def maximize_conventional_capacity(
 
                     achieved = min(scanner_cap, injection_cap, uptake_cap, production_cap)
 
+                    # Build 3A (Section 3): target-bound ranking benefit, then LOWER CapEx,
+                    # raw achieved only as a final low-priority tiebreaker.
+                    served_for_ranking = min(achieved, inputs.maximum_expected_demand_per_day)
                     tie = (
-                        achieved,
+                        served_for_ranking,
                         -capex,
                         -(add_injection + add_uptake),
                         -add_scanners,
                         -production_expansion_pct,
-                        0,
+                        achieved,
                     )
                     if best_payload is None or tie > best_payload["tie"]:
                         best_payload = {
@@ -785,16 +832,23 @@ def maximize_conventional_capacity(
     annual_revenue = revenue_throughput * assumptions.revenue_per_scan * assumptions.operating_days_per_year
     increase = achieved - baseline_capacity
 
-    constraints = {
+    # Build 3A: production_after_decay only participates when physical capacity is calibrated
+    # and finite. When uncalibrated the production cap is inf and must not appear as binding
+    # nor be serialized/reported anywhere.
+    constraints: dict[str, float] = {
         "scanner": float(best_payload["scanner_cap"]),
         "injection_rooms": float(best_payload["injection_cap"]),
         "uptake_rooms": float(best_payload["uptake_cap"]),
-        "production_after_decay": float(best_payload["production_cap"]),
     }
+    raw_prod_cap = float(best_payload["production_cap"])
+    if use_physical_capacity and not math.isinf(raw_prod_cap):
+        constraints["production_after_decay"] = raw_prod_cap
     binding = _binding_constraint_name(constraints, achieved)
 
-    prod_cap = float(best_payload["production_cap"])
     gross_required_doses = achieved / max(retained, 1e-12)
+
+    prod_cap_status = eob_status
+    prod_feasibility_qualified = use_physical_capacity and not math.isinf(raw_prod_cap)
 
     capex_ledger = [
         _ledger_item(
@@ -817,21 +871,21 @@ def maximize_conventional_capacity(
         ),
         _ledger_item(
             "Production expansion blocks (10%)",
-            float(best_payload["prod_blocks"]),
+            float(best_payload["prod_blocks"]) if use_physical_capacity else 0.0,
             assumptions.production_expansion_capex_per_10pct,
-            "decision variable",
+            "charged only when physical EOB capacity is calibrated and requires expansion",
         ),
         _ledger_item(
             "Cyclotron purchase",
             1.0 if bool(best_payload["cyclotron_needed"]) else 0.0,
             assumptions.cyclotron_purchase_capex,
-            "required only if no existing cyclotron and production expanded",
+            "charged only when physical production expansion requires a new cyclotron",
         ),
         _ledger_item(
             "Cyclotron installation",
             1.0 if bool(best_payload["cyclotron_needed"]) else 0.0,
             assumptions.cyclotron_installation_capex,
-            "required only if no existing cyclotron and production expanded",
+            "charged only when physical production expansion requires a new cyclotron",
         ),
     ]
 
@@ -849,7 +903,7 @@ def maximize_conventional_capacity(
         annual_revenue=annual_revenue,
         retained_activity_pct=retained * 100.0,
         production_expansion_pct=float(best_payload["production_expansion_pct"]),
-        gross_required_doses_per_day=min(gross_required_doses, prod_cap / max(retained, 1e-12)),
+        gross_required_doses_per_day=gross_required_doses,
         binding_constraint=binding,
         additional_scanners=int(best_payload["add_scanners"]),
         new_rooms_constructed=int(best_payload["add_injection"]) + int(best_payload["add_uptake"]),
@@ -861,6 +915,11 @@ def maximize_conventional_capacity(
         building_connections=0,
         backbone_charged=False,
         capex_ledger=capex_ledger,
+        production_capacity_status=prod_cap_status,
+        production_feasibility_qualified=prod_feasibility_qualified,
+        # Build 3A.2: legacy conventional identity; transport basis actually used.
+        candidate_identity="GENERIC_LEGACY_CONVENTIONAL",
+        transport_minutes_basis=_conventional_transport_min(inputs),
     )
 
 
@@ -877,17 +936,21 @@ def maximize_mrt_capacity(
     synthesis_yield = _synthesis_yield_fraction(assumptions)
     synthesis_retention = _synthesis_retention_fraction(assumptions, half_life_min)
     synthesis_factor = max(synthesis_retention * synthesis_yield, 1e-12)
-    physical_eob_capacity_mbq_per_day, _ = _resolve_physical_eob_capacity_mbq_per_day(
+    physical_eob_capacity_mbq_per_day, eob_status = _resolve_physical_eob_capacity_mbq_per_day(
         inputs=inputs,
         assumptions=assumptions,
         batches_per_day=1,
     )
     use_physical_capacity = physical_eob_capacity_mbq_per_day is not None
-    baseline_production = (
-        float(physical_eob_capacity_mbq_per_day) * synthesis_factor / max(prescribed_activity_mbq, 1e-12) * retained_no_backbone
-        if use_physical_capacity
-        else inputs.current_usable_doses_per_day * retained_no_backbone
-    )
+    # Build 3A (Section 5-6): when physical EOB capacity is NOT calibrated, baseline
+    # production capacity is NOT the legacy current_usable_doses figure. It becomes
+    # float("inf") internally (scanner/room-limited only). inf is never returned.
+    if use_physical_capacity:
+        baseline_production = (
+            float(physical_eob_capacity_mbq_per_day) * synthesis_factor / max(prescribed_activity_mbq, 1e-12) * retained_no_backbone
+        )
+    else:
+        baseline_production = float("inf")
     baseline_scanner = scanner_capacity(
         inputs.current_scanners,
         assumptions.operating_hours_per_day,
@@ -900,9 +963,12 @@ def maximize_mrt_capacity(
         assumptions.uptake_cycle_min,
     )
     baseline_achieved = min(baseline_production, baseline_scanner, baseline_room)
+    # Build 3A: initializer tie must use target-bounded served throughput to be comparable
+    # with the search-loop tie tuples (which now key on served_for_ranking, then -capex).
+    baseline_served_for_ranking = min(baseline_achieved, inputs.maximum_expected_demand_per_day)
 
     best_payload: dict[str, object] = {
-        "tie": (baseline_achieved, -0.0, -0, -0, -0.0, -0),
+        "tie": (baseline_served_for_ranking, -0.0, -0, -0, -0.0, -0),
         "capex": 0.0,
         "achieved": baseline_achieved,
         "retained": retained_no_backbone,
@@ -927,18 +993,23 @@ def maximize_mrt_capacity(
         mrt_transport_min = assumptions.mrt_transport_default_min if inputs.mrt_transport_min is None else inputs.mrt_transport_min
         retained = retention(mrt_transport_min, half_life_min)
         max_add_scanners = int(common_budget // assumptions.scanner_capex) + 2
-        max_prod_blocks = 0 if use_physical_capacity else int(common_budget // assumptions.production_expansion_capex_per_10pct) + 2
+        # Build 3A (Section 5): when not calibrated, prod_blocks = 0 only. No legacy
+        # production scaling, no production/cyclotron CapEx in the uncalibrated path.
+        max_prod_blocks = int(common_budget // assumptions.production_expansion_capex_per_10pct) + 2 if use_physical_capacity else 0
         max_new_rooms = int(common_budget // assumptions.additional_room_capex) + 2
 
         current_total_rooms = inputs.current_injection_rooms + inputs.current_uptake_rooms
 
         for prod_blocks in range(0, max_prod_blocks + 1):
-            production_cap = (
-                float(physical_eob_capacity_mbq_per_day) * synthesis_factor / max(prescribed_activity_mbq, 1e-12) * retained
-                if use_physical_capacity
-                else inputs.current_usable_doses_per_day * (1.0 + prod_blocks * 0.1) * retained
-            )
-            production_pct = 0.0 if use_physical_capacity else prod_blocks * 10.0
+            if use_physical_capacity:
+                production_cap = (
+                    float(physical_eob_capacity_mbq_per_day) * synthesis_factor / max(prescribed_activity_mbq, 1e-12) * retained
+                )
+                production_pct = prod_blocks * 10.0
+            else:
+                # Build 3A: not calibrated -> no legacy production ceiling for the MRT search.
+                production_cap = float("inf")
+                production_pct = 0.0
 
             for add_scanners in range(0, max_add_scanners + 1):
                 total_scanners = inputs.current_scanners + add_scanners
@@ -963,14 +1034,15 @@ def maximize_mrt_capacity(
                         endpoints = 2 + connectable_rooms
                         guideway_cap = endpoints * (8.0 + 2.0 * infra_units)
 
-                        cyclotron_needed = (not inputs.has_existing_cyclotron) and prod_blocks > 0 and (not use_physical_capacity)
+                        # Build 3A: cyclotron and production CapEx only in calibrated path.
+                        cyclotron_needed = use_physical_capacity and (not inputs.has_existing_cyclotron) and prod_blocks > 0
                         capex = (
                             assumptions.mrt_infrastructure_capex
                             + guideway_segments * assumptions.guideway_segment_capex
                             + endpoints * assumptions.endpoint_capex
                             + add_scanners * assumptions.scanner_capex
                             + connectable_rooms * assumptions.additional_room_capex
-                            + prod_blocks * assumptions.production_expansion_capex_per_10pct
+                            + (prod_blocks * assumptions.production_expansion_capex_per_10pct if use_physical_capacity else 0.0)
                             + (
                                 assumptions.cyclotron_purchase_capex + assumptions.cyclotron_installation_capex
                                 if cyclotron_needed
@@ -981,8 +1053,11 @@ def maximize_mrt_capacity(
                             continue
 
                         achieved = min(production_cap, scanner_cap, room_cap, guideway_cap)
+                        # Build 3A (Section 3): target-bound ranking benefit, then LOWER CapEx.
+                        # Once demand is served, unused excess capacity must not win.
+                        served_for_ranking = min(achieved, inputs.maximum_expected_demand_per_day)
                         tie = (
-                            achieved,
+                            served_for_ranking,
                             -capex,
                             -new_rooms,
                             -add_scanners,
@@ -1018,16 +1093,24 @@ def maximize_mrt_capacity(
     annual_revenue = revenue_throughput * assumptions.revenue_per_scan * assumptions.operating_days_per_year
     increase = achieved - baseline_capacity
 
-    constraints = {
+    # Build 3A: production_after_decay only participates when physical capacity is calibrated
+    # and finite. When uncalibrated the production cap is inf and must not appear as binding
+    # nor be serialized/reported anywhere.
+    constraints: dict[str, float] = {
         "scanner": float(best_payload["scanner_cap"]),
         "rooms": float(best_payload["room_cap"]),
-        "production_after_decay": float(best_payload["production_cap"]),
         "guideway_network": float(best_payload["guideway_cap"]),
     }
+    raw_prod_cap = float(best_payload["production_cap"])
+    if use_physical_capacity and not math.isinf(raw_prod_cap):
+        constraints["production_after_decay"] = raw_prod_cap
     binding = _binding_constraint_name(constraints, achieved)
 
     retained = float(best_payload["retained"])
     gross_required_doses = achieved / max(retained, 1e-12)
+
+    prod_cap_status = eob_status
+    prod_feasibility_qualified = use_physical_capacity and not math.isinf(raw_prod_cap)
 
     capex_ledger = [
         _ledger_item(
@@ -1062,21 +1145,21 @@ def maximize_mrt_capacity(
         ),
         _ledger_item(
             "Production expansion blocks (10%)",
-            float(best_payload["prod_blocks"]),
+            float(best_payload["prod_blocks"]) if use_physical_capacity else 0.0,
             assumptions.production_expansion_capex_per_10pct,
-            "decision variable",
+            "charged only when physical EOB capacity is calibrated and requires expansion",
         ),
         _ledger_item(
             "Cyclotron purchase",
             1.0 if bool(best_payload["cyclotron_needed"]) else 0.0,
             assumptions.cyclotron_purchase_capex,
-            "required only if no existing cyclotron and production expanded",
+            "charged only when physical production expansion requires a new cyclotron",
         ),
         _ledger_item(
             "Cyclotron installation",
             1.0 if bool(best_payload["cyclotron_needed"]) else 0.0,
             assumptions.cyclotron_installation_capex,
-            "required only if no existing cyclotron and production expanded",
+            "charged only when physical production expansion requires a new cyclotron",
         ),
     ]
 
@@ -1106,6 +1189,16 @@ def maximize_mrt_capacity(
         building_connections=0,
         backbone_charged=bool(best_payload["backbone"]),
         capex_ledger=capex_ledger,
+        production_capacity_status=prod_cap_status,
+        production_feasibility_qualified=prod_feasibility_qualified,
+        # Build 3A.2 (D-I1): an MRT investment search that selects a zero-backbone
+        # winner did NOT build MRT -> NO_BUILD_BASELINE. A backbone-charged winner is
+        # a genuine GENERIC_LEGACY_MRT candidate.
+        candidate_identity=("GENERIC_LEGACY_MRT" if bool(best_payload["backbone"]) else "NO_BUILD_BASELINE"),
+        # Build 3A.2 (D-T1): report the transport basis ACTUALLY used for this candidate.
+        # best_payload["transport_min"] is conventional for the no-backbone baseline and
+        # mrt_transport_min for a backbone-charged candidate -- never inferred from pathway.
+        transport_minutes_basis=float(best_payload["transport_min"]),
     )
 
 
@@ -1147,14 +1240,17 @@ def evaluate_equal_budget_multibatch_pathway(
 
     if pathway == "Conventional":
         base = maximize_conventional_capacity(inputs, assumptions, half_life_min, common_budget)
-        transport_minutes = _conventional_transport_min(inputs)
         base_annual_opex = _base_annual_opex_conventional(base, assumptions)
     elif pathway == "MRT":
         base = maximize_mrt_capacity(inputs, assumptions, half_life_min, common_budget)
-        transport_minutes = assumptions.mrt_transport_default_min if inputs.mrt_transport_min is None else inputs.mrt_transport_min
         base_annual_opex = _base_annual_opex_mrt(base, assumptions)
     else:
         raise ValueError("pathway must be Conventional or MRT.")
+
+    # Build 3A.2 (D-T1): report the transport basis the selected candidate was ACTUALLY
+    # computed with, not an assumption inferred from the search pathway name. A zero-backbone
+    # MRT-search winner (NO_BUILD_BASELINE) carries the conventional transport basis.
+    transport_minutes = base.transport_minutes_basis
 
     useful_window_per_batch = max(0.0, assumptions.operating_hours_per_day * 60.0 / batches_per_day - transport_minutes)
     if useful_window_per_batch <= 0.0:
@@ -1213,6 +1309,9 @@ def evaluate_equal_budget_multibatch_pathway(
         capex_ledger=base.capex_ledger,
         usable_doses_per_day=base.gross_required_doses_per_day * base.retained_activity_pct / 100.0,
         binding_constraint_calibration="engineering_assumption",
+        production_capacity_status=base.production_capacity_status,
+        production_feasibility_qualified=base.production_feasibility_qualified,
+        candidate_identity=base.candidate_identity,
     )
 
 
