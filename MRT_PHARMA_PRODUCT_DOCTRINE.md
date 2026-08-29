@@ -452,5 +452,27 @@ here so no future build mistakes them for shipped behavior:
 
 ---
 
+## 14. Clinical radionuclide portfolio doctrine (OG-RAD-1)
+
+- **PORTFOLIO ≠ DEMAND MIX ≠ OPTIMIZER:** the clinical radionuclide portfolio says
+  *what clinical radionuclide demand is legitimate*; a demand scenario says *how
+  much of each is requested*; Part 3E says *what capital composition best serves
+  that demand*. These three stay separate. The portfolio never fabricates a
+  demand mix (`MULTI_RADIONUCLIDE_WEIGHTING_AUTHORITY = NOT_MODELED`).
+- **Architecture neutrality is mandatory:** the portfolio encodes no transport /
+  MRT / Conventional / decay-advantage bias. Short-half-life radionuclides
+  (C-11/N-13/O-15) are represented on the same footing as long-lived ones and are
+  never promoted because they might favor a faster transport mode. Part 3E must
+  discover architecture consequences from physics downstream.
+- **Physically known ≠ clinically admissible:** a radionuclide may be physically
+  recognized (half-life table / cyclotron support / generator daughter) yet remain
+  excluded from NORMAL demand for a missing clinical-modality, procedure, decay,
+  selected-source, or scanner authority. The gap is reported honestly, never
+  silently filled. Reuses SUPPORTED ≠ CALIBRATED (§10) and the portfolio is never
+  patient-identity-aware. **IMPLEMENTED (portfolio authority)** (OG-RAD-1,
+  `clinical_radionuclide_portfolio.py`).
+
+---
+
 *This is a governance artifact. It records product doctrine and introduces no
 production-engine behavior.*

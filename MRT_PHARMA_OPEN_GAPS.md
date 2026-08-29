@@ -182,6 +182,49 @@ authority each gap references.
 
 ---
 
+## Clinical radionuclide portfolio
+
+### OG-RAD-1 — Clinical Radionuclide Portfolio closure — PARTIAL (portfolio authority now exists)
+- **Opened by:** Clinical Radionuclide Portfolio Authority — Pre-Part-3E
+  Readiness build (uncommitted; starting SHA `28552cd`). Canonical module
+  `clinical_radionuclide_portfolio.py`, focused test
+  `test_clinical_radionuclide_portfolio.py` (52 tests), doc
+  `CLINICAL_RADIONUCLIDE_PORTFOLIO_AUTHORITY.md`.
+- **Today:** the architecture-neutral portfolio authority
+  (`resolve_clinical_radionuclide_portfolio` →
+  `ClinicalRadionuclidePortfolioResult` / `ClinicalRadionuclidePortfolioEntry`)
+  is IMPLEMENTED. It discovers the physically-recognized radionuclide universe
+  (**15**: At-211, C-11, Cu-64, F-18, Ga-68, Ge-68, I-123, I-124, In-111, Mo-99,
+  N-13, O-15, Tc-99m, Tl-201, Zr-89) from the existing authorities (half-life
+  table ∪ cyclotron `supported_radionuclides` ∪ generator daughters/parents) and
+  resolves per radionuclide: decay status, clinical modality, procedure status,
+  selected-source support, production calibration, scanner modality compatibility,
+  and NORMAL/STRESS/EXPLICIT admissibility. It reuses (never duplicates) the
+  decay, cyclotron, generator, scanner, and synthetic source-capability
+  authorities, is never patient-identity-aware, and encodes NO transport/MRT
+  architecture bias. `NORMAL_SYNTHETIC_ADMISSIBLE_COUNT = 2` (F-18 → PET,
+  Tc-99m → SPECT).
+- **Why PARTIAL (not CLOSED):** clinical modality evidence exists for only
+  **2 of 15** radionuclides (F-18/Tc-99m); the other 13 are
+  `CLINICAL_MODALITY_NOT_MODELED` (reported, never invented). Procedure authority
+  is absent (`PROCEDURE_NOT_MODELED`, `PROCEDURE_AUTHORIZED_COUNT = 0`). Decay
+  authority is missing for Cu-64/Zr-89/Ge-68/I-123/I-124/In-111/Tl-201/At-211.
+  Short-half-life PET controls C-11/N-13/O-15 have physics + half-life + cyclotron
+  support but remain `NORMAL_EXCLUDED` (`CLINICAL_MODALITY_NOT_MODELED`);
+  `SHORT_HALF_LIFE_NORMAL_ADMISSIBLE_COUNT = 0`. Multi-radionuclide weighting is
+  `NOT_MODELED` (the portfolio never fabricates a demand mix;
+  `PORTFOLIO != DEMAND MIX`).
+- **Closed would require:** repository-owned clinical modality classification and
+  (if desired) radionuclide-specific procedure authority for the remaining
+  radionuclides, plus canonical decay physics for Cu-64/Zr-89/I-123/I-124/etc.
+  Never fabricate a modality, procedure, half-life, or demand mix to close it.
+- **Reused-authority boundaries preserved:** Ge-68/Ga-68 generator remains
+  `NOT_MODELED` (OG-GEN-1); model-specific scanner radionuclide compatibility
+  remains `NOT_MODELED` (OG-SCN-1); the synthetic selected-source binding
+  (OG-SYNTH-1) is reused, not modified.
+
+---
+
 ## Generator
 
 ### OG-GEN-1 — Ge-68 / Ga-68 generator pathway — NOT_MODELED / ABSENT

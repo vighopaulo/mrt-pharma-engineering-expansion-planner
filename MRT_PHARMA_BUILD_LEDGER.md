@@ -31,6 +31,7 @@ This document changes **no** production-engine behavior.
 | Authority Consolidation | `b8e759e` | this ledger + INDEX/DOCTRINE/PRODUCT/INTEGRATION/OPEN_GAPS | `test_mrt_pharma_authority_index.py` | (governance) |
 | Cyclotron Production Estimation | `9570308` | `CYCLOTRON_PRODUCTION_ESTIMATION_AUTHORITY.md` | `test_cyclotron_production_estimation_authority.py` | 37 |
 | Cyclotron Production Evidence & Calibration Extension | uncommitted (current working tree) | `CYCLOTRON_PRODUCTION_EVIDENCE_SOURCES.md` (+ ESTIMATION_AUTHORITY addendum) | `test_cyclotron_production_evidence_extension.py` | 36 |
+| Clinical Radionuclide Portfolio Authority (OG-RAD-1) | uncommitted (current working tree; from `28552cd`) | `CLINICAL_RADIONUCLIDE_PORTFOLIO_AUTHORITY.md` | `test_clinical_radionuclide_portfolio.py` | 52 |
 
 > **Note on test counts:** the count is the number of test functions physically
 > present in the file. It is a recoverable structural measure, not a re-run pass

@@ -780,6 +780,44 @@ boundary** at each layer.
 - **Provenance/Build:** MRT Pharma Authority Consolidation final addendum
   (governance only).
 
+### 2.25 Clinical Radionuclide Portfolio Authority (OG-RAD-1)
+
+- **Canonical Authority:** architecture-neutral clinical radionuclide portfolio —
+  "what clinical radionuclide demand is legitimate?"
+- **Primary File:** `clinical_radionuclide_portfolio.py`
+  (`resolve_clinical_radionuclide_portfolio` →
+  `ClinicalRadionuclidePortfolioResult` / `ClinicalRadionuclidePortfolioEntry`,
+  `discover_physically_recognized_radionuclides`).
+- **Role:** sits conceptually between PHYSICAL SOURCE CAPABILITY and SYNTHETIC
+  DEMAND. Discovers the physically-recognized radionuclide universe (**15**) from
+  the existing authorities (half-life table ∪ cyclotron `supported_radionuclides`
+  ∪ generator daughters/parents) and resolves per radionuclide: decay / clinical
+  modality / procedure / selected-source support / production calibration /
+  scanner modality compatibility / NORMAL·STRESS·EXPLICIT admissibility. Reuses
+  (never duplicates) `diagnostics.load_radionuclide_half_lives`,
+  `cyclotron_catalog`, `generator_catalog`, `scanner_catalog` /
+  `clinical_resource_identity.ScannerModality`, and the SAME clinical modality
+  recognition set as `synthetic_radionuclide_source_capability`
+  (F-18 → PET, Tc-99m → SPECT).
+- **Separation preserved:** `PORTFOLIO` (what may be requested) ≠ `DEMAND MIX`
+  (how much) ≠ `OPTIMIZER` (Part 3E capital composition). Multi-radionuclide
+  weighting is `NOT_MODELED` (no fabricated mix). Never patient-identity-aware.
+  No transport/MRT architecture bias (architecture-neutral).
+- **Doctrine preserved:** RADIONUCLIDE PHYSICALLY KNOWN ≠ CLINICALLY ADMISSIBLE;
+  SUPPORTED ≠ CALIBRATED; CLINICALLY ADMISSIBLE ≠ QUANTITATIVELY CALIBRATED. A
+  calibrated F-18 record never qualifies C-11/N-13/O-15/Ga-68/Cu-64/etc. No
+  global-catalog fallback; no F-18/Tc-99m substitution; no cross-model borrowing.
+- **Counts (physical):** PHYSICALLY_RECOGNIZED = 15, HALF_LIFE_SUPPORTED = 7,
+  CLINICALLY_MODALITY_CLASSIFIED = 2, PROCEDURE_AUTHORIZED = 0,
+  NORMAL_ADMISSIBLE = 2, SHORT_HALF_LIFE_NORMAL_ADMISSIBLE = 0.
+- **Implementation Status:** IMPLEMENTED (portfolio authority) — clinical modality
+  / procedure evidence incomplete for 13/15 radionuclides.
+- **Focused test:** `test_clinical_radionuclide_portfolio.py` (52 tests).
+  **Doc:** `CLINICAL_RADIONUCLIDE_PORTFOLIO_AUTHORITY.md`.
+- **Open-Gap Ref:** OG-RAD-1 = **PARTIAL**. Reuses OG-SYNTH-1 binding; preserves
+  OG-GEN-1 (Ge-68/Ga-68 generator NOT_MODELED) and OG-SCN-1 (model-specific
+  scanner radionuclide compatibility NOT_MODELED).
+
 ---
 
 ## 3. Provenance — build documents (existing repository docs)
@@ -791,6 +829,7 @@ boundary** at each layer.
 | `FIVE_MODE_TRANSPORT_AUTHORITY_BUILD_3C.md` | Five transport building blocks |
 | `SPATIAL_ROUTE_NETWORK_AUTHORITY_BUILD_3C1.md` | Two-route-family spatial routing |
 | `PHYSICAL_FEASIBILITY_AUTHORITY_PART_3D.md` | Unified physical feasibility closure |
+| `CLINICAL_RADIONUCLIDE_PORTFOLIO_AUTHORITY.md` | Clinical radionuclide portfolio authority (OG-RAD-1) |
 | `FOUR_ARCHITECTURE_BUILD2R_REDERIVATION_REPORT.md` | Four-architecture economic rederivation |
 | `four_architecture_economic_report*.md` | Economic baselines |
 | `ENGINEERING_IMPLEMENTATION_AUDIT_MILESTONE_ZERO.md` | Milestone-zero audit |
