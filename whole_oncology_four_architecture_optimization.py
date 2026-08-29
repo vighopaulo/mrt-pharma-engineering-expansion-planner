@@ -136,6 +136,21 @@ import campus_retrofit_benchmark as _campus_retrofit_benchmark
 
 Architecture = ArchitectureMode  # section 2: reuse, never redefine
 DevelopmentContext = Literal["RETROFIT", "GREENFIELD"]
+
+# AS-IS Digital Twin Phase 1B (Sec 3): ONE orthogonal canonical "project
+# starting state" axis, DISTINCT from DevelopmentContext (CapEx attribution)
+# and StudyScope (study objective). It answers "what starting condition IS the
+# facility?" -- never how CapEx is attributed and never what study objective is
+# run. Per the Phase 1A insertion-point analysis this is a NEW closed type owned
+# by StudyConfiguration; no existing value carries AS-IS semantics.
+#   GREENFIELD               -- a new site/project (no pre-existing facility).
+#   RETROFIT                 -- a capital intervention on an existing facility.
+#   EXISTING_FACILITY_AS_IS  -- reconstruct-what-exists-now, with NO implied
+#                               capital intervention, MRT installation, or
+#                               What-If state. An AS-IS facility MAY later
+#                               branch into a Retrofit study, but does not
+#                               automatically imply Retrofit/Greenfield CapEx.
+ProjectStartingState = Literal["GREENFIELD", "RETROFIT", "EXISTING_FACILITY_AS_IS"]
 HybridFallbackMode = Literal["MANUAL_CONVENTIONAL", "AUTOMATED_CONVENTIONAL"]
 HybridScope = Literal["ZONE_LEVEL_SAME_BUILDING", "BUILDING_LEVEL_CAMPUS"]
 """Repository-first closure (section 12/23-24): `evaluate_hybrid_mrt` is
@@ -165,6 +180,15 @@ class StudyConfiguration:
     economic_mode: EconomicMode
     hybrid_fallback_mode: HybridFallbackMode | None = None
     baseline_reference: str = "WHOLE_ONCOLOGY_CONTROLLED_BENCHMARK_2026"
+    project_starting_state: ProjectStartingState = "RETROFIT"
+    """AS-IS Digital Twin Phase 1B (Sec 3-4): orthogonal starting-state axis.
+    Defaults to "RETROFIT" so every existing caller (Part 3D/3E/3E.1/3E.2,
+    benchmark/retrofit/greenfield studies) is byte-for-byte unchanged -- the
+    field is purely additive and read by NO existing consumer. AS-IS is opt-in
+    only and never re-interprets development_context/study_scope. It carries NO
+    CapEx-attribution meaning: development_context remains the sole CapEx
+    authority (RETROFIT default here does NOT force retrofit CapEx; an AS-IS run
+    composes with whichever development_context/study_scope is chosen)."""
 
 
 def clone_study_configuration(base: StudyConfiguration, **overrides: object) -> StudyConfiguration:
