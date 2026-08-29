@@ -97,64 +97,105 @@ def test_05_tc99m_audited_spect_generator_admissible():
     assert e.normal_admissible == "NORMAL_ADMISSIBLE"
 
 
-def test_06_c11_audited_modality_not_modeled():
+def test_06_c11_audited_pet_classified_after_completeness():
+    # Completeness closure: C-11 now has FDA Choline C-11 PET modality evidence
+    # (EV-C11-MOD-001). In the benchmark scenario only GE890 (F-18) is selected,
+    # so C-11 is excluded for NO_COMPATIBLE_SOURCE, not modality.
     e = _entry("C-11")
     assert e.decay_status == "DECAY_AUTHORITY_PRESENT"  # half-life exists
-    assert e.clinical_modality_status == "CLINICAL_MODALITY_NOT_MODELED"
+    assert e.clinical_modality == "PET"
+    assert e.clinical_modality_status == "CLINICALLY_MODALITY_CLASSIFIED"
     assert e.normal_admissible == "NORMAL_EXCLUDED"
-    assert e.blocking_gap == "CLINICAL_MODALITY_NOT_MODELED"
+    assert e.blocking_gap == "NO_COMPATIBLE_SOURCE"
 
 
-def test_07_n13_audited_modality_not_modeled():
+def test_07_n13_audited_pet_classified_after_completeness():
     e = _entry("N-13")
     assert e.decay_status == "DECAY_AUTHORITY_PRESENT"
-    assert e.clinical_modality_status == "CLINICAL_MODALITY_NOT_MODELED"
-    assert e.normal_admissible == "NORMAL_EXCLUDED"
+    assert e.clinical_modality == "PET"  # FDA Ammonia N-13 PET (EV-N13-MOD-001)
+    assert e.clinical_modality_status == "CLINICALLY_MODALITY_CLASSIFIED"
+    assert e.normal_admissible == "NORMAL_EXCLUDED"  # no C-11/N-13 source selected in benchmark
 
 
-def test_08_o15_audited_modality_not_modeled():
+def test_08_o15_audited_pet_classified_after_completeness():
     e = _entry("O-15")
     assert e.decay_status == "DECAY_AUTHORITY_PRESENT"
-    assert e.clinical_modality_status == "CLINICAL_MODALITY_NOT_MODELED"
+    assert e.clinical_modality == "PET"  # [15O]water PET perfusion (EV-O15-MOD-001)
+    assert e.clinical_modality_status == "CLINICALLY_MODALITY_CLASSIFIED"
     assert e.normal_admissible == "NORMAL_EXCLUDED"
 
 
-def test_09_ga68_audited_no_generator_modality_not_modeled():
+def test_09_ga68_audited_pet_classified_and_generator_after_completeness():
     e = _entry("Ga-68")
     assert e.decay_status == "DECAY_AUTHORITY_PRESENT"
-    assert e.compatible_generator_ids == ()  # OG-GEN-1: no Ge-68/Ga-68 generator
-    assert e.clinical_modality_status == "CLINICAL_MODALITY_NOT_MODELED"
-    assert e.normal_admissible == "NORMAL_EXCLUDED"
+    assert e.clinical_modality == "PET"  # FDA 68Ga-DOTATATE/PSMA PET (EV-GA68-MOD-001)
+    assert e.clinical_modality_status == "CLINICALLY_MODALITY_CLASSIFIED"
+    # OG-GEN-1 closed: Ge-68/Ga-68 generator now exists canonically, but the
+    # benchmark scenario selects only the Tc-99m generator, so no Ga-68 generator
+    # is compatible HERE (selected-source specific). The generator EXISTS in the
+    # catalog (see test_09b), it is just not selected in this scenario.
+    assert e.compatible_generator_ids == ()
+    assert e.normal_admissible == "NORMAL_EXCLUDED"  # no Ga-68 source selected in benchmark
 
 
-def test_10_cu64_audited_decay_missing():
+def test_09b_ge68_ga68_generator_now_canonical():
+    # OG-GEN-1 closure: selecting the Ge-68/Ga-68 generator makes Ga-68 a
+    # generator daughter, distinct from the cyclotron pathway.
+    from generator_catalog import load_generator_catalog
+
+    ge_ga = [m.catalog_model_id for m in load_generator_catalog().models if m.parent_radionuclide == "Ge-68"]
+    assert ge_ga, "Ge-68/Ga-68 generator must exist canonically after completeness closure"
+    pf = resolve_clinical_radionuclide_portfolio(
+        selected_generator_ids=(ge_ga[0],),
+        selected_scanner_modalities=_BOTH_MODALITIES,
+        mode="NORMAL",
+    )
+    e = pf.entry_for("Ga-68")
+    assert ge_ga[0] in e.compatible_generator_ids  # generator daughter pathway
+    assert e.clinical_modality == "PET"
+    assert e.normal_admissible == "NORMAL_ADMISSIBLE"  # generator-produced Ga-68 PET
+
+
+def test_10_cu64_audited_decay_present_after_completeness():
+    # Completeness closure: Cu-64 half-life 12.7 h now canonical (EV-CU64-HL-001).
     e = _entry("Cu-64")
-    assert e.decay_status == "DECAY_AUTHORITY_MISSING"
-    assert e.half_life_minutes is None
-    assert e.normal_admissible == "NORMAL_EXCLUDED"
+    assert e.decay_status == "DECAY_AUTHORITY_PRESENT"
+    assert e.half_life_minutes == 762.0
+    assert e.clinical_modality == "PET"  # FDA Detectnet (EV-CU64-MOD-001)
+    assert e.normal_admissible == "NORMAL_EXCLUDED"  # no Cu-64 source selected in benchmark
 
 
-def test_11_zr89_audited_decay_missing():
+def test_11_zr89_audited_decay_present_after_completeness():
     e = _entry("Zr-89")
-    assert e.decay_status == "DECAY_AUTHORITY_MISSING"
+    assert e.decay_status == "DECAY_AUTHORITY_PRESENT"
+    assert e.half_life_minutes == 4705.2  # 78.42 h (EV-ZR89-HL-001)
+    assert e.clinical_modality == "PET"  # immunoPET (EV-ZR89-MOD-001)
     assert e.normal_admissible == "NORMAL_EXCLUDED"
 
 
-def test_12_i123_audited_decay_missing():
+def test_12_i123_audited_decay_present_spect_after_completeness():
     e = _entry("I-123")
-    assert e.decay_status == "DECAY_AUTHORITY_MISSING"
+    assert e.decay_status == "DECAY_AUTHORITY_PRESENT"
+    assert e.half_life_minutes == 792.0  # 13.2 h (EV-I123-HL-001)
+    assert e.clinical_modality == "SPECT"  # FDA gamma 159 keV (EV-I123-MOD-001)
     assert e.normal_admissible == "NORMAL_EXCLUDED"
 
 
-def test_13_i124_audited_decay_missing():
+def test_13_i124_audited_decay_present_pet_after_completeness():
     e = _entry("I-124")
-    assert e.decay_status == "DECAY_AUTHORITY_MISSING"
+    assert e.decay_status == "DECAY_AUTHORITY_PRESENT"
+    assert e.half_life_minutes == 6012.0  # 100.2 h (EV-I124-HL-001)
+    assert e.clinical_modality == "PET"  # immunoPET (EV-I124-MOD-001)
     assert e.normal_admissible == "NORMAL_EXCLUDED"
 
 
 def test_14_mo99_audited_generator_parent_not_patient_demand():
+    # Mo-99 remains a generator PARENT: recognized non-diagnostic feedstock, so
+    # it stays NORMAL_EXCLUDED even after completeness closure (never patient
+    # demand). It carries NO diagnostic modality by design.
     e = _entry("Mo-99")
     assert e.is_generator_parent is True
+    assert e.clinical_modality is None
     assert e.clinical_modality_status == "CLINICAL_MODALITY_NOT_MODELED"
     assert e.normal_admissible == "NORMAL_EXCLUDED"  # never patient-administered demand
 
@@ -164,11 +205,16 @@ def test_14_mo99_audited_generator_parent_not_patient_demand():
 # ---------------------------------------------------------------------------
 
 
-def test_15_half_life_absence_blocks_normal_where_required():
+def test_15_decay_authority_present_for_all_after_completeness():
+    # Completeness closure: every physically-recognized radionuclide now has a
+    # canonical half-life (radionuclides.json extended from 7 -> 15). The decay
+    # authority no longer blocks NORMAL for these; they are excluded in the
+    # benchmark only for NO_COMPATIBLE_SOURCE (no such source selected here).
     for radionuclide in ("Cu-64", "Zr-89", "I-123", "I-124", "Ge-68"):
         e = _entry(radionuclide)
-        assert e.decay_status == "DECAY_AUTHORITY_MISSING"
-        assert e.normal_admissible == "NORMAL_EXCLUDED"
+        assert e.decay_status == "DECAY_AUTHORITY_PRESENT"
+        assert e.half_life_minutes is not None
+        assert e.normal_admissible == "NORMAL_EXCLUDED"  # no matching selected source in benchmark
 
 
 def test_16_selected_source_support_required():
@@ -358,10 +404,20 @@ def test_30_no_cross_model_capability_borrowing():
     assert e.production_calibration_status == "NOT_CALIBRATED"  # not borrowed MANUFACTURER_CALIBRATED
 
 
-def test_31_no_invented_modality_classification():
+def test_31_modality_classification_is_evidence_gated_after_completeness():
+    # Completeness closure: modality classifications now cover every radionuclide
+    # with a traceable evidence record (FDA/SNMMI/peer-reviewed). The set is not
+    # invented -- it is exactly the evidence-gated diagnostic bindings. THERAPY
+    # (At-211) and generator parents (Ge-68, Mo-99) carry NO diagnostic modality.
     pf = _benchmark_normal()
-    classified = [e.radionuclide for e in pf.entries if e.clinical_modality is not None]
-    assert set(classified) == {"F-18", "Tc-99m"}  # exactly the repository's two bindings
+    classified = {e.radionuclide for e in pf.entries if e.clinical_modality is not None}
+    assert classified == {
+        "F-18", "C-11", "N-13", "O-15", "Ga-68", "Cu-64", "Zr-89", "I-124",  # PET
+        "Tc-99m", "I-123", "In-111", "Tl-201",                               # SPECT
+    }
+    # Non-diagnostic radionuclides deliberately remain unclassified for scanner demand.
+    for non_diagnostic in ("At-211", "Ge-68", "Mo-99"):
+        assert pf.entry_for(non_diagnostic).clinical_modality is None
 
 
 def test_32_no_invented_procedure_classification():
@@ -463,12 +519,28 @@ def test_42_short_half_life_radionuclides_independently_represented():
     pf = _benchmark_normal()
     for radionuclide in ("C-11", "N-13", "O-15"):
         e = pf.entry_for(radionuclide)
-        # Independently represented with real half-life + its own precise reason;
-        # NOT promoted, NOT hidden, NOT collapsed into F-18.
+        # Independently represented with real half-life + PET modality (evidence
+        # closure) + its own precise reason; NOT collapsed into F-18. In the
+        # benchmark only GE890 (F-18) is selected, so the precise blocking reason
+        # is NO_COMPATIBLE_SOURCE, never a substitution.
         assert e.radionuclide == radionuclide
         assert e.half_life_minutes is not None
-        assert e.blocking_gap == "CLINICAL_MODALITY_NOT_MODELED"
+        assert e.clinical_modality == "PET"
+        assert e.blocking_gap == "NO_COMPATIBLE_SOURCE"
         assert e.stress_visible is True
+
+
+def test_42b_short_half_life_admissible_when_source_selected():
+    # PROOF (short-half-life is NOT excluded because it is short-lived): with a
+    # cyclotron that schedules C-11/N-13/O-15 selected, they become admissible on
+    # exactly the same footing as F-18 -- no architecture/transport advantage.
+    pf = resolve_clinical_radionuclide_portfolio(
+        selected_cyclotron_ids=(_MULTI_ISOTOPE_CYCLOTRON,),  # schedulable F-18/C-11/N-13/O-15/Ga-68
+        selected_scanner_modalities=_BOTH_MODALITIES,
+        mode="NORMAL",
+    )
+    for radionuclide in ("C-11", "N-13", "O-15", "Ga-68"):
+        assert pf.entry_for(radionuclide).normal_admissible == "NORMAL_ADMISSIBLE"
 
 
 # ---------------------------------------------------------------------------
@@ -486,6 +558,9 @@ def test_proof_a_current_normal_control():
 
 
 def test_proof_b_short_half_life_audit():
+    # After completeness closure: C-11/N-13/O-15 have half-life + PET modality
+    # evidence AND a selected schedulable source -> admissible, on the same
+    # footing as F-18 (no short-half-life promotion, no architecture bias).
     pf = resolve_clinical_radionuclide_portfolio(
         selected_cyclotron_ids=(_MULTI_ISOTOPE_CYCLOTRON,),  # schedulable C-11/N-13/O-15
         selected_scanner_modalities=_BOTH_MODALITIES,
@@ -494,11 +569,11 @@ def test_proof_b_short_half_life_audit():
     for radionuclide in ("C-11", "N-13", "O-15"):
         e = pf.entry_for(radionuclide)
         assert e.half_life_minutes is not None                       # half-life present
-        assert e.clinical_modality_status == "CLINICAL_MODALITY_NOT_MODELED"
-        assert e.procedure_status == "PROCEDURE_NOT_MODELED"
+        assert e.clinical_modality == "PET"
+        assert e.clinical_modality_status == "CLINICALLY_MODALITY_CLASSIFIED"
+        assert e.procedure_status == "PROCEDURE_NOT_MODELED"          # procedure still NOT_MODELED
         assert e.source_capability_status == "SUPPORTED_BY_SELECTED_SOURCE"  # supported by selected
-        assert e.normal_admissible == "NORMAL_EXCLUDED"
-        assert e.blocking_gap == "CLINICAL_MODALITY_NOT_MODELED"     # honest blocking reason
+        assert e.normal_admissible == "NORMAL_ADMISSIBLE"            # evidence-complete + source + scanner
 
 
 def test_proof_c_cypris_control():
@@ -521,12 +596,15 @@ def test_proof_d_pettrace_800_control():
         selected_scanner_modalities=_BOTH_MODALITIES,
         mode="NORMAL",
     )
-    # Physically supports 5 isotopes; clinical authority admits only F-18 to NORMAL.
+    # Physically supports 5 isotopes; after completeness closure all 5 are
+    # clinically classified (PET) and decay-authorized, so all 5 are NORMAL
+    # admissible with this schedulable source selected (the PETtrace 800 declares
+    # them; support/scanner/decay all pass). Production stays MODELED/NOT_CALIBRATED
+    # separately -- clinical admissibility != production calibration.
     supported = [e.radionuclide for e in pf.entries if _MULTI_ISOTOPE_CYCLOTRON in e.compatible_cyclotron_ids]
     assert set(supported) >= {"F-18", "C-11", "N-13", "O-15", "Ga-68"}
-    assert pf.entry_for("F-18").normal_admissible == "NORMAL_ADMISSIBLE"
-    for other in ("C-11", "N-13", "O-15", "Ga-68"):
-        assert pf.entry_for(other).normal_admissible == "NORMAL_EXCLUDED"
+    for radionuclide in ("F-18", "C-11", "N-13", "O-15", "Ga-68"):
+        assert pf.entry_for(radionuclide).normal_admissible == "NORMAL_ADMISSIBLE"
 
 
 def test_proof_e_no_source():
@@ -554,18 +632,19 @@ def test_proof_f_no_scanner():
 def test_proof_g_explicit_demand():
     from patient_radionuclide_demand import PatientRadionuclideDemand
 
-    # An explicitly requested radionuclide that lacks decay authority cannot be
-    # represented (validation raises) -- identity is never silently mutated.
+    # A radionuclide with NO canonical decay authority at all (genuinely outside
+    # the physically-recognized universe, e.g. Lu-177) cannot be represented --
+    # validation raises, identity is never silently mutated or fabricated.
     with pytest.raises(ValueError):
-        PatientRadionuclideDemand(patient_id="P9", radionuclide="Cu-64", prescribed_activity_mbq=200.0)
-    # A clinically-incomplete but decay-authorized radionuclide (Ga-68) is
-    # representable as explicit demand; the portfolio reports its real limitation
-    # rather than rewriting it.
-    demand = PatientRadionuclideDemand(patient_id="P9", radionuclide="Ga-68", prescribed_activity_mbq=200.0)
-    assert demand.radionuclide == "Ga-68"
-    e = resolve_clinical_radionuclide_portfolio(mode="EXPLICIT").entry_for("Ga-68")
+        PatientRadionuclideDemand(patient_id="P9", radionuclide="Lu-177", prescribed_activity_mbq=200.0)
+    # After completeness closure Cu-64 IS decay-authorized, so explicit demand
+    # for it is now representable (identity preserved); the portfolio reports its
+    # real per-scenario limitation rather than rewriting it.
+    demand = PatientRadionuclideDemand(patient_id="P9", radionuclide="Cu-64", prescribed_activity_mbq=200.0)
+    assert demand.radionuclide == "Cu-64"
+    e = resolve_clinical_radionuclide_portfolio(mode="EXPLICIT").entry_for("Cu-64")
     assert e.explicit_demand_representable is True
-    assert e.clinical_modality_status == "CLINICAL_MODALITY_NOT_MODELED"
+    assert e.clinical_modality == "PET"  # evidence-classified (EV-CU64-MOD-001)
 
 
 # ---------------------------------------------------------------------------

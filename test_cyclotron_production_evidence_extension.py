@@ -311,7 +311,12 @@ def test_22_ge890_remains_calibrated():
 # 23. unsupported pair remains unsupported
 # ---------------------------------------------------------------------------
 def test_23_unsupported_pair_remains_unsupported():
-    r = cpea.estimate_cyclotron_production(BEST_14P, "Ga-68")
+    # Cu-64 is cyclotron-only (no generator) and unsupported by BEST_14P ->
+    # NO_COMPATIBLE_SOURCE, no fabricated EOB. (Ga-68 now has a Ge-68/Ga-68
+    # generator after the Clinical Radionuclide Completeness closure, so it is
+    # OUT_OF_CYCLOTRON_SCOPE on an unsupported cyclotron rather than
+    # NO_COMPATIBLE_SOURCE.)
+    r = cpea.estimate_cyclotron_production(BEST_14P, "Cu-64")
     assert r.supported is False
     assert r.estimation_status == "NO_COMPATIBLE_SOURCE"
     assert r.estimated_or_calibrated_eob_mbq is None

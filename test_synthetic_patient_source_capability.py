@@ -120,11 +120,15 @@ def test_08_normal_mode_uses_source_constrained_set():
 
 
 def test_09_normal_mode_does_not_generate_unsupported_radionuclide():
-    # CYPRIS supports F-18 but NOT any SPECT radionuclide; requesting SPECT with
-    # only CYPRIS must NOT silently emit Tc-99m.
+    # No generator selected -> the SPECT admissible set must not silently emit a
+    # generator daughter (Tc-99m). Completeness note: after modality closure
+    # CYPRIS DOES support the SPECT cyclotron isotope I-123, so to prove the
+    # "no unsupported radionuclide" invariant we use a cyclotron that supports
+    # NO SPECT radionuclide at all (GE890, F-18 only). Requesting SPECT then must
+    # raise -- never fall back to Tc-99m.
     with pytest.raises(NoCompatibleSourceError):
         ops.build_representative_day_population(
-            **{**_DAY_KW, "target_pet_procedures": 0}, selected_cyclotron_ids=(CYPRIS,),
+            **{**_DAY_KW, "target_pet_procedures": 0}, selected_cyclotron_ids=(CYCLOTRON_F18_CALIBRATED,),
         )
 
 
@@ -211,11 +215,21 @@ def test_18_modeled_evidence_does_not_increase_patient_count():
 # ---------------------------------------------------------------------------
 
 def test_19_production_capacity_does_not_weight_selection():
-    # GE890 (648000 MBq calibrated) vs a supported-but-uncalibrated CYPRIS:
-    # both yield exactly the same single admissible PET radionuclide (F-18).
+    # Production capacity/calibration must not weight the admissible set. Compare
+    # the SAME F-18-only source presented as calibrated (GE890) vs a
+    # supported-but-uncalibrated source restricted to the same isotope set is not
+    # directly comparable post-completeness (CYPRIS supports more isotopes), so
+    # the capacity-neutrality invariant is proven on F-18 specifically: F-18 is
+    # admissible from BOTH regardless of calibration tier, and appears exactly
+    # once in each admissible set.
     high = resolve_admissible_radionuclides(modality="PET", selected_cyclotron_ids=[CYCLOTRON_F18_CALIBRATED])
     low = resolve_admissible_radionuclides(modality="PET", selected_cyclotron_ids=[CYPRIS])
-    assert high.admissible_radionuclides == low.admissible_radionuclides == ("F-18",)
+    assert "F-18" in high.admissible_radionuclides
+    assert "F-18" in low.admissible_radionuclides
+    assert high.admissible_radionuclides.count("F-18") == low.admissible_radionuclides.count("F-18") == 1
+    # GE890 (F-18 only) yields exactly F-18; capacity/calibration never adds or
+    # removes a radionuclide beyond what the source SUPPORTS.
+    assert high.admissible_radionuclides == ("F-18",)
 
 
 def test_20_revenue_does_not_weight_selection():
@@ -254,23 +268,34 @@ def test_23_tc99m_not_resolved_through_cyclotron():
 # ---------------------------------------------------------------------------
 
 def test_24_mixed_scenario_resolves_pet_and_spect_independently():
+    # After completeness closure CYPRIS supports several PET isotopes
+    # (F-18, Cu-64, Zr-89, I-124, Ga-68) and one SPECT isotope (I-123); the
+    # generator adds Tc-99m to SPECT. The two modality sets stay independent:
+    # PET carries no generator daughter, SPECT carries the generator daughter +
+    # the cyclotron's SPECT isotope, and the sets do not cross-contaminate.
     pet = resolve_admissible_radionuclides(
         modality="PET", selected_cyclotron_ids=[CYPRIS], selected_generator_ids=[GEN_DRYTEC],
     )
     spect = resolve_admissible_radionuclides(
         modality="SPECT", selected_cyclotron_ids=[CYPRIS], selected_generator_ids=[GEN_DRYTEC],
     )
-    assert pet.admissible_radionuclides == ("F-18",)
-    assert spect.admissible_radionuclides == ("Tc-99m",)
+    assert set(pet.admissible_radionuclides) == {"F-18", "Cu-64", "Zr-89", "I-124", "Ga-68"}
+    assert set(spect.admissible_radionuclides) == {"Tc-99m", "I-123"}
+    # Independence: no PET isotope leaks into SPECT and vice versa.
+    assert not (set(pet.admissible_radionuclides) & set(spect.admissible_radionuclides))
+    assert "Tc-99m" not in pet.admissible_radionuclides
 
 
 def test_25_multiple_cyclotrons_produce_union():
+    # GE890 (F-18) UNION PETtrace 800 (F-18,C-11,N-13,O-15,Ga-68) -> all five
+    # PET isotopes are admissible after completeness closure.
     r = resolve_admissible_radionuclides(
         modality="PET", selected_cyclotron_ids=[CYCLOTRON_F18_CALIBRATED, CYCLOTRON_MULTI],
     )
-    assert r.admissible_radionuclides == ("F-18",)
-    # Union preserves BOTH source ids for F-18.
+    assert set(r.admissible_radionuclides) == {"F-18", "C-11", "N-13", "O-15", "Ga-68"}
+    # Union preserves BOTH source ids for the shared F-18 identity (no duplicate).
     assert set(r.compatible_source_ids_for("F-18")) == {CYCLOTRON_F18_CALIBRATED, CYCLOTRON_MULTI}
+    assert r.admissible_radionuclides.count("F-18") == 1
 
 
 def test_26_multiple_generators_preserve_identity_without_duplicates():
@@ -320,9 +345,11 @@ def test_29_explicit_stress_unsupported_demand_is_preserved():
 def test_30_stress_unsupported_demand_reaches_no_compatible_source():
     # STRESS_TEST resolver call for a modality whose selected sources cannot
     # supply a clinically-recognized radionuclide -> NO_COMPATIBLE_SOURCE, and
-    # the resolver never substitutes.
+    # the resolver never substitutes. Completeness note: CYPRIS now supports the
+    # SPECT isotope I-123, so to prove the NO_COMPATIBLE_SOURCE stress path we
+    # use GE890 (F-18 only, no SPECT isotope) under SPECT.
     r = resolve_admissible_radionuclides(
-        modality="SPECT", selected_cyclotron_ids=[CYPRIS], mode="STRESS_TEST",
+        modality="SPECT", selected_cyclotron_ids=[CYCLOTRON_F18_CALIBRATED], mode="STRESS_TEST",
     )
     assert r.status == "NO_COMPATIBLE_SOURCE"
     assert r.mode == "STRESS_TEST"
@@ -469,14 +496,17 @@ def test_proof_C_no_source_control():
 
 
 def test_proof_D_mixed_source_control():
+    # PETtrace 800 supports F-18,C-11,N-13,O-15,Ga-68 (all PET after closure);
+    # the Tc-99m generator supplies SPECT. Modality independence preserved.
     pet = resolve_admissible_radionuclides(
         modality="PET", selected_cyclotron_ids=[CYCLOTRON_MULTI], selected_generator_ids=[GEN_TECHNELITE],
     )
     spect = resolve_admissible_radionuclides(
-        modality="PET" if False else "SPECT", selected_cyclotron_ids=[CYCLOTRON_MULTI], selected_generator_ids=[GEN_TECHNELITE],
+        modality="SPECT", selected_cyclotron_ids=[CYCLOTRON_MULTI], selected_generator_ids=[GEN_TECHNELITE],
     )
-    assert pet.admissible_radionuclides == ("F-18",)
-    assert spect.admissible_radionuclides == ("Tc-99m",)
+    assert set(pet.admissible_radionuclides) == {"F-18", "C-11", "N-13", "O-15", "Ga-68"}
+    assert spect.admissible_radionuclides == ("Tc-99m",)  # PETtrace 800 has no SPECT isotope
+    assert "Tc-99m" not in pet.admissible_radionuclides
 
 
 def test_proof_E_stress_test_control_preserves_and_exposes():
@@ -492,13 +522,16 @@ def test_proof_E_stress_test_control_preserves_and_exposes():
 def test_proof_F_multi_radionuclide_control():
     r = resolve_admissible_radionuclides(modality="PET", selected_cyclotron_ids=[CYCLOTRON_MULTI])
     seen = set(r.admissible_radionuclides) | {e[0] for e in r.excluded_radionuclides}
-    # All declared radionuclides are visible; only clinically-recognized F-18 is
-    # admissible; the rest are reported (not invented) as limitations/exclusions.
+    # All declared radionuclides are visible. After completeness closure every
+    # PETtrace-800 isotope is evidence-classified PET, so all five are now
+    # admissible (multi-radionuclide) -- each backed by a traceable evidence
+    # record, none invented. This is the intended completeness result.
     assert {"F-18", "C-11", "N-13", "O-15", "Ga-68"} <= seen
-    assert r.admissible_radionuclides == ("F-18",)
+    assert set(r.admissible_radionuclides) == {"F-18", "C-11", "N-13", "O-15", "Ga-68"}
+    # No radionuclide is excluded for "not clinically classified" any more.
     excluded_reasons = {rn: reason for rn, reason in r.excluded_radionuclides}
     for rn in ("C-11", "N-13", "O-15", "Ga-68"):
-        assert excluded_reasons[rn] == "SUPPORTED_BUT_NOT_CLINICALLY_MODALITY_CLASSIFIED"
+        assert rn not in excluded_reasons
 
 
 # ---------------------------------------------------------------------------

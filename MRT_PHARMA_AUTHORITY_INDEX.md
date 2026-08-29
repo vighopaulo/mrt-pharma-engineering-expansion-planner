@@ -320,15 +320,18 @@ Canonical direction (production does NOT generate patient demand):
   `GeneratorAsset.available_tc99m_activity_mbq` / `.elute()`, `PreparationBatch`.
 - **Primary Tests:** `test_pet_spect_generator_native_authority_completion.py`,
   `test_build3b_production_authority.py`.
-- **Authority Type:** B. **Implementation Status:** IMPLEMENTED (Mo-99 → Tc-99m).
-  **Calibration Status:** physics `literature_calibrated`; all economics
-  `NOT_CALIBRATED`.
+- **Authority Type:** B. **Implementation Status:** IMPLEMENTED (Mo-99 → Tc-99m;
+  Ge-68 → Ga-68 pathway now canonical). **Calibration Status:** physics
+  `literature_calibrated`; all economics `NOT_CALIBRATED`.
 - **Models:** `CURIUM_TECHNELITE`, `CURIUM_ULTRA_TECHNEKOW_FM`,
   `GE_HEALTHCARE_DRYTEC` (all Mo-99 → Tc-99m, elution 0.85, 2 elutions/day,
-  14-day life).
-- **Known Limitations:** **Ge-68/Ga-68 generator = NOT_MODELED / ABSENT.** Ge-68
-  and Ga-68 appear only as cyclotron-produced isotopes, never as a generator
-  parent/daughter. See OG-GEN-1.
+  14-day life); `ECKERT_ZIEGLER_GALLIAPHARM` (Ge-68 → Ga-68).
+- **Known Limitations:** the Ge-68/Ga-68 generator **pathway identity** is now
+  canonical (OG-GEN-1 = `PATHWAY_CLOSED`, Clinical Radionuclide Completeness
+  build) — Ga-68 carries BOTH a cyclotron and a generator pathway, kept distinct.
+  Generator procurement/production economics (reference activity, useful life,
+  elution efficiency, max elutions/day for the Ge-68/Ga-68 unit) remain
+  `NOT_CALIBRATED`. See OG-GEN-1.
 
 ### 2.11 Transport building-block authority (Build 3C)
 
@@ -730,10 +733,12 @@ boundary** at each layer.
     `build_representative_day_population` consumes it when selected-source ids are
     supplied and raises `NoCompatibleSourceError` rather than fabricating or
     substituting; with no selected-source ids the representative benchmark
-    (F-18 / Tc-99m) is preserved unchanged. Only F-18 (PET) and Tc-99m (SPECT) are
-    clinically modality-classified; other cyclotron-supported radionuclides are
-    reported as `SUPPORTED_BUT_NOT_CLINICALLY_MODALITY_CLASSIFIED` limitations
-    (never invented). **Focused test:** `test_synthetic_patient_source_capability.py`.
+    (F-18 / Tc-99m) is preserved unchanged. Following the Clinical Radionuclide
+    Completeness build the canonical modality recognition set is 12 radionuclides
+    (PET = F-18/C-11/N-13/O-15/Ga-68/Cu-64/Zr-89/I-124; SPECT = Tc-99m/I-123/
+    In-111/Tl-201); any radionuclide still outside the recognition set is reported
+    as `SUPPORTED_BUT_NOT_CLINICALLY_MODALITY_CLASSIFIED` (never invented).
+    **Focused test:** `test_synthetic_patient_source_capability.py`.
     **Doc:** `SYNTHETIC_PATIENT_SOURCE_CAPABILITY_AUTHORITY.md`.
   - **Open-Gap Ref:** OG-SYNTH-1 = **PARTIAL** (selected-source representative
     binding implemented and test-locked; NOT globally CLOSED because the
@@ -797,8 +802,9 @@ boundary** at each layer.
   (never duplicates) `diagnostics.load_radionuclide_half_lives`,
   `cyclotron_catalog`, `generator_catalog`, `scanner_catalog` /
   `clinical_resource_identity.ScannerModality`, and the SAME clinical modality
-  recognition set as `synthetic_radionuclide_source_capability`
-  (F-18 → PET, Tc-99m → SPECT).
+  recognition set as `synthetic_radionuclide_source_capability` (following the
+  Clinical Radionuclide Completeness build: PET = F-18/C-11/N-13/O-15/Ga-68/
+  Cu-64/Zr-89/I-124; SPECT = Tc-99m/I-123/In-111/Tl-201).
 - **Separation preserved:** `PORTFOLIO` (what may be requested) ≠ `DEMAND MIX`
   (how much) ≠ `OPTIMIZER` (Part 3E capital composition). Multi-radionuclide
   weighting is `NOT_MODELED` (no fabricated mix). Never patient-identity-aware.
@@ -807,16 +813,21 @@ boundary** at each layer.
   SUPPORTED ≠ CALIBRATED; CLINICALLY ADMISSIBLE ≠ QUANTITATIVELY CALIBRATED. A
   calibrated F-18 record never qualifies C-11/N-13/O-15/Ga-68/Cu-64/etc. No
   global-catalog fallback; no F-18/Tc-99m substitution; no cross-model borrowing.
-- **Counts (physical):** PHYSICALLY_RECOGNIZED = 15, HALF_LIFE_SUPPORTED = 7,
-  CLINICALLY_MODALITY_CLASSIFIED = 2, PROCEDURE_AUTHORIZED = 0,
-  NORMAL_ADMISSIBLE = 2, SHORT_HALF_LIFE_NORMAL_ADMISSIBLE = 0.
-- **Implementation Status:** IMPLEMENTED (portfolio authority) — clinical modality
-  / procedure evidence incomplete for 13/15 radionuclides.
+- **Counts (physical, after the Clinical Radionuclide Completeness build; NORMAL
+  under maximal source control = all compatible cyclotrons + all generators +
+  PET/SPECT):** PHYSICALLY_RECOGNIZED = 15, HALF_LIFE_SUPPORTED = 15,
+  CLINICALLY_MODALITY_CLASSIFIED = 12, PROCEDURE_AUTHORIZED = 0,
+  NORMAL_ADMISSIBLE = 12, SHORT_HALF_LIFE_NORMAL_ADMISSIBLE = 3 (C-11/N-13/O-15).
+- **Implementation Status:** IMPLEMENTED (portfolio authority) — procedure
+  authority still `NOT_MODELED` for all radionuclides (why OG-RAD-1 stays PARTIAL).
 - **Focused test:** `test_clinical_radionuclide_portfolio.py` (52 tests).
   **Doc:** `CLINICAL_RADIONUCLIDE_PORTFOLIO_AUTHORITY.md`.
-- **Open-Gap Ref:** OG-RAD-1 = **PARTIAL**. Reuses OG-SYNTH-1 binding; preserves
-  OG-GEN-1 (Ge-68/Ga-68 generator NOT_MODELED) and OG-SCN-1 (model-specific
-  scanner radionuclide compatibility NOT_MODELED).
+- **Open-Gap Ref:** OG-RAD-1 = **PARTIAL** (procedure authority still
+  `NOT_MODELED`). Reuses OG-SYNTH-1 binding. Following the Clinical Radionuclide
+  Completeness & Evidence Closure build the Ge-68/Ga-68 generator pathway is now
+  canonical (OG-GEN-1 = `PATHWAY_CLOSED`, economics still `NOT_CALIBRATED`), so
+  Ga-68 carries both a cyclotron and a generator pathway; OG-SCN-1 (model-specific
+  scanner radionuclide compatibility) remains `NOT_MODELED`.
 
 ---
 
@@ -839,6 +850,9 @@ boundary** at each layer.
 | `MRT_PHARMA_INTEGRATION_ARCHITECTURE.md` | External-system seam map — ARIA/Bentley/NVIDIA/CAD-BIM/facility/hospital (this build) |
 | `MRT_PHARMA_BUILD_LEDGER.md` | Physical git build history 3A→Part 3D + this build (this build) |
 | `MRT_PHARMA_OPEN_GAPS.md` | Documented open gaps (this build) |
+| `clinical_radionuclide_evidence.json` | Canonical clinical-radionuclide external-evidence registry (raw + normalized, provenance, evidence class) — Completeness build |
+| `CLINICAL_RADIONUCLIDE_COMPLETENESS_AUTHORITY.md` | Clinical radionuclide completeness report (14 tables); half-life 7→15, modality 2→12, Ge-68/Ga-68 generator (OG-GEN-1) — Completeness build |
+| `test_clinical_radionuclide_completeness.py` | Focused completeness tests (62: 50 invariants + proofs A–I + traceability) |
 
 ---
 

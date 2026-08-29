@@ -246,9 +246,26 @@ def test_21_irradiation_duration_follows_saturation_model():
 # 22. unsupported radionuclide returns no compatible production authority
 # ---------------------------------------------------------------------------
 def test_22_unsupported_radionuclide_no_compatible_source():
-    r = cpea.estimate_cyclotron_production(BEST_14P, "Ga-68")
+    # Cu-64 is a cyclotron-only radionuclide (no generator pathway) that BEST_14P
+    # (F-18 only) does not support -> NO_COMPATIBLE_SOURCE. (Ga-68 is no longer a
+    # valid example here: after the Clinical Radionuclide Completeness closure it
+    # has a Ge-68/Ga-68 GENERATOR pathway, so an unsupported cyclotron classifies
+    # it OUT_OF_CYCLOTRON_SCOPE instead -- see test_22b.)
+    r = cpea.estimate_cyclotron_production(BEST_14P, "Cu-64")
     assert r.supported is False
     assert r.estimation_status == "NO_COMPATIBLE_SOURCE"
+
+
+def test_22b_ga68_generator_daughter_out_of_cyclotron_scope():
+    # OG-GEN-1 closure ripple: Ga-68 now has a Ge-68/Ga-68 generator, so a
+    # cyclotron that does not support it treats it as OUT_OF_CYCLOTRON_SCOPE
+    # (like Tc-99m), never applying the cyclotron saturation equation.
+    r = cpea.estimate_cyclotron_production(BEST_14P, "Ga-68")
+    assert r.supported is False
+    assert r.estimation_status == "OUT_OF_CYCLOTRON_SCOPE"
+    import generator_catalog as gc
+    daughters = {m.daughter_radionuclide for m in gc.load_generator_catalog().models}
+    assert "Ga-68" in daughters
 
 
 # ---------------------------------------------------------------------------
@@ -385,15 +402,23 @@ def test_proof_b_supported_but_uncalibrated_control():
 def test_proof_c_radionuclide_specificity():
     f18 = cpea.estimate_cyclotron_production(GE890, "F-18")
     assert f18.is_calibrated()
-    # The calibrated F-18 result qualifies no other radionuclide.
-    for other in ("C-11", "N-13", "Ga-68"):
+    # The calibrated F-18 result qualifies NO other radionuclide: none inherits
+    # an EOB value. Cyclotron-only unsupported isotopes (C-11, N-13) resolve
+    # NO_COMPATIBLE_SOURCE; Ga-68 (now a generator daughter) resolves
+    # OUT_OF_CYCLOTRON_SCOPE. In every case no F-18 capacity is borrowed.
+    for other in ("C-11", "N-13"):
         r = cpea.estimate_cyclotron_production(GE890, other)
         assert r.estimation_status == "NO_COMPATIBLE_SOURCE"
         assert r.estimated_or_calibrated_eob_mbq is None
+    ga = cpea.estimate_cyclotron_production(GE890, "Ga-68")
+    assert ga.estimation_status == "OUT_OF_CYCLOTRON_SCOPE"
+    assert ga.estimated_or_calibrated_eob_mbq is None  # still no F-18 borrowing
 
 
 def test_proof_d_no_compatible_source():
-    r = cpea.estimate_cyclotron_production(BEST_14P, "Ga-68")
+    # A cyclotron-only radionuclide (Cu-64, no generator pathway) unsupported by
+    # the model resolves NO_COMPATIBLE_SOURCE.
+    r = cpea.estimate_cyclotron_production(BEST_14P, "Cu-64")
     assert r.estimation_status == "NO_COMPATIBLE_SOURCE"
 
 

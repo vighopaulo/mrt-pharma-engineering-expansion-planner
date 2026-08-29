@@ -128,8 +128,11 @@ authority each gap references.
   physics for Cu-64/Zr-89/I-123/I-124. **Do not mark a pair as modeled unless a
   defensible estimator can actually be constructed from physical evidence.**
 - **Generator boundary preserved:** cyclotron estimation never absorbs the
-  generator pathway (Tc-99m → `OUT_OF_CYCLOTRON_SCOPE`); Ge-68/Ga-68 generator
-  remains `NOT_MODELED` (OG-GEN-1).
+  generator pathway (Tc-99m → `OUT_OF_CYCLOTRON_SCOPE`; Ga-68 via a generator is
+  likewise never produced through the cyclotron estimator). The Ge-68/Ga-68
+  generator *pathway identity* is now canonical (OG-GEN-1 `PATHWAY_CLOSED`, see
+  below), but its quantitative production remains outside the cyclotron
+  estimation authority — the estimator gained no generator production math.
 
 ### OG-SYNTH-1 — Synthetic-patient source-capability constraint — PARTIAL (selected-source representative path implemented; default/legacy path still benchmark-driven)
 - **Prior status (PLANNED / PARTIAL):** the CAPITAL PROJECT synthetic patient
@@ -174,11 +177,11 @@ authority each gap references.
   retain the representative benchmark defaults (F-18 / Tc-99m) unchanged for
   backward compatibility, and the explicit inbound path is explicit-demand by
   design. A future build could make selected-source ids mandatory for every
-  synthetic entry point. Additionally, only F-18 (PET) and Tc-99m (SPECT) are
-  clinically modality-classified today; other cyclotron-supported radionuclides
-  (C-11, N-13, O-15, Ga-68, Cu-64, Zr-89, I-123, I-124) are reported as
-  `SUPPORTED_BUT_NOT_CLINICALLY_MODALITY_CLASSIFIED` limitations, never invented
-  as admissible.
+  synthetic entry point. (Note: the clinical modality recognition set is no
+  longer limited to F-18/Tc-99m — the Clinical Radionuclide Completeness build
+  expanded it to 12 radionuclides; any radionuclide still outside the set is
+  reported as `SUPPORTED_BUT_NOT_CLINICALLY_MODALITY_CLASSIFIED`, never invented
+  as admissible.)
 
 ---
 
@@ -204,37 +207,70 @@ authority each gap references.
   authorities, is never patient-identity-aware, and encodes NO transport/MRT
   architecture bias. `NORMAL_SYNTHETIC_ADMISSIBLE_COUNT = 2` (F-18 → PET,
   Tc-99m → SPECT).
-- **Why PARTIAL (not CLOSED):** clinical modality evidence exists for only
-  **2 of 15** radionuclides (F-18/Tc-99m); the other 13 are
-  `CLINICAL_MODALITY_NOT_MODELED` (reported, never invented). Procedure authority
-  is absent (`PROCEDURE_NOT_MODELED`, `PROCEDURE_AUTHORIZED_COUNT = 0`). Decay
-  authority is missing for Cu-64/Zr-89/Ge-68/I-123/I-124/In-111/Tl-201/At-211.
-  Short-half-life PET controls C-11/N-13/O-15 have physics + half-life + cyclotron
-  support but remain `NORMAL_EXCLUDED` (`CLINICAL_MODALITY_NOT_MODELED`);
-  `SHORT_HALF_LIFE_NORMAL_ADMISSIBLE_COUNT = 0`. Multi-radionuclide weighting is
-  `NOT_MODELED` (the portfolio never fabricates a demand mix;
-  `PORTFOLIO != DEMAND MIX`).
-- **Closed would require:** repository-owned clinical modality classification and
-  (if desired) radionuclide-specific procedure authority for the remaining
-  radionuclides, plus canonical decay physics for Cu-64/Zr-89/I-123/I-124/etc.
-  Never fabricate a modality, procedure, half-life, or demand mix to close it.
-- **Reused-authority boundaries preserved:** Ge-68/Ga-68 generator remains
-  `NOT_MODELED` (OG-GEN-1); model-specific scanner radionuclide compatibility
-  remains `NOT_MODELED` (OG-SCN-1); the synthetic selected-source binding
-  (OG-SYNTH-1) is reused, not modified.
+- **Advanced by:** Clinical Radionuclide Completeness & Evidence Closure build
+  (uncommitted; starting SHA `6343ca1`; evidence registry
+  `clinical_radionuclide_evidence.json`, doc
+  `CLINICAL_RADIONUCLIDE_COMPLETENESS_AUTHORITY.md`, focused test
+  `test_clinical_radionuclide_completeness.py` — 62 tests). Deep authoritative
+  evidence (FDA labeling / SNMMI / IAEA-LNHB-ENSDF nuclear data / peer-reviewed
+  clinical) was found and PROPAGATED into the canonical authorities, then the
+  portfolio was RECOMPUTED (never manually set):
+  - **Decay:** `radionuclides.json` extended 7 → **15** half-lives (added Cu-64,
+    Zr-89, Ge-68, I-123, I-124, In-111, Tl-201, At-211). Single decay authority;
+    no second table.
+  - **Modality:** the single canonical modality authority
+    (`_CLINICALLY_RECOGNIZED_RADIONUCLIDES_BY_MODALITY`) extended 2 → **12**
+    evidence-gated bindings (PET: +C-11/N-13/O-15/Ga-68/Cu-64/Zr-89/I-124;
+    SPECT: +I-123/In-111/Tl-201). Both the portfolio and the synthetic-capability
+    authority consume it (no competing dict).
+  - **Generator:** Ge-68/Ga-68 generator added (OG-GEN-1 pathway closed).
+  - Recomputed counts: `NORMAL_SYNTHETIC_ADMISSIBLE_COUNT = 12` (was 2),
+    `PART_3E_PORTFOLIO_ELIGIBLE_COUNT = 12`,
+    `SHORT_HALF_LIFE_NORMAL_ADMISSIBLE_COUNT = 3` (C-11/N-13/O-15 with a
+    schedulable source), `EXPLICIT_DEMAND_REPRESENTABLE_COUNT = 15`.
+- **Why STILL PARTIAL (not CLOSED):** a radionuclide-specific **PROCEDURE**
+  classification authority remains `NOT_MODELED` (`PROCEDURE_AUTHORIZED_COUNT = 0`)
+  — the build closed modality + decay, not procedure taxonomy. **Quantitative
+  production** stays mostly `NOT_CALIBRATED`/`MODELED` (OG-CYC-1). **Multi-
+  radionuclide weighting** remains `NOT_MODELED` (`PORTFOLIO != DEMAND MIX`; no
+  fabricated prevalence). At-211 (THERAPY) and Ge-68/Mo-99 (generator parents)
+  are honestly recognized as **non-diagnostic** and stay `NORMAL_EXCLUDED` (never
+  forced into scanner demand).
+- **Closed would require:** repository-owned radionuclide-specific procedure
+  authority, quantitative production calibration for the remaining pairs, and (if
+  ever desired) a demand-mix/prevalence authority — none fabricated.
+- **Reused-authority boundaries preserved:** model-specific scanner radionuclide
+  compatibility remains `NOT_MODELED` (OG-SCN-1); the synthetic selected-source
+  binding (OG-SYNTH-1) is reused (its modality recognition set was extended
+  canonically, consumed unchanged in shape).
 
 ---
 
 ## Generator
 
-### OG-GEN-1 — Ge-68 / Ga-68 generator pathway — NOT_MODELED / ABSENT
-- **Today:** the generator catalog contains only Mo-99 → Tc-99m models
-  (`CURIUM_TECHNELITE`, `CURIUM_ULTRA_TECHNEKOW_FM`, `GE_HEALTHCARE_DRYTEC`).
-  Ge-68 and Ga-68 appear only as **cyclotron**-produced isotopes; there is no
-  Ge-68/Ga-68 **generator** authority.
-- **Closed would require:** a Ge-68/Ga-68 generator catalog + physics authority,
-  if a generator Ga-68 pathway is ever needed. Reporting it absent is the correct
-  current behavior — never fabricate one.
+### OG-GEN-1 — Ge-68 / Ga-68 generator pathway — PATHWAY_CLOSED (economics PARTIAL)
+- **Closed by:** Clinical Radionuclide Completeness & Evidence Closure build
+  (uncommitted; starting SHA `6343ca1`). Authoritative evidence (commercially
+  available Ge-68/Ga-68 generators — Eckert & Ziegler GalliaPharm, IRE-ELiT
+  Galli Eo used for cGMP 68Ga-DOTATOC; FDA-approved generator-produced Ga-68
+  PET agents such as NETSPOT; parent Ge-68 half-life ~271 d) was found and
+  propagated. Evidence records `EV-GA68-GEN-001`, `EV-GE68-HL-001`.
+- **Today:** the canonical generator catalog now contains the Ge-68/Ga-68 model
+  `ECKERT_ZIEGLER_GALLIAPHARM` (`parent_radionuclide="Ge-68"`,
+  `daughter_radionuclide="Ga-68"`) alongside the three Mo-99/Tc-99m models. Ga-68
+  now has BOTH a cyclotron production pathway AND a generator daughter pathway,
+  kept **distinct**. Ge-68 is a generator parent (never patient-administered).
+  Test-locked in `test_pet_spect_generator_native_authority_completion.py`
+  (`test_generator_catalog_includes_ge68_ga68`) and
+  `test_clinical_radionuclide_completeness.py` (`test_34`, `test_35`, `proof_f`).
+- **Still PARTIAL (economics only):** the generator **procurement economics** and
+  model-specific reference-activity options remain `NOT_CALIBRATED` (no defensible
+  pricing evidence located). This mirrors the Mo-99/Tc-99m generators, whose
+  economics are also `NOT_CALIBRATED`. The pathway identity is closed; the
+  monetary calibration is not.
+- **Closed (economics) would require:** defensible per-model procurement/service
+  pricing + reference-activity options for the Ge-68/Ga-68 generator. Never
+  fabricate; keep `NOT_CALIBRATED` until evidence exists.
 
 ---
 

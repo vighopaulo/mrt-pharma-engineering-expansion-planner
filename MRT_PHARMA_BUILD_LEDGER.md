@@ -461,3 +461,48 @@ estimation authority and its narrow Part 3D seam recorded above.*
   IMPLEMENTED; monetary power/service/consumable/procurement `$` inputs still
   unavailable). Part 3E Phase 1 consumable with qualified economics.
 - **NO commit. NO push. NO stage.**
+
+---
+
+## Clinical Radionuclide Completeness & Evidence Closure (Pre-Part-3E) — UNCOMMITTED
+
+- **Starting SHA:** `6343ca1` (Clinical Radionuclide Portfolio Authority), branch
+  `main`, origin/main = `6343ca1`, divergence 0/0, working tree clean at start.
+- **Objective:** COMPLETENESS — determine whether radionuclides excluded from the
+  NORMAL portfolio lacked evidence or lacked incorporation, then propagate found
+  authoritative evidence into the CANONICAL authorities and recompute the
+  portfolio. Architecture/transport/economics-neutral. Not intended to make MRT
+  win.
+- **NEW FILES:** `clinical_radionuclide_evidence.json` (canonical evidence
+  registry, 27 records), `CLINICAL_RADIONUCLIDE_COMPLETENESS_AUTHORITY.md`
+  (14 inline tables), `test_clinical_radionuclide_completeness.py` (62 tests).
+- **CANONICAL AUTHORITIES UPDATED (evidence-gated, DATA only — no equations):**
+  - `radionuclides.json`: half-life table **7 → 15** (added Cu-64=762.0,
+    Zr-89=4705.2, Ge-68=390441.6, I-123=792.0, I-124=6012.0, In-111=4038.912,
+    Tl-201=4380.624, At-211=432.96 min). Single decay authority; no second table.
+  - `synthetic_radionuclide_source_capability.py`: the single canonical clinical
+    modality authority `_CLINICALLY_RECOGNIZED_RADIONUCLIDES_BY_MODALITY` extended
+    **2 → 12** evidence-gated bindings (PET +C-11/N-13/O-15/Ga-68/Cu-64/Zr-89/
+    I-124; SPECT +I-123/In-111/Tl-201). Consumed unchanged-in-shape by the
+    portfolio (no competing dict).
+  - `generator_equipment_catalog.json`: added `ECKERT_ZIEGLER_GALLIAPHARM`
+    (Ge-68 → Ga-68) — OG-GEN-1 pathway closed; economics NOT_CALIBRATED.
+- **CONSUMER TESTS UPDATED (test-lock new canonical truth):**
+  `test_clinical_radionuclide_portfolio.py` (52 → 54),
+  `test_synthetic_patient_source_capability.py` (47),
+  `test_pet_spect_generator_native_authority_completion.py` (+Ge-68/Ga-68 test),
+  `test_cyclotron_production_estimation_authority.py` /
+  `test_cyclotron_production_evidence_extension.py` (Ga-68 now a generator
+  daughter → OUT_OF_CYCLOTRON_SCOPE on unsupported cyclotrons; genuine
+  NO_COMPATIBLE_SOURCE proofs re-based on cyclotron-only Cu-64).
+- **PORTFOLIO RECOMPUTED (emergent):** NORMAL_ADMISSIBLE **2 → 12**, HALF_LIFE
+  **7 → 15**, MODALITY **2 → 12**, PART3E_ELIGIBLE **2 → 12**,
+  SHORT_HALF_LIFE_ADMISSIBLE **0 → 3**. Excluded honestly: At-211 (THERAPY),
+  Ge-68/Mo-99 (generator parents).
+- **PHYSICS/ECONOMICS PRESERVED:** decay/generator/cyclotron **equations**
+  unchanged (DATA only); Equipment OPEX, scanner timing, transport physics,
+  Part 3D, capital/economic engine, `equal_budget` **unchanged**.
+- **GOVERNANCE:** OG-GEN-1 → PATHWAY_CLOSED (economics PARTIAL); OG-RAD-1 advanced
+  (still PARTIAL — procedure authority + quantitative production + demand-mix
+  weighting remain NOT_MODELED). OG-SCN-1 / OG-SYNTH-1 boundaries preserved.
+- **NO commit. NO push. NO stage.**

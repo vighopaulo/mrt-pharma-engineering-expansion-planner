@@ -52,11 +52,14 @@ AUTHORITY BOUNDARY (what this module does NOT do)
 REUSED AUTHORITIES (never duplicated)
 -------------------------------------
 - `diagnostics.load_radionuclide_half_lives` / `radionuclides.json` -> the ONE
-  decay/half-life authority (7 radionuclides today).
+  decay/half-life authority (all 15 physically-recognized radionuclides after
+  the Clinical Radionuclide Completeness & Evidence Closure build; was 7).
 - `cyclotron_catalog.load_cyclotron_catalog` -> `supported_radionuclides`
   (SUPPORT), `schedulable_radionuclides`, `production_calibration_status`.
 - `generator_catalog.load_generator_catalog` -> `daughter_radionuclide` /
-  `parent_radionuclide` (Mo-99 -> Tc-99m only; no Ge-68/Ga-68 generator, OG-GEN-1).
+  `parent_radionuclide` (Mo-99 -> Tc-99m, plus the Ge-68 -> Ga-68 pathway added by
+  the Completeness build; OG-GEN-1 pathway closed, generator economics still
+  NOT_CALIBRATED). Ga-68 therefore has both a cyclotron and a generator pathway.
 - `scanner_catalog.load_scanner_catalog` + `clinical_resource_identity.ScannerModality`
   -> PET/SPECT modality availability (modality-level only; model-specific
   radionuclide compatibility is NOT_MODELED, OG-SCN-1).
@@ -572,8 +575,9 @@ def resolve_clinical_radionuclide_portfolio(
         "in the repository; procedures are reported as PROCEDURE_NOT_MODELED, never invented.",
         "Model-specific scanner radionuclide compatibility is NOT_MODELED (OG-SCN-1); only PET/SPECT "
         "modality availability is authoritative.",
-        "Ge-68/Ga-68 generator pathway is NOT_MODELED (OG-GEN-1); Ga-68 appears only as a "
-        "cyclotron-supported radionuclide, never as a generator daughter.",
+        "Ge-68/Ga-68 generator pathway is now canonical (OG-GEN-1 pathway closed); Ga-68 "
+        "appears as BOTH a cyclotron-supported radionuclide and a generator daughter, kept "
+        "distinct. Generator procurement economics remain NOT_CALIBRATED.",
         "This authority is ARCHITECTURE-NEUTRAL: no transport/MRT/Conventional/decay-advantage bias.",
     ]
 

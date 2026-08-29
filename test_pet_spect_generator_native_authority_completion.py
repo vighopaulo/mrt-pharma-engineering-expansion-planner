@@ -184,10 +184,28 @@ def test_generator_catalog_loads_real_models():
     catalog = load_generator_catalog()
     ids = {m.catalog_model_id for m in catalog.models}
     assert {"CURIUM_TECHNELITE", "CURIUM_ULTRA_TECHNEKOW_FM", "GE_HEALTHCARE_DRYTEC"} <= ids
+    # The three Mo-99/Tc-99m generators keep their exact parent/daughter identity.
+    mo99_models = {"CURIUM_TECHNELITE", "CURIUM_ULTRA_TECHNEKOW_FM", "GE_HEALTHCARE_DRYTEC"}
     for model in catalog.models:
-        assert model.parent_radionuclide == "Mo-99"
-        assert model.daughter_radionuclide == "Tc-99m"
+        if model.catalog_model_id in mo99_models:
+            assert model.parent_radionuclide == "Mo-99"
+            assert model.daughter_radionuclide == "Tc-99m"
         assert model.requires_electrical_power is False  # section 13: passive column generators
+
+
+def test_generator_catalog_includes_ge68_ga68_after_completeness():
+    # Clinical Radionuclide Completeness & Evidence Closure (OG-GEN-1): the
+    # Ge-68/Ga-68 generator is now canonical, DISTINCT from the Mo-99/Tc-99m
+    # pathway. Parent/daughter identity is preserved and not collapsed.
+    catalog = load_generator_catalog()
+    ge_ga = [m for m in catalog.models if m.parent_radionuclide == "Ge-68"]
+    assert ge_ga, "Ge-68/Ga-68 generator must be present after completeness closure"
+    assert all(m.daughter_radionuclide == "Ga-68" for m in ge_ga)
+    # Mo-99 parent and Ge-68 parent are distinct; Tc-99m and Ga-68 daughters distinct.
+    parents = {m.parent_radionuclide for m in catalog.models}
+    daughters = {m.daughter_radionuclide for m in catalog.models}
+    assert {"Mo-99", "Ge-68"} <= parents
+    assert {"Tc-99m", "Ga-68"} <= daughters
 
 
 def test_generator_model_selection_creates_facility_instance():

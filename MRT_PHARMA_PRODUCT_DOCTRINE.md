@@ -471,6 +471,18 @@ here so no future build mistakes them for shipped behavior:
   silently filled. Reuses SUPPORTED ≠ CALIBRATED (§10) and the portfolio is never
   patient-identity-aware. **IMPLEMENTED (portfolio authority)** (OG-RAD-1,
   `clinical_radionuclide_portfolio.py`).
+- **Clinical radionuclide completeness (Pre-Part-3E):** the clinical radionuclide
+  authority is an evidence-gated COMPLETENESS artifact. A radionuclide is admitted
+  to the diagnostic portfolio only when authoritative evidence (FDA / SNMMI /
+  nuclear-data / peer-reviewed) establishes its clinical modality AND canonical
+  decay physics exist AND a selected source supports it AND a compatible scanner
+  modality is present — never because it is short-lived or favors any transport
+  architecture. THERAPY radionuclides (At-211) and generator PARENTS (Ge-68,
+  Mo-99) are recognized but carry no diagnostic scanner demand. Evidence lives in
+  `clinical_radionuclide_evidence.json`; canonical facts live in their owning
+  authorities. `PORTFOLIO != DEMAND MIX`: expansion never fabricates prevalence.
+  **IMPLEMENTED (completeness closure)** (OG-RAD-1 advanced, OG-GEN-1 pathway
+  closed).
 
 ---
 

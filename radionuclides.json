@@ -1,9 +1,47 @@
 {
-  "F-18": {"half_life_min": 109.8},
-  "Ga-68": {"half_life_min": 67.7},
-  "C-11": {"half_life_min": 20.3},
-  "N-13": {"half_life_min": 9.97},
-  "O-15": {"half_life_min": 2.04},
-  "Tc-99m": {"half_life_min": 360.0},
-  "Mo-99": {"half_life_min": 3956.4}
+  "F-18": {
+    "half_life_min": 109.8
+  },
+  "Ga-68": {
+    "half_life_min": 67.7
+  },
+  "C-11": {
+    "half_life_min": 20.3
+  },
+  "N-13": {
+    "half_life_min": 9.97
+  },
+  "O-15": {
+    "half_life_min": 2.04
+  },
+  "Tc-99m": {
+    "half_life_min": 360.0
+  },
+  "Mo-99": {
+    "half_life_min": 3956.4
+  },
+  "Cu-64": {
+    "half_life_min": 762.0
+  },
+  "Zr-89": {
+    "half_life_min": 4705.2
+  },
+  "Ge-68": {
+    "half_life_min": 390441.6
+  },
+  "I-123": {
+    "half_life_min": 792.0
+  },
+  "I-124": {
+    "half_life_min": 6012.0
+  },
+  "In-111": {
+    "half_life_min": 4038.912
+  },
+  "Tl-201": {
+    "half_life_min": 4380.624
+  },
+  "At-211": {
+    "half_life_min": 432.96
+  }
 }

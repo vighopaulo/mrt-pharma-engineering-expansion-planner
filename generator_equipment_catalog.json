@@ -11,7 +11,12 @@
       "new_purchase_candidate": true,
       "installed_equipment_selectable": true,
       "customer_selectable": true,
-      "nominal_reference_activity_options_mbq": [37000.0, 111000.0, 222000.0, 555000.0],
+      "nominal_reference_activity_options_mbq": [
+        37000.0,
+        111000.0,
+        222000.0,
+        555000.0
+      ],
       "reference_calibration_semantics": "Manufacturer-stated Mo-99 activity at a specified calibration reference date/time (typical US industry 'calibration day' convention); NOT the activity available at any later elution.",
       "useful_life_days": 14.0,
       "elution_efficiency_fraction": 0.85,
@@ -23,25 +28,57 @@
       "requires_electrical_power": false,
       "field_provenance": {
         "useful_life_days": {
-          "value": 14.0, "unit": "days", "source": "General nuclear-pharmacy professional knowledge (recalled, NOT independently re-verified via live fetch this session -- both attempted manufacturer URL fetches returned HTTP 404)",
-          "evidence_type": "technical_literature", "confidence": "medium", "calibration_status": "literature_calibrated",
+          "value": 14.0,
+          "unit": "days",
+          "source": "General nuclear-pharmacy professional knowledge (recalled, NOT independently re-verified via live fetch this session -- both attempted manufacturer URL fetches returned HTTP 404)",
+          "evidence_type": "technical_literature",
+          "confidence": "medium",
+          "calibration_status": "literature_calibrated",
           "notes": "Typical clinical generator replacement interval driven by Mo-99 decay economics, not a hard failure mode."
         },
         "elution_efficiency_fraction": {
-          "value": 0.85, "unit": "fraction", "source": "General nuclear-pharmacy professional knowledge (recalled, not live-verified this session)",
-          "evidence_type": "technical_literature", "confidence": "medium", "calibration_status": "literature_calibrated"
+          "value": 0.85,
+          "unit": "fraction",
+          "source": "General nuclear-pharmacy professional knowledge (recalled, not live-verified this session)",
+          "evidence_type": "technical_literature",
+          "confidence": "medium",
+          "calibration_status": "literature_calibrated"
         }
       },
       "economics": [
-        {"component": "purchase_capex", "value": "NOT_CALIBRATED", "currency": null, "cost_year": null, "price_basis": null,
-         "source": "No defensible procurement/pricing evidence located this session (live fetch attempts failed, HTTP 404)",
-         "evidence_type": "not_calibrated", "confidence": "unknown", "calibration_status": "not_calibrated"},
-        {"component": "replacement_cost_per_cycle", "value": "NOT_CALIBRATED", "currency": null, "cost_year": null, "price_basis": null,
-         "source": "No defensible procurement/pricing evidence located this session",
-         "evidence_type": "not_calibrated", "confidence": "unknown", "calibration_status": "not_calibrated"},
-        {"component": "annual_maintenance_opex", "value": "NOT_CALIBRATED", "currency": null, "cost_year": null, "price_basis": null,
-         "source": "No defensible cost evidence located this session",
-         "evidence_type": "not_calibrated", "confidence": "unknown", "calibration_status": "not_calibrated"}
+        {
+          "component": "purchase_capex",
+          "value": "NOT_CALIBRATED",
+          "currency": null,
+          "cost_year": null,
+          "price_basis": null,
+          "source": "No defensible procurement/pricing evidence located this session (live fetch attempts failed, HTTP 404)",
+          "evidence_type": "not_calibrated",
+          "confidence": "unknown",
+          "calibration_status": "not_calibrated"
+        },
+        {
+          "component": "replacement_cost_per_cycle",
+          "value": "NOT_CALIBRATED",
+          "currency": null,
+          "cost_year": null,
+          "price_basis": null,
+          "source": "No defensible procurement/pricing evidence located this session",
+          "evidence_type": "not_calibrated",
+          "confidence": "unknown",
+          "calibration_status": "not_calibrated"
+        },
+        {
+          "component": "annual_maintenance_opex",
+          "value": "NOT_CALIBRATED",
+          "currency": null,
+          "cost_year": null,
+          "price_basis": null,
+          "source": "No defensible cost evidence located this session",
+          "evidence_type": "not_calibrated",
+          "confidence": "unknown",
+          "calibration_status": "not_calibrated"
+        }
       ],
       "source_url_or_document": "NOT_INDEPENDENTLY_FETCHED_THIS_SESSION (attempted https://www.curiumpharma.com/product/technelite/ -> HTTP 404)",
       "source_confidence": "medium"
@@ -56,7 +93,11 @@
       "new_purchase_candidate": true,
       "installed_equipment_selectable": true,
       "customer_selectable": true,
-      "nominal_reference_activity_options_mbq": [37000.0, 111000.0, 222000.0],
+      "nominal_reference_activity_options_mbq": [
+        37000.0,
+        111000.0,
+        222000.0
+      ],
       "reference_calibration_semantics": "Manufacturer-stated Mo-99 activity at a specified calibration reference date/time; NOT the activity available at any later elution.",
       "useful_life_days": 14.0,
       "elution_efficiency_fraction": 0.85,
@@ -68,20 +109,48 @@
       "requires_electrical_power": false,
       "field_provenance": {
         "useful_life_days": {
-          "value": 14.0, "unit": "days", "source": "General nuclear-pharmacy professional knowledge (recalled, not live-verified this session)",
-          "evidence_type": "technical_literature", "confidence": "medium", "calibration_status": "literature_calibrated"
+          "value": 14.0,
+          "unit": "days",
+          "source": "General nuclear-pharmacy professional knowledge (recalled, not live-verified this session)",
+          "evidence_type": "technical_literature",
+          "confidence": "medium",
+          "calibration_status": "literature_calibrated"
         }
       },
       "economics": [
-        {"component": "purchase_capex", "value": "NOT_CALIBRATED", "currency": null, "cost_year": null, "price_basis": null,
-         "source": "No defensible procurement/pricing evidence located this session",
-         "evidence_type": "not_calibrated", "confidence": "unknown", "calibration_status": "not_calibrated"},
-        {"component": "replacement_cost_per_cycle", "value": "NOT_CALIBRATED", "currency": null, "cost_year": null, "price_basis": null,
-         "source": "No defensible procurement/pricing evidence located this session",
-         "evidence_type": "not_calibrated", "confidence": "unknown", "calibration_status": "not_calibrated"},
-        {"component": "annual_maintenance_opex", "value": "NOT_CALIBRATED", "currency": null, "cost_year": null, "price_basis": null,
-         "source": "No defensible cost evidence located this session",
-         "evidence_type": "not_calibrated", "confidence": "unknown", "calibration_status": "not_calibrated"}
+        {
+          "component": "purchase_capex",
+          "value": "NOT_CALIBRATED",
+          "currency": null,
+          "cost_year": null,
+          "price_basis": null,
+          "source": "No defensible procurement/pricing evidence located this session",
+          "evidence_type": "not_calibrated",
+          "confidence": "unknown",
+          "calibration_status": "not_calibrated"
+        },
+        {
+          "component": "replacement_cost_per_cycle",
+          "value": "NOT_CALIBRATED",
+          "currency": null,
+          "cost_year": null,
+          "price_basis": null,
+          "source": "No defensible procurement/pricing evidence located this session",
+          "evidence_type": "not_calibrated",
+          "confidence": "unknown",
+          "calibration_status": "not_calibrated"
+        },
+        {
+          "component": "annual_maintenance_opex",
+          "value": "NOT_CALIBRATED",
+          "currency": null,
+          "cost_year": null,
+          "price_basis": null,
+          "source": "No defensible cost evidence located this session",
+          "evidence_type": "not_calibrated",
+          "confidence": "unknown",
+          "calibration_status": "not_calibrated"
+        }
       ],
       "source_url_or_document": "NOT_INDEPENDENTLY_FETCHED_THIS_SESSION",
       "source_confidence": "medium"
@@ -96,7 +165,12 @@
       "new_purchase_candidate": true,
       "installed_equipment_selectable": true,
       "customer_selectable": true,
-      "nominal_reference_activity_options_mbq": [37000.0, 111000.0, 222000.0, 444000.0],
+      "nominal_reference_activity_options_mbq": [
+        37000.0,
+        111000.0,
+        222000.0,
+        444000.0
+      ],
       "reference_calibration_semantics": "Manufacturer-stated Mo-99 activity at a specified calibration reference date/time; NOT the activity available at any later elution.",
       "useful_life_days": 14.0,
       "elution_efficiency_fraction": 0.85,
@@ -108,23 +182,131 @@
       "requires_electrical_power": false,
       "field_provenance": {
         "useful_life_days": {
-          "value": 14.0, "unit": "days", "source": "General nuclear-pharmacy professional knowledge (recalled, not live-verified this session)",
-          "evidence_type": "technical_literature", "confidence": "medium", "calibration_status": "literature_calibrated"
+          "value": 14.0,
+          "unit": "days",
+          "source": "General nuclear-pharmacy professional knowledge (recalled, not live-verified this session)",
+          "evidence_type": "technical_literature",
+          "confidence": "medium",
+          "calibration_status": "literature_calibrated"
         }
       },
       "economics": [
-        {"component": "purchase_capex", "value": "NOT_CALIBRATED", "currency": null, "cost_year": null, "price_basis": null,
-         "source": "No defensible procurement/pricing evidence located this session (live fetch attempted, page unavailable)",
-         "evidence_type": "not_calibrated", "confidence": "unknown", "calibration_status": "not_calibrated"},
-        {"component": "replacement_cost_per_cycle", "value": "NOT_CALIBRATED", "currency": null, "cost_year": null, "price_basis": null,
-         "source": "No defensible procurement/pricing evidence located this session",
-         "evidence_type": "not_calibrated", "confidence": "unknown", "calibration_status": "not_calibrated"},
-        {"component": "annual_maintenance_opex", "value": "NOT_CALIBRATED", "currency": null, "cost_year": null, "price_basis": null,
-         "source": "No defensible cost evidence located this session",
-         "evidence_type": "not_calibrated", "confidence": "unknown", "calibration_status": "not_calibrated"}
+        {
+          "component": "purchase_capex",
+          "value": "NOT_CALIBRATED",
+          "currency": null,
+          "cost_year": null,
+          "price_basis": null,
+          "source": "No defensible procurement/pricing evidence located this session (live fetch attempted, page unavailable)",
+          "evidence_type": "not_calibrated",
+          "confidence": "unknown",
+          "calibration_status": "not_calibrated"
+        },
+        {
+          "component": "replacement_cost_per_cycle",
+          "value": "NOT_CALIBRATED",
+          "currency": null,
+          "cost_year": null,
+          "price_basis": null,
+          "source": "No defensible procurement/pricing evidence located this session",
+          "evidence_type": "not_calibrated",
+          "confidence": "unknown",
+          "calibration_status": "not_calibrated"
+        },
+        {
+          "component": "annual_maintenance_opex",
+          "value": "NOT_CALIBRATED",
+          "currency": null,
+          "cost_year": null,
+          "price_basis": null,
+          "source": "No defensible cost evidence located this session",
+          "evidence_type": "not_calibrated",
+          "confidence": "unknown",
+          "calibration_status": "not_calibrated"
+        }
       ],
       "source_url_or_document": "NOT_INDEPENDENTLY_FETCHED_THIS_SESSION (attempted https://www.gehealthcare.com/products/molecular-imaging/spect-ct/nm-ct-870-dr -> HTTP 404, unrelated product page)",
       "source_confidence": "medium"
+    },
+    {
+      "catalog_model_id": "ECKERT_ZIEGLER_GALLIAPHARM",
+      "manufacturer": "Eckert & Ziegler",
+      "model": "GalliaPharm (Germanium Ge68/Gallium Ga68 Generator)",
+      "parent_radionuclide": "Ge-68",
+      "daughter_radionuclide": "Ga-68",
+      "commercial_status": "current",
+      "new_purchase_candidate": true,
+      "installed_equipment_selectable": true,
+      "customer_selectable": true,
+      "nominal_reference_activity_options_mbq": [],
+      "reference_calibration_semantics": "Manufacturer-stated Ge-68 parent activity at a specified calibration reference date/time; NOT the Ga-68 activity available at any later elution. Specific per-model reference-activity options were NOT independently sourced this session and are left empty (NOT_CALIBRATED), never fabricated.",
+      "useful_life_days": null,
+      "elution_efficiency_fraction": null,
+      "max_elutions_per_day": null,
+      "dimensions_cm": null,
+      "mass_kg": null,
+      "shielding_handling_notes": "Lead-shielded Ge-68/Ga-68 radionuclide generator; the long-lived Ge-68 parent (half-life ~271 days) enables extended in-hospital Ga-68 elution for PET radiopharmaceutical labeling (e.g. 68Ga-DOTATATE, 68Ga-PSMA-11).",
+      "technical_operating_requirements": "Standard radiopharmacy hot-lab handling with a compatible Ga-68 synthesis/elution module; no specialized facility beyond typical nuclear pharmacy infrastructure.",
+      "requires_electrical_power": false,
+      "field_provenance": {
+        "parent_daughter_pathway": {
+          "value": "Ge-68 -> Ga-68",
+          "unit": null,
+          "source": "Ge-68/Ga-68 generator is a commercially available radionuclide generator (GalliaPharm approved; Galli Eo used for cGMP 68Ga-DOTATOC); parent Ge-68 half-life ~271 d enables in-hospital Ga-68 production. Clinical Radionuclide Completeness & Evidence Closure evidence record EV-GA68-GEN-001.",
+          "evidence_type": "regulatory",
+          "confidence": "high",
+          "calibration_status": "literature_calibrated",
+          "source_revision_or_date": "2018+",
+          "notes": "Pathway identity + parent half-life only; model-specific reference activity / useful life / elution behavior NOT independently sourced this session (NOT_CALIBRATED)."
+        },
+        "parent_half_life": {
+          "value": 390441.6,
+          "unit": "minutes",
+          "source": "Ge-68 half-life T1/2 = 271.14(15) d (peer-reviewed measurement, PMC6236682); canonical value propagated to radionuclides.json. Evidence record EV-GE68-HL-001.",
+          "evidence_type": "technical_literature",
+          "confidence": "high",
+          "calibration_status": "literature_calibrated",
+          "source_revision_or_date": "2018",
+          "notes": "271.14 d * 1440 = 390441.6 min."
+        }
+      },
+      "economics": [
+        {
+          "component": "purchase_capex",
+          "value": "NOT_CALIBRATED",
+          "currency": null,
+          "cost_year": null,
+          "price_basis": null,
+          "source": "No defensible procurement/pricing evidence located this session for the Ge-68/Ga-68 generator",
+          "evidence_type": "not_calibrated",
+          "confidence": "unknown",
+          "calibration_status": "not_calibrated"
+        },
+        {
+          "component": "replacement_cost_per_cycle",
+          "value": "NOT_CALIBRATED",
+          "currency": null,
+          "cost_year": null,
+          "price_basis": null,
+          "source": "No defensible procurement/pricing evidence located this session",
+          "evidence_type": "not_calibrated",
+          "confidence": "unknown",
+          "calibration_status": "not_calibrated"
+        },
+        {
+          "component": "annual_maintenance_opex",
+          "value": "NOT_CALIBRATED",
+          "currency": null,
+          "cost_year": null,
+          "price_basis": null,
+          "source": "No defensible cost evidence located this session",
+          "evidence_type": "not_calibrated",
+          "confidence": "unknown",
+          "calibration_status": "not_calibrated"
+        }
+      ],
+      "source_url_or_document": "Ge-68/Ga-68 generator evidence: https://jnm.snmjournals.org/content/59/supplement_1/405 (Galli Eo cGMP 68Ga-DOTATOC); Ge-68 half-life https://pmc.ncbi.nlm.nih.gov/articles/PMC6236682/ . Evidence records EV-GA68-GEN-001, EV-GE68-HL-001.",
+      "source_confidence": "high"
     }
   ]
 }

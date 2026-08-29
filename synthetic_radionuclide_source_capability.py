@@ -53,15 +53,25 @@ MODALITY AUTHORITY (reused, not invented)
 -----------------------------------------
 The repository's clinical modality vocabulary is `Literal["PET", "SPECT"]`
 (`clinical_resource_identity.ScannerModality`, `nuclear_appointment.NuclearModality`,
-`long_horizon_operational_planning.ClinicalModality`). The repository clinically
-recognizes exactly two radionuclide->modality clinical bindings today:
-`F-18 -> PET` (cyclotron) and `Tc-99m -> SPECT` (generator daughter). Other
-cyclotron-*supported* radionuclides (C-11, N-13, O-15, Ga-68, Cu-64, Zr-89,
-I-123, I-124) have NO clinical modality classification anywhere in the
-repository. Per the build governor, this module MUST NOT invent such a
-classification: those radionuclides are reported as
-`SUPPORTED_BUT_NOT_CLINICALLY_MODALITY_CLASSIFIED` limitations and are excluded
-from the admissible synthetic set until a clinical authority recognizes them.
+`long_horizon_operational_planning.ClinicalModality`). The canonical diagnostic
+radionuclide->modality authority is the single
+`_CLINICALLY_RECOGNIZED_RADIONUCLIDES_BY_MODALITY` mapping below, also consumed by
+`clinical_radionuclide_portfolio`. Following the Clinical Radionuclide
+Completeness & Evidence Closure build, every binding is EVIDENCE-GATED against a
+traceable record in `clinical_radionuclide_evidence.json` (FDA labeling / SNMMI /
+peer-reviewed clinical, classified by emission evidence: positron -> PET, single
+gamma photon -> SPECT):
+
+    PET   : F-18, C-11, N-13, O-15, Ga-68, Cu-64, Zr-89, I-124
+    SPECT : Tc-99m, I-123, In-111, Tl-201
+
+Radionuclides with NO diagnostic scanner modality are deliberately excluded here
+and never invented as admissible imaging demand: `At-211` is a THERAPY (alpha)
+radionuclide, and `Ge-68`/`Mo-99` are GENERATOR PARENTS (production feedstock /
+calibration source, never patient-administered). Any radionuclide a selected
+source supports but that carries no diagnostic modality binding is reported as a
+`SUPPORTED_BUT_NOT_CLINICALLY_MODALITY_CLASSIFIED` limitation, never silently
+promoted.
 """
 
 from __future__ import annotations
@@ -90,17 +100,46 @@ SourceType = Literal["CYCLOTRON", "GENERATOR"]
 # Clinical radionuclide -> modality recognition (REUSED repository authority)
 # ---------------------------------------------------------------------------
 #
-# These are the ONLY radionuclide->modality clinical bindings the repository
-# currently recognizes (see oncology_pet_spect_scenario.PET_RADIONUCLIDE /
-# SPECT_RADIONUCLIDE, multi_cyclotron_authority module docstring, and the
-# PET<->CYCLOTRON / SPECT<->GENERATOR pairing used throughout). This is a
-# recognition set, NOT an invented expansion: a cyclotron may physically
-# support C-11/N-13/O-15/Ga-68 etc., but the repository does not yet classify
-# those as clinically-admissible PET synthetic demand, so they are reported as
-# limitations rather than silently promoted (build governor Sec 8/30).
+# The canonical repository clinical radionuclide -> DIAGNOSTIC-modality authority.
+# This is the single dictionary consumed by BOTH this module and
+# `clinical_radionuclide_portfolio._clinical_modality_for` (no competing modality
+# table exists anywhere in the repository).
+#
+# Every binding below is EVIDENCE-GATED: each radionuclide->modality entry is
+# backed by a traceable record in `clinical_radionuclide_evidence.json`
+# (Clinical Radionuclide Completeness & Evidence Closure build). A radionuclide
+# is classified PET vs SPECT by its EMISSION EVIDENCE (positron -> PET, single
+# gamma photon -> SPECT), never by its element or by cyclotron support alone.
+#
+#   PET  (positron-emitter diagnostic agents):
+#     F-18    control (mature reference)
+#     C-11    FDA Choline C-11 PET (recurrent prostate cancer)        [EV-C11-MOD-001]
+#     N-13    FDA Ammonia N-13 PET (myocardial perfusion)             [EV-N13-MOD-001]
+#     O-15    [15O]water PET perfusion (peer-reviewed clinical)       [EV-O15-MOD-001]
+#     Ga-68   FDA 68Ga-DOTATATE / SNMMI 68Ga-PSMA-11 PET              [EV-GA68-MOD-001]
+#     Cu-64   FDA Cu-64 DOTATATE (Detectnet) PET (NET localization)   [EV-CU64-MOD-001]
+#     Zr-89   Zr-89 immunoPET (peer-reviewed clinical)                [EV-ZR89-MOD-001]
+#     I-124   I-124 immunoPET (peer-reviewed clinical)                [EV-I124-MOD-001]
+#   SPECT (single-photon/gamma diagnostic agents):
+#     Tc-99m  control (generator daughter)
+#     I-123   FDA Sodium Iodide I-123 gamma imaging (159 keV)         [EV-I123-MOD-001]
+#     In-111  FDA In-111 pentetreotide (OctreoScan) gamma imaging     [EV-IN111-MOD-001]
+#     Tl-201  FDA Thallous Chloride Tl-201 SPECT (myocardial)         [EV-TL201-MOD-001]
+#
+# DELIBERATELY EXCLUDED from this DIAGNOSTIC-modality authority (evidence-honest,
+# NOT an omission):
+#   At-211  THERAPY (alpha emitter) — no diagnostic scanner modality; recognized
+#           in the evidence registry as a THERAPY radionuclide and must NEVER be
+#           forced into PET/SPECT scanner demand.               [EV-AT211-USE-001]
+#   Ge-68   GENERATOR PARENT (Ge-68/Ga-68 generator + PET calibration source) —
+#           not patient-administered diagnostic demand.               [EV-GE68-HL-001]
+#   Mo-99   GENERATOR PARENT (Mo-99/Tc-99m) — production feedstock only.
+#
+# `Modality` is `Literal["PET", "SPECT"]` by construction, so THERAPY / generator
+# parents cannot be represented here — that typed boundary is intentional.
 _CLINICALLY_RECOGNIZED_RADIONUCLIDES_BY_MODALITY: Mapping[Modality, frozenset[str]] = {
-    "PET": frozenset({"F-18"}),
-    "SPECT": frozenset({"Tc-99m"}),
+    "PET": frozenset({"F-18", "C-11", "N-13", "O-15", "Ga-68", "Cu-64", "Zr-89", "I-124"}),
+    "SPECT": frozenset({"Tc-99m", "I-123", "In-111", "Tl-201"}),
 }
 
 

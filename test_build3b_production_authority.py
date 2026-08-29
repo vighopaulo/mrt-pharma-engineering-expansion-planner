@@ -351,8 +351,35 @@ def test_generator_catalog_is_mo99_tc99m_and_economics_not_calibrated():
 
     catalog = gc.load_generator_catalog()
     assert catalog.models, "generator catalog must contain at least one model"
-    for model in catalog.models:
-        assert model.parent_radionuclide == "Mo-99"
+
+    # RECONCILED (Clinical Radionuclide Completeness & Evidence Closure, OG-GEN-1):
+    # Build 3B originally protected the repository GAP "the only generator pathway
+    # is Mo-99 -> Tc-99m; no gallium generator exists". That gap was later CLOSED
+    # by canonical evidence: the Ge-68 -> Ga-68 generator (ECKERT_ZIEGLER_GALLIAPHARM,
+    # evidence EV-GA68-GEN-001 / EV-GE68-HL-001) is now a real catalog model. This
+    # test is narrowed to protect the NEW canonical truth without weakening Build 3B's
+    # actual guarantees: (a) the Mo-99 -> Tc-99m pathway is still present, and (b) all
+    # generator economics remain NOT_CALIBRATED (never fabricated $0).
+    mo99_tc99m = [m for m in catalog.models if m.parent_radionuclide == "Mo-99"]
+    assert mo99_tc99m, "Mo-99 -> Tc-99m generator pathway must remain present"
+    for model in mo99_tc99m:
         assert model.daughter_radionuclide == "Tc-99m"
-        # No gallium generator exists; daughter is never Ga-68.
-        assert model.daughter_radionuclide != "Ga-68"
+
+    # The Ge-68 -> Ga-68 pathway is now canonical and DISTINCT from Mo-99/Tc-99m.
+    ge68_ga68 = [m for m in catalog.models if m.parent_radionuclide == "Ge-68"]
+    for model in ge68_ga68:
+        assert model.daughter_radionuclide == "Ga-68"
+    # Every generator parent/daughter pairing is one of the two canonical pathways;
+    # no fabricated third pathway was introduced.
+    for model in catalog.models:
+        assert (model.parent_radionuclide, model.daughter_radionuclide) in {
+            ("Mo-99", "Tc-99m"),
+            ("Ge-68", "Ga-68"),
+        }
+
+    # Generator economics remain NOT_CALIBRATED for every model (the guarantee the
+    # test name asserts) -- never a fabricated price.
+    for model in catalog.models:
+        for record in model.economics:
+            assert record.value == "NOT_CALIBRATED"
+            assert record.calibration_status == "not_calibrated"
