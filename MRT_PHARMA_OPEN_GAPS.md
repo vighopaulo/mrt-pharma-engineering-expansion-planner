@@ -283,15 +283,74 @@ authority each gap references.
 
 ## Scanner / imaging equipment
 
-### OG-SCN-1 — Scanner economics / power / footprint calibration — NOT_CALIBRATED
+### OG-SCN-1 — Model-specific scanner calibration (economics / power / footprint / throughput) — PARTIAL
+- **Reviewed by:** Scanner Authority Review & Part 3E Readiness (uncommitted;
+  starting SHA `a1002ca`). See `SCANNER_AUTHORITY_REVIEW_PART_3E_READINESS.md`.
 - **Today:** `scanner_catalog.py` + `scanner_equipment_catalog.json` carry six
-  real Siemens Healthineers / GE HealthCare / Philips models with
-  `literature_calibrated` technical fields; power/dimensions and ALL economics
-  are `NOT_CALIBRATED`. The study-level PET scanner cost anchor remains the
-  generic `PlannerAssumptions.scanner_capex`.
+  real Siemens Healthineers / GE HealthCare / Philips models. Manufacturer /
+  model / modality / commercial status (incl. `LEGACY_INSTALLED_BASE`) /
+  new-purchase candidacy / per-protocol acquisition minutes are present
+  (`literature_calibrated`); the sizing layer (`required_scanner_count` /
+  `required_scanner_counts_for_mixed_population`) and PET/SPECT modality
+  separation (`check_modality_capacity`, `scanners_of_modality`) are IMPLEMENTED.
+  Per-model **power**, **dimensions/footprint/clearance/weight/floor-loading/
+  shielding/HVAC**, and ALL **economics** (CapEx/service/energy) remain
+  `NOT_CALIBRATED`; scanner instance **position/orientation/room identity** are
+  `NOT_MODELED`. The study-level PET scanner cost anchor remains the generic
+  `PlannerAssumptions.scanner_capex`.
+- **Classification:** `PARTIAL` — scanner **quantity** and **PET/SPECT modality**
+  authority are Part 3E Phase 1 READY; model-specific **ranking**
+  (economics/power/geometry/throughput) is `NOT_YET_RANKABLE`. This is NOT a
+  Part 3E Phase 1 blocker (Phase 1 selects class/quantity/modality).
 - **Closed would require:** defensible per-model procurement/service pricing,
-  power, and footprint evidence. Never fabricate; keep `NOT_CALIBRATED` until
-  evidence exists.
+  power kW, and footprint/room evidence. Never fabricate; keep `NOT_CALIBRATED`
+  until evidence exists.
+
+### OG-SCN-2 — Part 3D `feasible` derivation not yet migrated for the Light-MRT-dominant variant — PARTIAL
+- **Reviewed by:** Scanner Authority Review & Part 3E Readiness (uncommitted).
+- **Today:** the FOUR canonical architecture evaluators
+  (MANUAL_CONVENTIONAL / AUTOMATED_CONVENTIONAL / HYBRID_MRT / MRT_DOMINANT via
+  `_evaluate_mrt_style_architecture`) derive `ArchitectureResult.feasible` from
+  the Part 3D contract (`derive_physical_feasibility` →
+  `_physical_feasibility_result_fields`). The separate Build 2R
+  `evaluate_light_mrt_dominant` **variant** evaluator and the
+  `ZonalHybridPartitionCandidate` **candidate** dataclass still carry a hardcoded
+  `feasible=True` (Section H.1 of the review).
+- **Classification:** `PARTIAL` — narrow, non-blocking. Does not affect the
+  canonical four-architecture gate or Part 3E scanner readiness.
+- **Closed would require:** routing the Light-MRT-dominant variant (and, if
+  desired, the zonal-hybrid candidate pre-screen) through
+  `derive_physical_feasibility`. No fabrication involved; a mechanical migration.
+
+---
+
+## Cross-equipment recurring cost
+
+### OG-OPEX-1 — Equipment OPEX monetary authority (power kW + service/unit $) — PARTIAL
+- **Reviewed by:** Scanner Authority Review & Part 3E Readiness (uncommitted),
+  Section M.
+- **Today:** the **physical duty / utilization** layer exists and is real —
+  `equipment_energy_opex.py` derives scanner scan-minutes and cyclotron
+  irradiation-minutes from the actual long-horizon plan; the patient-aware
+  batch-planning → required-EOB → production-cycle chain yields cyclotron
+  cycles/day; generator useful-life yields a replacement schedule in **units**.
+  A reusable `electricity_cost_per_kwh` tariff (`CONTROLLED_ASSUMPTION`) exists.
+  What is missing is the **monetary calibration inputs**: per-model **power kW**
+  (scanner/cyclotron power specs are `NOT_CALIBRATED`, so
+  `equipment_energy_opex` honestly returns `calculated_energy_kwh = 0.0` /
+  `NOT_CALIBRATED` for those classes), **service $**, **consumable $**, and
+  **generator procurement $**.
+- **Classification:** `PARTIAL` — duty binding built; monetary layer uncalibrated.
+  NOT a Part 3E Phase 1 blocker: Phase 1 may proceed with a
+  `known_annual_opex_subtotal_usd` while `total_annual_opex_usd = NOT_CALIBRATED`
+  (existing economic doctrine).
+- **Closed would require:** per-equipment-class power kW + separately-provenanced
+  site unit costs ($/kWh already exists; $/service, $/consumable, $/generator to
+  be supplied as `CONTROLLED_ASSUMPTION` until a commercial quote calibrates
+  them), composing `OPEX_annual = OPEX_spec_derived + OPEX_commercial +
+  OPEX_site_specific` with mixed-evidence provenance (weakest component governs).
+  Must never back-derive $ from EOB activity, nameplate × 8760, or a fixed
+  %-of-CapEx presented as manufacturer-specified.
 
 ---
 

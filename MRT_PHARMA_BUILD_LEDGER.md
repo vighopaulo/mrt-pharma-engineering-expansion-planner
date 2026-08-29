@@ -339,3 +339,78 @@ estimation authority and its narrow Part 3D seam recorded above.*
   is opt-in. OG-CYC-1, OG-GEN-1, and all other gaps unchanged.
 - **SUPERSEDES / SUPERSEDED BY:** builds on the Cyclotron Production Evidence
   Extension checkpoint; supersedes nothing; not superseded.
+
+
+---
+
+## CURRENT UNCOMMITTED BUILD — Scanner Authority Review & Part 3E Readiness
+
+- **TYPE:** REVIEW / DOCUMENTATION (audit → authority trace → gap classification
+  → Part 3E readiness determination). **No engine code changed.**
+- **STARTING SHA:** `a1002ca` (origin/main; clean; divergence 0/0).
+- **PURPOSE:** finalize the scanner authority review and the Part 3E readiness
+  determination — verify (not restart) the existing review against the physical
+  repository, complete the readiness matrix, classify remaining scanner gaps,
+  lock conclusions with focused tests, and report. No Part 3E, no Equipment OPEX
+  Authority, no scanner optimization, no BIM ingestion, no Operations closure,
+  no UI.
+- **REVIEW ARTIFACTS (untracked, created):**
+  `SCANNER_AUTHORITY_REVIEW_PART_3E_READINESS.md`,
+  `test_scanner_authority_review.py`.
+- **GOVERNANCE DOCS CHANGED (additive):** `MRT_PHARMA_AUTHORITY_INDEX.md`
+  (scanner-review conclusions block), `MRT_PHARMA_OPEN_GAPS.md`
+  (OG-SCN-1 refined to PARTIAL; added OG-SCN-2 and OG-OPEX-1),
+  `MRT_PHARMA_PRODUCT_DOCTRINE.md` (Section 11A durable scanner doctrine),
+  this ledger.
+- **SCANNER INVENTORY:** six real models — Siemens Symbia Pro.specta (SPECT),
+  Siemens Biograph Vision (PET), GE NM/CT 870 DR (SPECT), GE NM/CT 860 (SPECT),
+  GE Discovery MI (PET), Philips BrightView XCT (SPECT, LEGACY_INSTALLED_BASE,
+  not a new-purchase candidate). Technical fields `literature_calibrated`;
+  economics/power/footprint `NOT_CALIBRATED`.
+- **PART 3E READINESS RESULT:** `READY_WITH_DOCUMENTED_LIMITATIONS`.
+  `SCANNER_QUANTITY_SELECTION_READY=YES`, `MODALITY_SELECTION_READY=YES`,
+  `MODEL_SELECTION_READY=NO`, `PHASE_1_MODE=CLASS_AND_MODALITY`,
+  `PHASE_1_READY=YES`. Model-specific scanner optimization deferred (not blocking).
+- **OPEX CONCLUSION:** cross-equipment OPEX = PARTIAL. A schedule-derived
+  equipment ENERGY authority (`equipment_energy_opex.py`) already exists (duty
+  derived from the actual long-horizon plan); the missing layer is monetary
+  (per-model power kW + service/unit $). Recorded as OG-OPEX-1.
+  `EQUIPMENT_OPEX_AUTHORITY_REQUIRED_BEFORE_PART_3E_PHASE_1 = NO`
+  (Phase 1 may use `known_annual_opex_subtotal_usd` with
+  `total_annual_opex_usd = NOT_CALIBRATED`).
+- **HOSPITAL MASTER CALENDAR FINDING:** long-horizon operational planning
+  authority EXISTS (`long_horizon_operational_planning.py`, data-driven horizon,
+  single validated day engine per date; scanner resource identity + date-level
+  availability + patient→batch→scanner traceability). Intra-day maintenance/
+  downtime windows and per-scanner operating hours remain PARTIAL/NOT_MODELED
+  (future Operations closure, not this review).
+- **HONEST CORRECTION MADE (documentation only):** the FOUR canonical
+  architecture evaluators derive `ArchitectureResult.feasible` from the Part 3D
+  contract; the separate `evaluate_light_mrt_dominant` variant and
+  `ZonalHybridPartitionCandidate` still hardcode `feasible=True` (recorded as
+  OG-SCN-2). No engine change made to fix this in a review build.
+- **FOCUSED TESTS:** `test_scanner_authority_review.py` — **41 passed**
+  (25 scanner-authority + 8 calendar-seam + 7 final-readiness + 1 modality-guard).
+- **DIRECTLY-AFFECTED REGRESSION (all `/opt/anaconda3/bin/python -m pytest`):**
+  - scanner review + clinical identity + clinical bottleneck + Part 3D closure +
+    equipment energy OPEX + oncology PET/SPECT completion = **168 passed**.
+  - long-horizon calendar + operating-day scheduler + production-clinical schedule
+    + patient radionuclide demand + design-horizon + Build 3B production +
+    cyclotron production windows + multi-isotope decay + synthetic source
+    capability = **193 passed**.
+  - `test_equal_budget.py` + `test_mrt_pharma_authority_index.py`
+    (economic + governance PRESERVATION) = **128 passed**.
+  - canonical spatial authority closure = **85 passed**; architecture report =
+    **2 passed**; `test_spatial_benchmark.py` representative decay/transport
+    identity subset = **2 passed** (full 22-test suite is genuinely slow, not
+    broken; no engine change affects it).
+  - capital project API + Build 3A (identity + MRT patch C) + Build 3C transport +
+    Build 3C.1 spatial route + cyclotron catalog foundation + PET/SPECT generator
+    native = **185 passed**.
+  - four-architecture optimization = **199 passed, 1 skipped**.
+- **ENGINE FILES CHANGED:** **NONE.** `git diff --name-only` = three governance
+  `.md` docs only (+137/-7); untracked = the two review artifacts. `equal_budget.py`
+  untouched; four-architecture / scanner / production / calendar engines untouched.
+- **OG-SCN-1 STATUS:** **PARTIAL** (refined from NOT_CALIBRATED headline;
+  quantity + modality READY, model-specific ranking NOT_YET_RANKABLE).
+- **NO commit. NO push. NO stage.**

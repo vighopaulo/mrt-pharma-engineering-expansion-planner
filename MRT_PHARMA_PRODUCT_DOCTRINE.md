@@ -343,6 +343,51 @@ or patient appointment **while preserving radionuclide-decay physics**.
 
 ---
 
+## 11A. Scanner doctrine
+
+> **SCANNER COUNT ≠ SCANNER MODEL ≠ SCANNER CAPABILITY ≠ SCANNER THROUGHPUT.**
+
+These are four distinct authorities and must never be collapsed into one:
+
+- **Scanner count** is a plain requirement integer derived from patient demand
+  (`PATIENT DEMAND → SCANNER REQUIREMENT`, ceiling division) — never a model
+  selection, never reversed into demand.
+- **Scanner model** is a catalog identity (manufacturer / model / modality /
+  commercial status). A count carries no model; a model is not ranked by count.
+- **Scanner capability** (modality, protocol families, energy range) is
+  equipment capability — it never manufactures patient demand. **Excess scanner
+  capability / capacity is HEADROOM, not new patients.**
+- **Scanner throughput** (per-protocol acquisition minutes) is a workload driver;
+  it is not, by itself, a full patients/day figure unless setup/turnover/
+  operating-hours authority supports it.
+
+Further durable rules:
+
+- **Patient-awareness belongs to the scheduling / calendar layer, not the scanner
+  catalog.** `PATIENT → SCHEDULER/CALENDAR → SCANNER RESOURCE ASSIGNMENT` while
+  `SCANNER CATALOG → EQUIPMENT CAPABILITY`. The scanner catalog does **not** need
+  `patient_id`, patient name, patient room, or appointment. A scanner **resource**
+  (persistent `SCN-xxx` identity) may be assigned to a patient by the calendar;
+  the scanner **catalog model** is not bound to a patient.
+- **PET ≠ SPECT capacity.** PET demand consumes only PET scanner capacity and
+  SPECT demand only SPECT capacity; untagged (modality-unknown) scanners are
+  excluded from both pools — no silent capacity sharing.
+- **Existing / retain / new-purchase / replacement / legacy-installed-base are
+  all legitimate capital choices.** `NO BUILD` and `RETAIN EXISTING EQUIPMENT`
+  are valid; a newer model existing is not, by itself, a reason to replace.
+- **Patient-aware batch planning → production requirement → clinical schedule →
+  scanner assignment** is the operational chain; scanner timing is causally
+  downstream of production/transport/injection/uptake.
+- **The long-horizon Hospital Master Calendar foundation EXISTS**
+  (`long_horizon_operational_planning.py`, data-driven horizon). Full live
+  Operations closure (intra-day scanner downtime windows, per-scanner operating
+  hours) may remain partial and is a separate future build.
+- **Never fabricate scanner economics, power, footprint, room requirements, or
+  model-specific throughput.** `NOT_CALIBRATED` / `NOT_MODELED` are preserved
+  honestly (see Section 12).
+
+---
+
 ## 12. No-fabrication doctrine
 
 Honest unknowns are preserved, never invented:

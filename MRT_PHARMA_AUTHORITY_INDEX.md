@@ -639,6 +639,32 @@ Canonical direction (production does NOT generate patient demand):
 - **Known Limitations:** scanner economics/power/footprint uncalibrated; the
   study-level PET scanner cost anchor remains the generic
   `PlannerAssumptions.scanner_capex`. See OG-SCN-1.
+- **Scanner Authority Review & Part 3E Readiness** (uncommitted; starting SHA
+  `a1002ca`; artifacts `SCANNER_AUTHORITY_REVIEW_PART_3E_READINESS.md` +
+  `test_scanner_authority_review.py`). Physically-verified conclusions:
+  - Scanner **quantity** authority = READY (`required_scanner_count`,
+    demand→count ceiling division); **PET/SPECT modality** authority = READY
+    (`check_modality_capacity` enforces separation by construction;
+    `scanners_of_modality` excludes untagged scanners from both pools);
+    **model-specific** ranking = NOT_YET_RANKABLE (economics/power/geometry
+    `NOT_CALIBRATED`/`NOT_MODELED`).
+  - Part 3E readiness: `QUANTITY=YES`, `MODALITY=YES`, `MODEL=NO`,
+    Phase-1 mode = `CLASS_AND_MODALITY`, `PHASE_1_READY=YES`. Result =
+    `READY_WITH_DOCUMENTED_LIMITATIONS`.
+  - Part 3D scanner gate is a single aggregate count (modality-agnostic) reading
+    `nuclear.candidate.scanners`; `feasible` is DERIVED for the four canonical
+    architectures but hardcoded in the `evaluate_light_mrt_dominant` variant and
+    `ZonalHybridPartitionCandidate` (OG-SCN-2).
+  - Patient-awareness lives in the scheduling/calendar layer
+    (`long_horizon_operational_planning.py`, `PatientOperationalPlan`); the
+    scanner **catalog** carries NO patient identity (boundary preserved).
+  - Long-horizon Hospital-Master-Calendar foundation EXISTS
+    (`long_horizon_operational_planning.py`, data-driven horizon, single validated
+    day engine per date); scanner availability is date-level; intra-day
+    maintenance/downtime windows remain `PARTIAL`/`NOT_MODELED`.
+  - A schedule-derived equipment **energy** authority exists
+    (`equipment_energy_opex.py`, duty from the actual plan) but the monetary layer
+    (per-model power kW + service $) is `NOT_CALIBRATED` (OG-OPEX-1).
 
 ### 2.24 Patient / batch / production-equipment awareness boundary
 
