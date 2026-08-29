@@ -327,8 +327,19 @@ authority each gap references.
 ## Cross-equipment recurring cost
 
 ### OG-OPEX-1 — Equipment OPEX monetary authority (power kW + service/unit $) — PARTIAL
-- **Reviewed by:** Scanner Authority Review & Part 3E Readiness (uncommitted),
-  Section M.
+- **Reviewed by:** Scanner Authority Review & Part 3E Readiness (Section M).
+- **Advanced by:** Equipment OPEX Authority build (uncommitted;
+  `equipment_opex_authority.py` + `test_equipment_opex_authority.py` +
+  `EQUIPMENT_OPEX_AUTHORITY.md`). The **physical-driver → componentized-annual-OPEX**
+  authority is now IMPLEMENTED and composes `equipment_energy_opex.py` for
+  scanner/cyclotron/generator: `EquipmentOpexComponent` tracks the physical
+  driver and the monetary unit cost as **separate** evidence classes (weakest
+  governs); `EquipmentOpexResult` exposes `known_annual_opex_subtotal_usd` while
+  `total_annual_opex_status` stays `NOT_CALIBRATED` until every applicable
+  component is calculated; `build_opex_component` is a single no-zero-fill choke
+  point (unknown → `None`/status, never `$0`). The gap remains **PARTIAL** only
+  because the monetary calibration INPUTS below are still unavailable — not
+  because the authority is missing.
 - **Today:** the **physical duty / utilization** layer exists and is real —
   `equipment_energy_opex.py` derives scanner scan-minutes and cyclotron
   irradiation-minutes from the actual long-horizon plan; the patient-aware

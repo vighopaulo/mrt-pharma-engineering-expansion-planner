@@ -404,6 +404,39 @@ Honest unknowns are preserved, never invented:
 
 ---
 
+## 12A. Equipment OPEX doctrine (physical driver ≠ monetary unit cost)
+
+The Equipment OPEX Authority (`equipment_opex_authority.py`) composes the
+existing schedule-derived duty/energy authority into componentized annual OPEX
+for SCANNER, CYCLOTRON, and GENERATOR, under a single governing decomposition:
+
+```
+OPEX_annual = OPEX_spec_derived + OPEX_commercial + OPEX_site_specific
+```
+
+Durable rules:
+
+- **PHYSICAL DRIVER and MONETARY UNIT COST carry SEPARATE evidence classes.** A
+  driver may be `SITE_CALIBRATED` (schedule-derived beam-on hours, scan-minutes,
+  replacement count) while the unit cost is `NOT_CALIBRATED`. The **weakest** of
+  the two governs the component; the strongest never promotes the whole result.
+- **No zero-fill.** An unknown power, service price, consumable price, or
+  generator purchase price yields `annual_cost_usd = None` and a status naming
+  the missing side — never `$0`, never `0 kWh`.
+- **Known subtotal ≠ total.** `known_annual_opex_subtotal_usd` may be numeric
+  while `total_annual_opex_status = NOT_CALIBRATED`; the total dollar figure is
+  reported only when every applicable component is calculated.
+- **Never back-derive dollars** from EOB activity, `nameplate × 8760`, or a fixed
+  %-of-CapEx presented as manufacturer-specified. Beam current is a workload
+  driver, not a facility electrical load.
+- **Direction is authoritative:** demand → workload → utilization → OPEX drivers,
+  never OPEX → utilization; excess equipment capacity is headroom, never revenue.
+- **Class-appropriate applicability:** a passive Mo-99/Tc-99m generator's
+  electricity is `NOT_APPLICABLE`, not a fabricated `$0`; a generator is recurring
+  procurement, not permanent capital.
+
+---
+
 ## 13. Standing PLANNED product intentions (not yet implemented)
 
 These are durable **product intentions** classified `PLANNED_REQUIREMENT` — named

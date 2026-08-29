@@ -414,3 +414,49 @@ estimation authority and its narrow Part 3D seam recorded above.*
 - **OG-SCN-1 STATUS:** **PARTIAL** (refined from NOT_CALIBRATED headline;
   quantity + modality READY, model-specific ranking NOT_YET_RANKABLE).
 - **NO commit. NO push. NO stage.**
+
+---
+
+## Equipment OPEX Authority (uncommitted)
+
+- **Starting authority:** branch `main`, HEAD `df7bf03` (Scanner authority: Part 3E
+  readiness boundary), working tree clean, divergence 0/0.
+- **Nature:** NARROW engine build. New `equipment_opex_authority.py` COMPOSES the
+  existing `equipment_energy_opex.py` (+ cyclotron/generator/scanner catalogs +
+  long-horizon production plan) into a componentized physical-driver → annual-OPEX
+  authority for SCANNER, CYCLOTRON, GENERATOR. No new duty-cycle engine, no
+  physics change, no catalog change, no Part 3E optimizer, no UI.
+- **Contract:** `EquipmentOpexComponent` (physical driver + monetary unit cost as
+  SEPARATE evidence classes, weakest governs) + `EquipmentOpexResult`
+  (`known_annual_opex_subtotal_usd`, `total_annual_opex_status`,
+  `comparability_status`, reusing `EconomicComparabilityStatus`).
+  `build_opex_component` is the single no-zero-fill choke point (unknown →
+  `None`/status, never `$0`).
+- **Control proofs (Section 44):** A scanner-unknown-power (duty exists, energy `$`
+  withheld); B cyclotron-utilization (2 cycles → 3.0 beam-on hours, no kW from
+  beam current); C CYPRIS MP-30 preserved `not_calibrated`, no GE borrowing; D
+  generator replacement 27/yr @14-day life CALCULABLE, procurement `$`
+  `NOT_CALIBRATED`; E known subtotal `$50,000` while total `NOT_CALIBRATED`; F no
+  zero-fill on service/power/price.
+- **FOCUSED TESTS:** `test_equipment_opex_authority.py` — **40 passed**
+  (34 invariants + 6 control proofs). One real bug fixed:
+  `known_annual_opex_subtotal_usd` now `float(sum(...))` (was int `0`).
+- **DIRECTLY-AFFECTED REGRESSION (all `/opt/anaconda3/bin/python -m pytest`):**
+  - OPEX authority + `equipment_energy_opex` + scanner review = **102 passed**.
+  - cyclotron catalog foundation/e2e/fleet/windows/estimation/evidence +
+    PET-SPECT generator native + long-horizon planning + production-clinical
+    schedule = **224 passed**.
+  - multi-isotope decay + F-18 decay + `equal_budget` + authority index =
+    **158 passed**.
+  - Part 3D physical feasibility = **46 passed**.
+  - capital project API = **27 passed**.
+  - four-architecture optimization = **199 passed, 1 skipped**.
+- **ENGINE FILES CHANGED:** **NONE.** `git diff --stat` empty; untracked =
+  `equipment_opex_authority.py`, `test_equipment_opex_authority.py`,
+  `EQUIPMENT_OPEX_AUTHORITY.md`; governance `.md` docs refined
+  (`MRT_PHARMA_AUTHORITY_INDEX.md` §2.23A, `MRT_PHARMA_OPEN_GAPS.md` OG-OPEX-1,
+  `MRT_PHARMA_PRODUCT_DOCTRINE.md` §12A, this ledger).
+- **OG-OPEX-1 STATUS:** **PARTIAL** (physical-driver + componentization authority
+  IMPLEMENTED; monetary power/service/consumable/procurement `$` inputs still
+  unavailable). Part 3E Phase 1 consumable with qualified economics.
+- **NO commit. NO push. NO stage.**

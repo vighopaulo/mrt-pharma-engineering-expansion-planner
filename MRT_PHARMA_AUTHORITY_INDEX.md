@@ -666,6 +666,34 @@ Canonical direction (production does NOT generate patient demand):
     (`equipment_energy_opex.py`, duty from the actual plan) but the monetary layer
     (per-model power kW + service $) is `NOT_CALIBRATED` (OG-OPEX-1).
 
+### 2.23A Equipment OPEX Authority (physical driver → componentized annual OPEX)
+
+- **Primary Files:** `equipment_opex_authority.py`,
+  `test_equipment_opex_authority.py`, `EQUIPMENT_OPEX_AUTHORITY.md` (uncommitted;
+  starting SHA `df7bf03`).
+- **Primary Symbols:** `EquipmentOpexComponent`, `EquipmentOpexResult`,
+  `EquipmentOpexClass` (`SCANNER`/`CYCLOTRON`/`GENERATOR`), `EvidenceStatus`
+  ladder, `build_opex_component` (no-zero-fill choke point),
+  `weakest_evidence`, `compute_scanner_opex`, `compute_cyclotron_opex`,
+  `compute_generator_opex`, `derive_cyclotron_utilization_from_cycles`,
+  `derive_generator_replacement_schedule`, `annualize_horizon_quantity`.
+- **Nature:** COMPOSES `equipment_energy_opex.py` (and the cyclotron/generator/
+  scanner catalogs + the long-horizon production plan) into componentized annual
+  OPEX. Introduces NO new duty-cycle engine, NO physics, NO catalog. Reuses the
+  existing `EconomicComparabilityStatus` vocabulary and the
+  `electricity_cost_per_kwh` (`CONTROLLED_ASSUMPTION`) tariff.
+- **Doctrine enforced:** physical driver and monetary unit cost carry SEPARATE
+  evidence classes (weakest governs); `annual_cost_usd` is `None` (never `$0`)
+  when either side is uncalibrated; `known_annual_opex_subtotal_usd` may be
+  numeric while `total_annual_opex_status = NOT_CALIBRATED`; never back-derive `$`
+  from EOB activity / `nameplate × 8760` / %-of-CapEx-as-manufacturer.
+- **Calibration Status:** physical-driver + componentization layer IMPLEMENTED;
+  scanner/cyclotron **power kW**, all **service/consumable/procurement $** remain
+  `NOT_CALIBRATED` (OG-OPEX-1 still PARTIAL). Part 3E Phase 1 consumable with
+  qualified economics.
+- **Boundary:** no patient identity accepted by any class (scanner/cyclotron/
+  generator OPEX); patient-aware batch-planning boundary preserved.
+
 ### 2.24 Patient / batch / production-equipment awareness boundary
 
 Governance navigation for the synthetic-patient → batch-planning →
