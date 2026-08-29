@@ -255,10 +255,32 @@ of existing layering** — it changes no production-engine behavior.
   is the **combined capability of ALL selected production sources** — cyclotron(s)
   **and** generator(s) — not merely the selected cyclotron's radionuclides. If a
   Mo-99/Tc-99m generator is present, Tc-99m is admissible even though the
-  cyclotron does not produce it. *(Implementation status: this constraint is
-  **PLANNED / PARTIAL**, not yet enforced by the generator code today — see
-  `MRT_PHARMA_OPEN_GAPS.md` OG-SYNTH-1. The doctrine is normative; the
-  enforcement is a future narrow build.)*
+  cyclotron does not produce it. *(Implementation status: **OG-SYNTH-1 = PARTIAL**
+  — the selected-source representative binding is **IMPLEMENTED** by the Synthetic
+  Patient Radionuclide Source-Capability Binding build, but the gap is NOT
+  globally CLOSED. The `synthetic_radionuclide_source_capability.py` resolver
+  derives the admissible set from the SELECTED cyclotron + generator sources
+  BEFORE patient creation, and
+  `oncology_pet_spect_scenario.build_representative_day_population` consumes it
+  when selected-source ids are supplied. NORMAL synthetic demand for an
+  unsupported radionuclide is no longer generated; STRESS_TEST / explicit demand
+  is preserved and exposed downstream as `NO_COMPATIBLE_SOURCE`. The
+  default/legacy path (no selected-source ids) remains benchmark-driven
+  (F-18 / Tc-99m) for backward compatibility, which is why OG-SYNTH-1 stays
+  PARTIAL rather than CLOSED. See
+  `SYNTHETIC_PATIENT_SOURCE_CAPABILITY_AUTHORITY.md` and
+  `MRT_PHARMA_OPEN_GAPS.md` OG-SYNTH-1.)*
+- **NORMAL synthetic demand = source-capability-constrained before patient
+  creation; EXPLICIT / STRESS-TEST demand = preserved even if unsupported.**
+  Synthetic patient radionuclide demand is constrained by the scenario's
+  combined selected production-source capability set (cyclotron supported
+  radionuclides ∪ generator daughter radionuclides, filtered by clinical
+  modality). The randomizer chooses only within the admissible set; it never
+  fabricates or substitutes a radionuclide, and it never falls back to F-18 /
+  Tc-99m or borrows from an unselected catalog machine. STRESS_TEST callers may
+  deliberately request an unsupported radionuclide, which is preserved and
+  surfaced as `NO_COMPATIBLE_SOURCE` — the system must never silently alter
+  patient demand to make the facility feasible.
 - **Batch production is patient-aware.** The patient-aware batch-production
   planner translates patient clinical requirements into radionuclide-specific
   physical production requirements before those requirements reach the cyclotron

@@ -497,13 +497,33 @@ def test_stress_test_does_not_silently_mutate_patient_demand(corpus):
 
 
 def test_synthetic_source_capability_constraint_status_is_honest(corpus):
-    # The constraint must be classified PLANNED / PARTIAL, never described as
-    # already implemented, and the gap must be registered.
+    # The constraint must be classified honestly against the PHYSICAL
+    # implementation: OG-SYNTH-1 is PARTIAL -- the selected-source representative
+    # binding is implemented and test-locked, but the default/legacy synthetic
+    # path (no selected-source ids) remains benchmark-driven, so it is NOT
+    # globally CLOSED. The gap must be registered and must never be described as
+    # fully closed / globally implemented.
     _assert_in(corpus, "OG-SYNTH-1")
+    # Current physical status is PARTIAL (the honest classification).
     _assert_any(
         corpus,
         [
-            "PLANNED / PARTIAL",
-            "PLANNED/PARTIAL",
+            "og-synth-1 = partial",
+            "og-synth-1 — synthetic-patient source-capability constraint — partial",
+            "og-synth-1 (reclassified",  # tolerated legacy phrasing
+            "advanced from planned / partial",
+            "planned / partial",
+            "planned/partial",
         ],
     )
+    # Guard against the aspirational overstatement this test exists to prevent:
+    # OG-SYNTH-1 must not be labelled globally CLOSED / fully implemented.
+    for forbidden in (
+        "og-synth-1 = closed",
+        "og-synth-1 — synthetic-patient source-capability constraint — closed",
+        "reclassified from planned / partial to closed",
+        "og-synth-1 (reclassified from planned / partial to closed",
+    ):
+        assert forbidden not in corpus, (
+            f"OG-SYNTH-1 must not be described as globally CLOSED; found {forbidden!r}"
+        )

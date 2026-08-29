@@ -271,3 +271,71 @@ estimation authority and its narrow Part 3D seam recorded above.*
   unchanged; **OG-SYNTH-1 remains OPEN** (randomizer untouched).
 - **SUPERSEDES / SUPERSEDED BY:** extends build 9 (Cyclotron Production
   Estimation); supersedes nothing; not superseded.
+
+
+---
+
+## Build — Synthetic Patient Radionuclide Source-Capability Binding (OG-SYNTH-1) — CURRENT UNCOMMITTED BUILD
+
+- **STATUS:** CURRENT UNCOMMITTED BUILD (not committed, not pushed; no SHA assigned).
+- **STARTING SHA:** `c35bc4e` (Cyclotron Production Evidence & Calibration
+  Extension checkpoint); branch `main`; `origin/main = c35bc4e`; working tree
+  clean; divergence 0/0 at start.
+- **PURPOSE:** advance OG-SYNTH-1 to PARTIAL by implementing the selected-source
+  representative binding — bind synthetic patient radionuclide demand to the
+  radionuclides the scenario's SELECTED production sources can actually supply,
+  **before** patient creation (the default/legacy path stays benchmark-driven,
+  so the gap is not globally closed).
+  Required chain: SELECTED SOURCES → SOURCE-SUPPORTED SET → ADMISSIBLE SYNTHETIC
+  SET → SYNTHETIC PATIENT REQUIREMENTS → (unchanged) PATIENT-AWARE BATCH PLANNING
+  → PHYSICAL PRODUCTION REQUIREMENT → CYCLOTRON / GENERATOR AUTHORITY.
+- **MAJOR AUTHORITY ESTABLISHED:** `synthetic_radionuclide_source_capability.py`
+  — `resolve_admissible_radionuclides(*, modality, selected_cyclotron_ids,
+  selected_generator_ids, mode)` → `SyntheticRadionuclideCapabilityResult`
+  (`admissible_radionuclides`, `excluded_radionuclides`, `source_by_radionuclide`,
+  `status`, `limitations`); `choose_normal_synthetic_radionuclide`;
+  `NoCompatibleSourceError`. Admissible = cyclotron `supported_radionuclides`
+  (SUPPORT semantics) ∪ generator `daughter_radionuclide`, filtered by clinical
+  modality recognition (F-18 → PET, Tc-99m → SPECT). Selected-source specific;
+  no global-catalog fallback; source identities preserved and de-duplicated.
+- **NORMAL vs STRESS behavior:** NORMAL = source-capability-constrained before
+  patient creation (unsupported radionuclide never generated; `NoCompatibleSource`
+  raised — no F-18/Tc-99m fallback). STRESS_TEST / explicit demand = preserved and
+  exposed downstream as `NO_COMPATIBLE_SOURCE`; never silently mutated.
+- **CANONICAL SEMANTICS PRESERVED:** SUPPORTED ≠ CALIBRATED (CYPRIS MP-30 + F-18
+  admissible by SUPPORT while `NOT_CALIBRATED` / `NOT_AVAILABLE`); no estimator,
+  capacity, or economics consulted; cyclotron/generator APIs remain NOT
+  patient-identity-aware; patient cohort ≠ physical production batch; batch
+  planning remains patient-aware and downstream.
+- **FILES CREATED:** `synthetic_radionuclide_source_capability.py`,
+  `test_synthetic_patient_source_capability.py`,
+  `SYNTHETIC_PATIENT_SOURCE_CAPABILITY_AUTHORITY.md`.
+- **FILES CHANGED (additive / backward-compatible):** `oncology_pet_spect_scenario.py`
+  (import + optional `selected_cyclotron_ids` / `selected_generator_ids` / `mode`
+  params on `build_representative_day_population` and
+  `build_stochastic_representative_day_population`; the two `NuclearProcedureAssignment`
+  radionuclide sites now use the source-resolved locals; `None` selected-source
+  ids preserve the benchmark F-18/Tc-99m defaults exactly),
+  `MRT_PHARMA_AUTHORITY_INDEX.md`, `MRT_PHARMA_OPEN_GAPS.md`,
+  `MRT_PHARMA_PRODUCT_DOCTRINE.md`, this ledger.
+- **ENGINE FILES CHANGED:** only `oncology_pet_spect_scenario.py` (the synthetic
+  generator seam). No cyclotron estimator / catalog / generator / transport /
+  scanner / four-architecture / equal_budget change.
+- **FOCUSED TESTS:** `test_synthetic_patient_source_capability.py` — 47 passed
+  (40 Section-41 invariants + control proofs A–F + patient-aware batch boundary).
+- **PRESERVATION REGRESSION (all `/opt/anaconda3/bin/python -m pytest`):** patient
+  radionuclide demand + oncology PET/SPECT + inbound + production clinical schedule
+  + cyclotron catalog foundation + PET/SPECT generator native + cyclotron production
+  estimation + evidence extension = 275 passed; Build 3B + Part 3D = 62 passed;
+  `test_equal_budget.py` + `test_mrt_pharma_authority_index.py` = 128 passed; multi-
+  cyclotron + production windows + multi-isotope decay = 83 passed; four-architecture
+  = 199 passed / 1 skipped; capital project API + cyclotron e2e/fleet = 48 passed.
+- **GOVERNANCE:** OG-SYNTH-1 = **PARTIAL** (advanced from PLANNED / PARTIAL, NOT
+  globally CLOSED). Implemented + test-locked: the selected-source capability
+  resolver, the selected-source-constrained representative NORMAL path, no-source
+  `NO_COMPATIBLE_SOURCE` failure, and STRESS_TEST / explicit-demand preservation.
+  Still open: the default/legacy synthetic path (no selected-source ids) remains
+  benchmark-driven (F-18 / Tc-99m) for backward compatibility, so the constraint
+  is opt-in. OG-CYC-1, OG-GEN-1, and all other gaps unchanged.
+- **SUPERSEDES / SUPERSEDED BY:** builds on the Cyclotron Production Evidence
+  Extension checkpoint; supersedes nothing; not superseded.

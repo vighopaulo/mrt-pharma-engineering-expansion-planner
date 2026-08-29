@@ -65,6 +65,11 @@ from multi_isotope_decay import required_upstream_activity, retained_fraction
 from nuclear_source import NuclearSourceInstance, SourceFeasibilityResult, evaluate_cyclotron_source_feasibility, evaluate_generator_source_feasibility
 from scanner_catalog import ScannerCatalogModel
 from study_scope import apply_study_scope
+from synthetic_radionuclide_source_capability import (
+    SyntheticDemandMode,
+    choose_normal_synthetic_radionuclide,
+    resolve_admissible_radionuclides,
+)
 
 NuclearPatientOrigin = Literal["INPATIENT", "OUTPATIENT"]
 Architecture = Literal["Conventional", "MRT", "Hybrid"]
@@ -162,17 +167,65 @@ def build_representative_day_population(
     target_pet_procedures: int,
     target_spect_procedures: int,
     seed: int,
+    selected_cyclotron_ids: tuple[str, ...] | None = None,
+    selected_generator_ids: tuple[str, ...] | None = None,
+    mode: SyntheticDemandMode = "NORMAL",
 ) -> tuple[tuple[OncologyPatientRecord, ...], DailyOncologyCensus]:
     """Build ONE representative operating day's persistent population.
     Reproducible via `seed` (section 49). Nuclear procedures are drawn from
     BOTH inpatients and outpatients (section 47) -- an inpatient who receives
     a nuclear procedure keeps their existing room/floor/building identity; an
     outpatient keeps their existing outpatient_origin identity. No second
-    patient identity is ever created."""
+    patient identity is ever created.
+
+    OG-SYNTH-1 source-capability binding: when `selected_cyclotron_ids` and/or
+    `selected_generator_ids` are supplied, the assigned PET/SPECT radionuclide
+    is derived from the scenario's SELECTED production sources via
+    `synthetic_radionuclide_source_capability.resolve_admissible_radionuclides`
+    (SUPPORT semantics, filtered by clinical modality) BEFORE any patient demand
+    is created -- so normal synthetic mode never generates demand for a
+    radionuclide no selected source can supply. If the selected sources cannot
+    supply an admissible radionuclide for a REQUESTED cohort (PET count > 0 or
+    SPECT count > 0), a `NoCompatibleSourceError` is raised rather than silently
+    substituting or dropping demand. When BOTH selected-source lists are left
+    `None` (the default), the module-level benchmark constants (`F-18` / `Tc-99m`)
+    are used unchanged, preserving the existing representative benchmark exactly
+    (backward compatible). This binding does not alter patient count, modality
+    counts, timing, or identity -- only which radionuclide a nuclear procedure
+    carries."""
     if occupied_beds > available_beds:
         raise ValueError("occupied_beds must not exceed available_beds")
     if target_pet_procedures + target_spect_procedures > occupied_beds + outpatient_encounters:
         raise ValueError("nuclear procedure target exceeds total active patients -- cannot assign without duplicate identity")
+
+    # OG-SYNTH-1: resolve the source-constrained radionuclide per modality BEFORE
+    # creating any patient demand. `None` selected-source lists preserve the
+    # benchmark defaults (backward compatibility); an explicit (possibly empty)
+    # list activates source-capability constraint. A cohort with zero requested
+    # procedures never forces a source requirement (no phantom demand).
+    source_constrained = selected_cyclotron_ids is not None or selected_generator_ids is not None
+    if source_constrained:
+        cyclotron_ids = tuple(selected_cyclotron_ids or ())
+        generator_ids = tuple(selected_generator_ids or ())
+        if target_pet_procedures > 0:
+            pet_capability = resolve_admissible_radionuclides(
+                modality="PET", selected_cyclotron_ids=cyclotron_ids,
+                selected_generator_ids=generator_ids, mode=mode,
+            )
+            pet_radionuclide = choose_normal_synthetic_radionuclide(pet_capability)
+        else:
+            pet_radionuclide = PET_RADIONUCLIDE
+        if target_spect_procedures > 0:
+            spect_capability = resolve_admissible_radionuclides(
+                modality="SPECT", selected_cyclotron_ids=cyclotron_ids,
+                selected_generator_ids=generator_ids, mode=mode,
+            )
+            spect_radionuclide = choose_normal_synthetic_radionuclide(spect_capability)
+        else:
+            spect_radionuclide = SPECT_RADIONUCLIDE
+    else:
+        pet_radionuclide = PET_RADIONUCLIDE
+        spect_radionuclide = SPECT_RADIONUCLIDE
 
     rng = random.Random(seed)
     patients: list[OncologyPatientRecord] = []
@@ -205,7 +258,7 @@ def build_representative_day_population(
         p = patients[idx]
         patients[idx] = OncologyPatientRecord(
             **{**p.__dict__, "nuclear_procedure": NuclearProcedureAssignment(
-                procedure_id=f"PET-{p.patient_id}", modality="PET", radionuclide=PET_RADIONUCLIDE,
+                procedure_id=f"PET-{p.patient_id}", modality="PET", radionuclide=pet_radionuclide,
                 prescribed_activity_mbq=370.0,
             )},
         )
@@ -213,7 +266,7 @@ def build_representative_day_population(
         p = patients[idx]
         patients[idx] = OncologyPatientRecord(
             **{**p.__dict__, "nuclear_procedure": NuclearProcedureAssignment(
-                procedure_id=f"SPECT-{p.patient_id}", modality="SPECT", radionuclide=SPECT_RADIONUCLIDE,
+                procedure_id=f"SPECT-{p.patient_id}", modality="SPECT", radionuclide=spect_radionuclide,
                 prescribed_activity_mbq=740.0,
             )},
         )
@@ -662,13 +715,22 @@ def build_stochastic_representative_day_population(
     target_mean_pet: float,
     target_mean_spect: float,
     seed: int,
+    selected_cyclotron_ids: tuple[str, ...] | None = None,
+    selected_generator_ids: tuple[str, ...] | None = None,
+    mode: SyntheticDemandMode = "NORMAL",
 ) -> tuple[tuple[OncologyPatientRecord, ...], DailyOncologyCensus, StochasticDemandDay]:
     """Section 27-31: genuinely stochastic daily PET/SPECT counts (never
     forced to the exact target), still assigned to EXISTING persistent
     patients only (never anonymous/synthetic patients created merely to
     satisfy the stochastic count) -- reuses
     `build_representative_day_population`'s population construction, only the
-    nuclear-procedure TARGET counts are stochastic."""
+    nuclear-procedure TARGET counts are stochastic.
+
+    OG-SYNTH-1: the optional `selected_cyclotron_ids`/`selected_generator_ids`/
+    `mode` are threaded unchanged into `build_representative_day_population` so
+    the stochastic path is source-capability-constrained on exactly the same
+    terms (the stochastic dimension is the COUNT only -- never the radionuclide,
+    and never the source capability)."""
     demand_day = generate_stochastic_daily_nuclear_demand(
         day=day, target_mean_pet=target_mean_pet, target_mean_spect=target_mean_spect, seed=seed,
     )
@@ -679,6 +741,7 @@ def build_stochastic_representative_day_population(
         day=day, available_beds=available_beds, occupied_beds=occupied_beds, admissions=admissions,
         discharges=discharges, outpatient_encounters=outpatient_encounters,
         target_pet_procedures=realized_pet, target_spect_procedures=realized_spect, seed=seed,
+        selected_cyclotron_ids=selected_cyclotron_ids, selected_generator_ids=selected_generator_ids, mode=mode,
     )
     return patients, census, demand_day
 

@@ -131,39 +131,54 @@ authority each gap references.
   generator pathway (Tc-99m → `OUT_OF_CYCLOTRON_SCOPE`); Ge-68/Ga-68 generator
   remains `NOT_MODELED` (OG-GEN-1).
 
-### OG-SYNTH-1 — Synthetic-patient source-capability constraint — PLANNED / PARTIAL
-- **Today:** the CAPITAL PROJECT synthetic patient generator produces radionuclide
-  demand **independently** of the scenario's selected production-source
-  configuration. `oncology_pet_spect_scenario.build_representative_day_population`
-  assigns the radionuclide purely by modality (PET → `PET_RADIONUCLIDE = "F-18"`,
-  SPECT → `SPECT_RADIONUCLIDE = "Tc-99m"`);
-  `inbound_patient_program.generate_synthetic_patient_population` stamps a
-  caller-supplied radionuclide on every patient; and
-  `patient_radionuclide_demand.PatientRadionuclideDemand` validates the
-  radionuclide **only** against the canonical half-life/decay table
-  (`load_radionuclide_half_lives`), not against any cyclotron/generator capability.
-  There is **no** code path where changing the selected cyclotron or generator
-  changes which radionuclides synthetic patients demand; a capability mismatch is
-  surfaced only **downstream** at the feasibility stage
-  (`NO_COMPATIBLE_SOURCE` / unmet). This decoupling is consistent with the
-  test-locked "demand is upstream" doctrine
-  (`test_excess_capacity_is_headroom_not_extra_patients`).
-- **Doctrine (product doctrine §11A):** in NORMAL representative synthetic mode,
-  synthetic radionuclide demand **should** be constrained to the **combined**
-  capability of all selected production sources (cyclotron supported radionuclides
-  ∪ generator supported radionuclides — e.g. Tc-99m admissible when a Mo-99/Tc-99m
-  generator is present even though the cyclotron does not produce it). SUPPORTED ≠
-  CALIBRATED: a supported radionuclide may constrain demand while its production
-  output remains `NOT_CALIBRATED`. An OPTIONAL FUTURE STRESS-TEST mode may
-  intentionally demand an unproducible radionuclide, in which case the system must
-  expose `NO_COMPATIBLE_SOURCE` and must **never** silently alter patient demand
-  to make the facility feasible.
-- **Closed would require:** a narrow, explicitly-scoped engine build that derives
-  the admissible synthetic radionuclide set from the selected cyclotron **and**
-  generator capabilities and constrains the generator accordingly (plus the
-  optional stress-test/requirement mode). This governance addendum does **not**
-  modify the randomizer. **Do not describe this constraint as implemented until
-  such a build exists.**
+### OG-SYNTH-1 — Synthetic-patient source-capability constraint — PARTIAL (selected-source representative path implemented; default/legacy path still benchmark-driven)
+- **Prior status (PLANNED / PARTIAL):** the CAPITAL PROJECT synthetic patient
+  generator produced radionuclide demand **independently** of the scenario's
+  selected production-source configuration.
+  `oncology_pet_spect_scenario.build_representative_day_population` assigned the
+  radionuclide purely by modality (PET → `PET_RADIONUCLIDE = "F-18"`, SPECT →
+  `SPECT_RADIONUCLIDE = "Tc-99m"`) with no reference to selected equipment; a
+  capability mismatch surfaced only downstream at the feasibility stage.
+- **Advanced to PARTIAL by:** the Synthetic Patient Radionuclide Source-Capability
+  Binding build (selected-source representative path only — the default/legacy
+  path remains benchmark-driven, see the "Remaining PARTIAL aspect" below). A
+  narrow, independently-testable authority
+  (`synthetic_radionuclide_source_capability.py`,
+  `resolve_admissible_radionuclides` → `SyntheticRadionuclideCapabilityResult`)
+  derives the admissible synthetic radionuclide set from the **SELECTED** cyclotron
+  and generator sources (cyclotron `supported_radionuclides` ∪ generator
+  `daughter_radionuclide`), filtered by the repository's clinical modality
+  recognition (F-18 → PET, Tc-99m → SPECT), preserving each source identity and
+  de-duplicating. `build_representative_day_population` (and its stochastic
+  wrapper) now consume that admissible set **before patient creation** when
+  selected-source ids are supplied. NORMAL synthetic demand for a radionuclide no
+  selected source can supply is no longer generated (raises
+  `NoCompatibleSourceError` — no F-18/Tc-99m fallback, no global-catalog
+  borrowing). **Focused test:** `test_synthetic_patient_source_capability.py`
+  (47 tests: 40 Section-41 invariants + control proofs A–F + patient-aware batch
+  boundary). **Doc:** `SYNTHETIC_PATIENT_SOURCE_CAPABILITY_AUTHORITY.md`.
+- **SUPPORTED ≠ CALIBRATED preserved:** admissibility uses SUPPORT semantics
+  only; a radionuclide is admissible when a selected source supports it even while
+  its production output is `NOT_CALIBRATED` / `NOT_AVAILABLE` (e.g.
+  `SUMITOMO_CYPRIS_MP_30` + F-18). Quantitative sufficiency remains the downstream
+  production authority's responsibility — this build consults no estimator,
+  capacity, or economics.
+- **STRESS_TEST / explicit demand preserved:** a `STRESS_TEST` mode is carried on
+  the result contract, and the explicit-demand paths
+  (`patient_radionuclide_demand.PatientRadionuclideDemand`,
+  `inbound_patient_program.generate_synthetic_patient_population`) remain
+  authoritative — a caller-supplied/unsupported radionuclide is never silently
+  rewritten; downstream feasibility exposes `NO_COMPATIBLE_SOURCE`.
+- **Remaining PARTIAL aspect (why not globally CLOSED):** the constraint is
+  **opt-in** — callers that pass no selected-source ids (the default `None`)
+  retain the representative benchmark defaults (F-18 / Tc-99m) unchanged for
+  backward compatibility, and the explicit inbound path is explicit-demand by
+  design. A future build could make selected-source ids mandatory for every
+  synthetic entry point. Additionally, only F-18 (PET) and Tc-99m (SPECT) are
+  clinically modality-classified today; other cyclotron-supported radionuclides
+  (C-11, N-13, O-15, Ga-68, Cu-64, Zr-89, I-123, I-124) are reported as
+  `SUPPORTED_BUT_NOT_CLINICALLY_MODALITY_CLASSIFIED` limitations, never invented
+  as admissible.
 
 ---
 

@@ -648,26 +648,43 @@ cyclotron/generator authority layering (product doctrine: `MRT_PHARMA_PRODUCT_DO
 boundary** at each layer.
 
 - **Synthetic patient radionuclide generation.**
-  - **Primary Files:** `oncology_pet_spect_scenario.py`
-    (`build_representative_day_population`, `build_stochastic_representative_day_population`,
-    constants `PET_RADIONUCLIDE = "F-18"` / `SPECT_RADIONUCLIDE = "Tc-99m"`),
-    `patient_radionuclide_demand.py` (`PatientRadionuclideDemand`),
-    `inbound_patient_program.py` (`generate_synthetic_patient_population`).
-  - **Doctrine:** the synthetic generator should constrain demanded radionuclides
+  - **Primary Files:** `synthetic_radionuclide_source_capability.py`
+    (`resolve_admissible_radionuclides` → `SyntheticRadionuclideCapabilityResult`,
+    `choose_normal_synthetic_radionuclide`, `NoCompatibleSourceError`) — the
+    source-capability resolver; `oncology_pet_spect_scenario.py`
+    (`build_representative_day_population`, `build_stochastic_representative_day_population`
+    now accept optional `selected_cyclotron_ids` / `selected_generator_ids` /
+    `mode`; benchmark constants `PET_RADIONUCLIDE = "F-18"` /
+    `SPECT_RADIONUCLIDE = "Tc-99m"` remain the backward-compatible default when no
+    selected-source ids are supplied), `patient_radionuclide_demand.py`
+    (`PatientRadionuclideDemand`, explicit-demand path),
+    `inbound_patient_program.py` (`generate_synthetic_patient_population`,
+    explicit-demand path).
+  - **Doctrine:** the NORMAL synthetic generator constrains demanded radionuclides
     to the **combined selected production-source capability set** (cyclotron
-    supported radionuclides ∪ generator supported radionuclides), not invent
-    demand independently of the scenario's production configuration.
-  - **Authority Type:** C (PLANNED_REQUIREMENT) for the constraint itself.
-  - **Implementation Status:** **PLANNED / PARTIAL.** Today the radionuclide is
-    assigned purely by modality (PET → F-18, SPECT → Tc-99m), and
-    `PatientRadionuclideDemand` validates only against the canonical half-life /
-    decay table (`load_radionuclide_half_lives`), **not** against any selected
-    cyclotron/generator capability. There is **no** code path where changing the
-    selected production source changes which radionuclides synthetic patients
-    demand; a capability mismatch is surfaced only **downstream** at the
-    feasibility stage. This is consistent with the test-locked "demand is
-    upstream" doctrine (§2.3). **Do NOT describe this constraint as implemented.**
-  - **Open-Gap Ref:** OG-SYNTH-1.
+    `supported_radionuclides` ∪ generator `daughter_radionuclide`, filtered by
+    clinical modality), resolved **before patient creation**. EXPLICIT /
+    STRESS_TEST demand is preserved and exposed downstream as
+    `NO_COMPATIBLE_SOURCE`, never silently mutated.
+  - **Authority Type:** B (IMPLEMENTED_REPOSITORY_AUTHORITY) for the resolver and
+    the NORMAL representative-path binding.
+  - **Implementation Status:** **IMPLEMENTED (normal representative path)** by the
+    Synthetic Patient Radionuclide Source-Capability Binding build (OG-SYNTH-1).
+    The resolver derives the admissible set from the SELECTED sources (SUPPORT
+    semantics; no calibration/estimator/capacity/economics consulted; no
+    global-catalog fallback), preserving source identity and de-duplicating.
+    `build_representative_day_population` consumes it when selected-source ids are
+    supplied and raises `NoCompatibleSourceError` rather than fabricating or
+    substituting; with no selected-source ids the representative benchmark
+    (F-18 / Tc-99m) is preserved unchanged. Only F-18 (PET) and Tc-99m (SPECT) are
+    clinically modality-classified; other cyclotron-supported radionuclides are
+    reported as `SUPPORTED_BUT_NOT_CLINICALLY_MODALITY_CLASSIFIED` limitations
+    (never invented). **Focused test:** `test_synthetic_patient_source_capability.py`.
+    **Doc:** `SYNTHETIC_PATIENT_SOURCE_CAPABILITY_AUTHORITY.md`.
+  - **Open-Gap Ref:** OG-SYNTH-1 = **PARTIAL** (selected-source representative
+    binding implemented and test-locked; NOT globally CLOSED because the
+    default/legacy path with no selected-source ids remains benchmark-driven, and
+    the explicit inbound path is explicit-demand by design).
 
 - **Patient-aware batch-production planning.**
   - **Primary Files:** `production_clinical_schedule.py`,
