@@ -1,0 +1,522 @@
+{
+  "settings_schema": {
+    "manual_enabled": true,
+    "pts_enabled": true,
+    "rths_enabled": true,
+    "agv_amr_enabled": true,
+    "mrt_enabled": true,
+    "pts_conventional_enabled": true,
+    "pts_nuclear_qualified_enabled": true,
+    "agv_amr_light_clinical_enabled": true,
+    "agv_amr_heavy_logistics_enabled": true,
+    "rths_standard_carrier_enabled": true,
+    "mrt_canonical_compact_enabled": true,
+    "radiopharm_qualification_supplied": false,
+    "pts_sensitive_specimen_validated": false
+  },
+  "family_scope_examples": {
+    "ALL_ON": [
+      "MANUAL",
+      "PTS",
+      "RTHS",
+      "AGV_AMR",
+      "MRT"
+    ],
+    "MANUAL_ONLY": [
+      "MANUAL"
+    ],
+    "ALL_EXCEPT_MRT": [
+      "MANUAL",
+      "PTS",
+      "RTHS",
+      "AGV_AMR"
+    ]
+  },
+  "subtype_scope_examples": {
+    "PTS_NUCLEAR_OFF": [
+      "PTS_CONVENTIONAL",
+      "AGV_AMR_LIGHT_CLINICAL",
+      "AGV_AMR_HEAVY_LOGISTICS",
+      "RTHS_STANDARD_CARRIER",
+      "MRT_CANONICAL_COMPACT"
+    ],
+    "AGV_HEAVY_OFF": [
+      "PTS_CONVENTIONAL",
+      "PTS_NUCLEAR_QUALIFIED",
+      "AGV_AMR_LIGHT_CLINICAL",
+      "RTHS_STANDARD_CARRIER",
+      "MRT_CANONICAL_COMPACT"
+    ],
+    "PARENT_PTS_OFF_children_forced_off": [
+      "AGV_AMR_LIGHT_CLINICAL",
+      "AGV_AMR_HEAVY_LOGISTICS",
+      "RTHS_STANDARD_CARRIER",
+      "MRT_CANONICAL_COMPACT"
+    ]
+  },
+  "eligibility_matrix": {
+    "RADIOPHARMACEUTICAL_NUCLEAR": {
+      "MANUAL": "QUALIFICATION_REQUIRED",
+      "PTS": "QUALIFICATION_REQUIRED",
+      "DEDICATED_RP_PTS": "ELIGIBLE",
+      "RTHS": "QUALIFICATION_REQUIRED",
+      "AGV_AMR_LIGHT_CLINICAL": "QUALIFICATION_REQUIRED",
+      "AGV_AMR_HEAVY_LOGISTICS": "QUALIFICATION_REQUIRED",
+      "MRT": "ELIGIBLE"
+    },
+    "SPECIMEN_BLOOD": {
+      "MANUAL": "ELIGIBLE",
+      "PTS": "ELIGIBLE",
+      "DEDICATED_RP_PTS": "INELIGIBLE",
+      "RTHS": "INELIGIBLE",
+      "AGV_AMR_LIGHT_CLINICAL": "ELIGIBLE",
+      "AGV_AMR_HEAVY_LOGISTICS": "INELIGIBLE",
+      "MRT": "ELIGIBLE"
+    },
+    "PHARMACY_INFUSION": {
+      "MANUAL": "ELIGIBLE",
+      "PTS": "ELIGIBLE",
+      "DEDICATED_RP_PTS": "INELIGIBLE",
+      "RTHS": "ELIGIBLE",
+      "AGV_AMR_LIGHT_CLINICAL": "ELIGIBLE",
+      "AGV_AMR_HEAVY_LOGISTICS": "INELIGIBLE",
+      "MRT": "ELIGIBLE"
+    },
+    "STERILE_CLEAN_SUPPLY": {
+      "MANUAL": "ELIGIBLE",
+      "PTS": "INELIGIBLE",
+      "DEDICATED_RP_PTS": "INELIGIBLE",
+      "RTHS": "ELIGIBLE",
+      "AGV_AMR_LIGHT_CLINICAL": "ELIGIBLE",
+      "AGV_AMR_HEAVY_LOGISTICS": "ELIGIBLE",
+      "MRT": "ELIGIBLE"
+    },
+    "CLEAN_LINEN": {
+      "MANUAL": "ELIGIBLE",
+      "PTS": "INELIGIBLE",
+      "DEDICATED_RP_PTS": "INELIGIBLE",
+      "RTHS": "ELIGIBLE",
+      "AGV_AMR_LIGHT_CLINICAL": "INELIGIBLE",
+      "AGV_AMR_HEAVY_LOGISTICS": "ELIGIBLE",
+      "MRT": "INELIGIBLE"
+    }
+  },
+  "sample_candidate_set": [
+    {
+      "candidate_name": "HYBRID_MANUAL_PTS",
+      "used_families": [
+        "MANUAL",
+        "PTS"
+      ],
+      "is_hybrid": true,
+      "known_capex": 470500.0,
+      "known_annual_opex": 9000.0,
+      "lifecycle_cost": 530890.732590473,
+      "unmet": 0,
+      "economic_status": "COMPARABLE_WITH_QUALIFICATIONS",
+      "unknown_capex": [
+        "Shielding/certification delta (NOT_CALIBRATED)"
+      ],
+      "unknown_opex": [
+        "Human handling labor (workload-derived; supplied separately)",
+        "Porter labor OPEX (workload/route-timing-derived; NOT_CALIBRATED without route geometry)"
+      ]
+    },
+    {
+      "candidate_name": "HYBRID_MANUAL_MRT",
+      "used_families": [
+        "MANUAL",
+        "MRT"
+      ],
+      "is_hybrid": true,
+      "known_capex": 752500.0,
+      "known_annual_opex": 0.0,
+      "lifecycle_cost": 752500.0,
+      "unmet": 0,
+      "economic_status": "COMPARABLE_WITH_QUALIFICATIONS",
+      "unknown_capex": [],
+      "unknown_opex": [
+        "MRT support labor (canonical authority)",
+        "Porter labor OPEX (workload/route-timing-derived; NOT_CALIBRATED without route geometry)",
+        "Standby/controls/cooling electricity (NOT_CALIBRATED, canonical)"
+      ]
+    },
+    {
+      "candidate_name": "HYBRID_RTHS_MRT",
+      "used_families": [
+        "RTHS",
+        "MRT"
+      ],
+      "is_hybrid": true,
+      "known_capex": 752000.0,
+      "known_annual_opex": 12500.0,
+      "lifecycle_cost": 835876.0174867681,
+      "unmet": 0,
+      "economic_status": "COMPARABLE_WITH_QUALIFICATIONS",
+      "unknown_capex": [
+        "Track/guideway civil works (NOT_CALIBRATED)"
+      ],
+      "unknown_opex": [
+        "MRT support labor (canonical authority)",
+        "Standby/controls/cooling electricity (NOT_CALIBRATED, canonical)",
+        "Vendor service contract (NOT_CALIBRATED)"
+      ]
+    },
+    {
+      "candidate_name": "HYBRID_PTS_RTHS",
+      "used_families": [
+        "PTS",
+        "RTHS"
+      ],
+      "is_hybrid": true,
+      "known_capex": 740000.0,
+      "known_annual_opex": 30500.0,
+      "lifecycle_cost": 944657.4826677141,
+      "unmet": 0,
+      "economic_status": "COMPARABLE_WITH_QUALIFICATIONS",
+      "unknown_capex": [
+        "Shielding/certification delta (NOT_CALIBRATED)",
+        "Track/guideway civil works (NOT_CALIBRATED)"
+      ],
+      "unknown_opex": [
+        "Building penetrations (NOT_CALIBRATED)",
+        "Diverter/controls service (NOT_CALIBRATED)",
+        "Human handling labor (workload-derived; supplied separately)",
+        "Vendor service contract (NOT_CALIBRATED)"
+      ]
+    },
+    {
+      "candidate_name": "HYBRID_PTS_RTHS_AGV_AMR",
+      "used_families": [
+        "PTS",
+        "RTHS",
+        "AGV_AMR"
+      ],
+      "is_hybrid": true,
+      "known_capex": 732000.0,
+      "known_annual_opex": 70301.5,
+      "lifecycle_cost": 1203728.7874676823,
+      "unmet": 0,
+      "economic_status": "COMPARABLE_WITH_QUALIFICATIONS",
+      "unknown_capex": [
+        "Facility network/server upgrades allocation (NOT_CALIBRATED)",
+        "Shielding/certification delta (NOT_CALIBRATED)",
+        "Track/guideway civil works (NOT_CALIBRATED)"
+      ],
+      "unknown_opex": [
+        "Facility charging-network standby electricity (NOT_CALIBRATED)",
+        "Human handling labor (workload-derived; supplied separately)",
+        "Vendor service contract (NOT_CALIBRATED)"
+      ]
+    },
+    {
+      "candidate_name": "HYBRID_PTS_RTHS_MRT",
+      "used_families": [
+        "PTS",
+        "RTHS",
+        "MRT"
+      ],
+      "is_hybrid": true,
+      "known_capex": 1142000.0,
+      "known_annual_opex": 21500.0,
+      "lifecycle_cost": 1286266.750077241,
+      "unmet": 0,
+      "economic_status": "COMPARABLE_WITH_QUALIFICATIONS",
+      "unknown_capex": [
+        "Track/guideway civil works (NOT_CALIBRATED)"
+      ],
+      "unknown_opex": [
+        "Building penetrations (NOT_CALIBRATED)",
+        "Diverter/controls service (NOT_CALIBRATED)",
+        "MRT support labor (canonical authority)",
+        "Standby/controls/cooling electricity (NOT_CALIBRATED, canonical)",
+        "Vendor service contract (NOT_CALIBRATED)"
+      ]
+    },
+    {
+      "candidate_name": "HYBRID_PTS_RTHS_MRT",
+      "used_families": [
+        "PTS",
+        "RTHS",
+        "MRT"
+      ],
+      "is_hybrid": true,
+      "known_capex": 1222000.0,
+      "known_annual_opex": 21500.0,
+      "lifecycle_cost": 1366266.750077241,
+      "unmet": 0,
+      "economic_status": "COMPARABLE_WITH_QUALIFICATIONS",
+      "unknown_capex": [
+        "Shielding/certification delta (NOT_CALIBRATED)",
+        "Track/guideway civil works (NOT_CALIBRATED)"
+      ],
+      "unknown_opex": [
+        "Human handling labor (workload-derived; supplied separately)",
+        "MRT support labor (canonical authority)",
+        "Standby/controls/cooling electricity (NOT_CALIBRATED, canonical)",
+        "Vendor service contract (NOT_CALIBRATED)"
+      ]
+    },
+    {
+      "candidate_name": "HYBRID_AGV_AMR_MRT",
+      "used_families": [
+        "AGV_AMR",
+        "MRT"
+      ],
+      "is_hybrid": true,
+      "known_capex": 1054000.0,
+      "known_annual_opex": 52056.0,
+      "lifecycle_cost": 1403299.9973032959,
+      "unmet": 0,
+      "economic_status": "COMPARABLE_WITH_QUALIFICATIONS",
+      "unknown_capex": [
+        "Facility network/server upgrades allocation (NOT_CALIBRATED)"
+      ],
+      "unknown_opex": [
+        "Facility charging-network standby electricity (NOT_CALIBRATED)",
+        "MRT support labor (canonical authority)",
+        "Standby/controls/cooling electricity (NOT_CALIBRATED, canonical)",
+        "Vendor service contract (NOT_CALIBRATED)"
+      ]
+    },
+    {
+      "candidate_name": "HYBRID_RTHS_AGV_AMR_MRT",
+      "used_families": [
+        "RTHS",
+        "AGV_AMR",
+        "MRT"
+      ],
+      "is_hybrid": true,
+      "known_capex": 1014000.0,
+      "known_annual_opex": 61301.5,
+      "lifecycle_cost": 1425338.054877209,
+      "unmet": 0,
+      "economic_status": "COMPARABLE_WITH_QUALIFICATIONS",
+      "unknown_capex": [
+        "Facility network/server upgrades allocation (NOT_CALIBRATED)",
+        "Track/guideway civil works (NOT_CALIBRATED)"
+      ],
+      "unknown_opex": [
+        "Facility charging-network standby electricity (NOT_CALIBRATED)",
+        "MRT support labor (canonical authority)",
+        "Standby/controls/cooling electricity (NOT_CALIBRATED, canonical)",
+        "Vendor service contract (NOT_CALIBRATED)"
+      ]
+    },
+    {
+      "candidate_name": "HYBRID_PTS_AGV_AMR",
+      "used_families": [
+        "PTS",
+        "AGV_AMR"
+      ],
+      "is_hybrid": true,
+      "known_capex": 914000.0,
+      "known_annual_opex": 79859.0,
+      "lifecycle_cost": 1449860.390438065,
+      "unmet": 0,
+      "economic_status": "COMPARABLE_WITH_QUALIFICATIONS",
+      "unknown_capex": [
+        "Facility network/server upgrades allocation (NOT_CALIBRATED)",
+        "Shielding/certification delta (NOT_CALIBRATED)"
+      ],
+      "unknown_opex": [
+        "Facility charging-network standby electricity (NOT_CALIBRATED)",
+        "Human handling labor (workload-derived; supplied separately)",
+        "Vendor service contract (NOT_CALIBRATED)"
+      ]
+    },
+    {
+      "candidate_name": "HYBRID_PTS_AGV_AMR",
+      "used_families": [
+        "PTS",
+        "AGV_AMR"
+      ],
+      "is_hybrid": true,
+      "known_capex": 1042000.0,
+      "known_annual_opex": 70056.0,
+      "lifecycle_cost": 1512081.462484242,
+      "unmet": 0,
+      "economic_status": "COMPARABLE_WITH_QUALIFICATIONS",
+      "unknown_capex": [
+        "Facility network/server upgrades allocation (NOT_CALIBRATED)",
+        "Shielding/certification delta (NOT_CALIBRATED)"
+      ],
+      "unknown_opex": [
+        "Building penetrations (NOT_CALIBRATED)",
+        "Diverter/controls service (NOT_CALIBRATED)",
+        "Facility charging-network standby electricity (NOT_CALIBRATED)",
+        "Human handling labor (workload-derived; supplied separately)",
+        "Vendor service contract (NOT_CALIBRATED)"
+      ]
+    },
+    {
+      "candidate_name": "HYBRID_AGV_AMR_MRT",
+      "used_families": [
+        "AGV_AMR",
+        "MRT"
+      ],
+      "is_hybrid": true,
+      "known_capex": 1196000.0,
+      "known_annual_opex": 70859.0,
+      "lifecycle_cost": 1671469.6578475921,
+      "unmet": 0,
+      "economic_status": "COMPARABLE_WITH_QUALIFICATIONS",
+      "unknown_capex": [
+        "Facility network/server upgrades allocation (NOT_CALIBRATED)"
+      ],
+      "unknown_opex": [
+        "Facility charging-network standby electricity (NOT_CALIBRATED)",
+        "MRT support labor (canonical authority)",
+        "Standby/controls/cooling electricity (NOT_CALIBRATED, canonical)",
+        "Vendor service contract (NOT_CALIBRATED)"
+      ]
+    },
+    {
+      "candidate_name": "HYBRID_PTS_AGV_AMR_MRT",
+      "used_families": [
+        "PTS",
+        "AGV_AMR",
+        "MRT"
+      ],
+      "is_hybrid": true,
+      "known_capex": 1444000.0,
+      "known_annual_opex": 61056.0,
+      "lifecycle_cost": 1853690.7298937691,
+      "unmet": 0,
+      "economic_status": "COMPARABLE_WITH_QUALIFICATIONS",
+      "unknown_capex": [
+        "Facility network/server upgrades allocation (NOT_CALIBRATED)"
+      ],
+      "unknown_opex": [
+        "Building penetrations (NOT_CALIBRATED)",
+        "Diverter/controls service (NOT_CALIBRATED)",
+        "Facility charging-network standby electricity (NOT_CALIBRATED)",
+        "MRT support labor (canonical authority)",
+        "Standby/controls/cooling electricity (NOT_CALIBRATED, canonical)",
+        "Vendor service contract (NOT_CALIBRATED)"
+      ]
+    },
+    {
+      "candidate_name": "HYBRID_PTS_AGV_AMR_MRT",
+      "used_families": [
+        "PTS",
+        "AGV_AMR",
+        "MRT"
+      ],
+      "is_hybrid": true,
+      "known_capex": 1524000.0,
+      "known_annual_opex": 61056.0,
+      "lifecycle_cost": 1933690.7298937691,
+      "unmet": 0,
+      "economic_status": "COMPARABLE_WITH_QUALIFICATIONS",
+      "unknown_capex": [
+        "Facility network/server upgrades allocation (NOT_CALIBRATED)",
+        "Shielding/certification delta (NOT_CALIBRATED)"
+      ],
+      "unknown_opex": [
+        "Facility charging-network standby electricity (NOT_CALIBRATED)",
+        "Human handling labor (workload-derived; supplied separately)",
+        "MRT support labor (canonical authority)",
+        "Standby/controls/cooling electricity (NOT_CALIBRATED, canonical)",
+        "Vendor service contract (NOT_CALIBRATED)"
+      ]
+    }
+  ],
+  "objective": "MINIMIZE_KNOWN_LIFECYCLE_COST_AMONG_MISSION_FEASIBLE_CANDIDATES",
+  "selected": "HYBRID_MANUAL_PTS",
+  "why_selected": "lowest known lifecycle cost $530,891 (CapEx $470,500 + OPEX-annuity) among 14 mission-feasible candidates; uses ('MANUAL', 'PTS'); economic_status=COMPARABLE_WITH_QUALIFICATIONS",
+  "hybrid_manual_mrt": {
+    "assignments": [
+      {
+        "mission": "M-RADIO",
+        "stream": "RADIOPHARMACEUTICAL_NUCLEAR",
+        "mode": "MRT",
+        "status": "ASSIGNED"
+      },
+      {
+        "mission": "M-SPEC",
+        "stream": "SPECIMEN_BLOOD",
+        "mode": "MANUAL",
+        "status": "ASSIGNED"
+      },
+      {
+        "mission": "M-LINEN",
+        "stream": "CLEAN_LINEN",
+        "mode": "MANUAL",
+        "status": "ASSIGNED"
+      },
+      {
+        "mission": "M-PHARM",
+        "stream": "PHARMACY_INFUSION",
+        "mode": "MANUAL",
+        "status": "ASSIGNED"
+      }
+    ],
+    "missions_by_mode": {
+      "MANUAL": 3,
+      "MRT": 1
+    },
+    "conserved": true
+  },
+  "sentinel_results": {
+    "MRT_OFF_mrt_in_any_candidate": false,
+    "AGV_OFF_agv_in_any": false,
+    "ALL_OFF_selected": null,
+    "PTS_NUCLEAR_OFF_rp_pts_available": false
+  },
+  "consumer_map": {
+    "TRANSPORT_SCOPE_SETTINGS_CONSUMER": "generalized_transport_optimizer._available_resolved_modes",
+    "TRANSPORT_ELIGIBILITY_CONSUMER": "generalized_transport_optimizer.resolved_mode_eligibility",
+    "GENERALIZED_CANDIDATE_GENERATOR": "generalized_transport_optimizer.generate_candidates",
+    "MISSION_ASSIGNMENT_CONSUMER": "generalized_transport_optimizer._assign_missions",
+    "MANUAL_RUNTIME_CONSUMER": "conventional_transport_authority (PorterOperatingPolicy/cart)",
+    "PTS_RUNTIME_CONSUMER": "conventional_transport_authority.DEFAULT_PTS_NETWORK",
+    "RTHS_RUNTIME_CONSUMER": "conventional_transport_authority RGHT (DEFAULT_AGV_MODEL rail-guided)",
+    "AGV_LIGHT_RUNTIME_CONSUMER": "floor_agv_amr_authority.DEFAULT_LIGHT_CLINICAL_PROFILE",
+    "AGV_HEAVY_RUNTIME_CONSUMER": "floor_agv_amr_authority.DEFAULT_HEAVY_LOGISTICS_PROFILE",
+    "MRT_RUNTIME_CONSUMER": "mrt_canonical_configuration.CANONICAL_MRT (READ-ONLY)",
+    "GENERALIZED_ECONOMIC_COMPARISON_CONSUMER": "generalized_transport_optimizer._aggregate_candidate_economics",
+    "SELECTION_RESULT_CONSUMER": "generalized_transport_optimizer.select_candidate"
+  },
+  "legacy_compatibility": {
+    "strategy": "PRESERVE_AS_LEGACY_ADAPTERS",
+    "evaluators_preserved": true,
+    "mappings": {
+      "MANUAL_CONVENTIONAL": {
+        "families": [
+          "MANUAL"
+        ],
+        "composite": false
+      },
+      "AUTOMATED_CONVENTIONAL": {
+        "families": [
+          "MANUAL",
+          "PTS",
+          "AGV_AMR"
+        ],
+        "composite": true
+      },
+      "HYBRID_MRT": {
+        "families": [
+          "MANUAL",
+          "MRT"
+        ],
+        "composite": true
+      },
+      "MRT_DOMINANT": {
+        "families": [
+          "MANUAL",
+          "MRT"
+        ],
+        "composite": false
+      }
+    }
+  },
+  "known_calibration_gaps": [
+    "Manual porter labor OPEX requires route geometry (NOT_CALIBRATED without it)",
+    "PTS diverter/controls service + building penetrations (NOT_CALIBRATED)",
+    "AGV vendor service contract + facility charging-network standby (NOT_CALIBRATED)",
+    "RTHS track/guideway civil works + vendor service contract (NOT_CALIBRATED)",
+    "MRT standby/controls/cooling electricity + support labor (NOT_CALIBRATED, canonical)"
+  ]
+}
