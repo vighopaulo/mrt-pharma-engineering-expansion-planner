@@ -1,0 +1,1698 @@
+{
+  "part3e_baseline": {
+    "rows": {
+      "MANUAL_CONVENTIONAL": {
+        "feasible": true,
+        "phys": "FEASIBLE_WITH_UNCALIBRATED_PRODUCTION_CAPACITY",
+        "binding": "none",
+        "new_study_capex": 125000.0,
+        "arch_specific_capex": 125000.0,
+        "total_comparable_project_capex": 125000.0,
+        "common_inherited_capex": 20450000.0,
+        "known_annual_opex": 1750320.0,
+        "true_total_annual_opex": 6771800.0,
+        "common_annual_opex": 4681480.0,
+        "arch_specific_annual_opex": 2090320.0,
+        "lifecycle_cost": 11869789.674195182,
+        "nuclear_qualified_completed": 19,
+        "porter_fte": 33.0,
+        "automation_or_mrt_fte": 0.0,
+        "scanner_peak": 4,
+        "injection_peak": 4,
+        "uptake_peak": 4
+      },
+      "AUTOMATED_CONVENTIONAL": {
+        "feasible": true,
+        "phys": "FEASIBLE_WITH_UNCALIBRATED_PRODUCTION_CAPACITY",
+        "binding": "none",
+        "new_study_capex": 1925000.0,
+        "arch_specific_capex": 1925000.0,
+        "total_comparable_project_capex": 1925000.0,
+        "common_inherited_capex": 20450000.0,
+        "known_annual_opex": 1870772.0,
+        "true_total_annual_opex": 6892252.0,
+        "common_annual_opex": 4681480.0,
+        "arch_specific_annual_opex": 2210772.0,
+        "lifecycle_cost": 14478032.398860479,
+        "nuclear_qualified_completed": 19,
+        "porter_fte": 34.0,
+        "automation_or_mrt_fte": 0.30000000000000004,
+        "scanner_peak": 4,
+        "injection_peak": 4,
+        "uptake_peak": 4
+      },
+      "MRT_DOMINANT": {
+        "feasible": true,
+        "phys": "FEASIBLE_WITH_UNCALIBRATED_PRODUCTION_CAPACITY",
+        "binding": "none",
+        "new_study_capex": 4871000.0,
+        "arch_specific_capex": 4871000.0,
+        "total_comparable_project_capex": 4871000.0,
+        "common_inherited_capex": 20450000.0,
+        "known_annual_opex": 5721012.95125,
+        "true_total_annual_opex": 5721012.95125,
+        "common_annual_opex": 4681480.0,
+        "arch_specific_annual_opex": 1039532.9512499999,
+        "lifecycle_cost": 43259462.58728571,
+        "nuclear_qualified_completed": 19,
+        "porter_fte": 12.0,
+        "automation_or_mrt_fte": 3.0,
+        "scanner_peak": 4,
+        "injection_peak": 4,
+        "uptake_peak": 4
+      },
+      "HYBRID_MRT": {
+        "feasible": true,
+        "phys": "FEASIBLE_WITH_UNCALIBRATED_PRODUCTION_CAPACITY",
+        "binding": "none",
+        "new_study_capex": 981500.0,
+        "arch_specific_capex": 981500.0,
+        "total_comparable_project_capex": 981500.0,
+        "common_inherited_capex": 20450000.0,
+        "known_annual_opex": 6912571.0125,
+        "true_total_annual_opex": 6912571.0125,
+        "common_annual_opex": 4681480.0,
+        "arch_specific_annual_opex": 2231091.0125,
+        "lifecycle_cost": 47365414.169838056,
+        "nuclear_qualified_completed": 19,
+        "porter_fte": 31.0,
+        "automation_or_mrt_fte": 3.0,
+        "scanner_peak": 4,
+        "injection_peak": 4,
+        "uptake_peak": 4
+      }
+    },
+    "preferred": "MANUAL_CONVENTIONAL",
+    "ranked": [
+      "MANUAL_CONVENTIONAL",
+      "AUTOMATED_CONVENTIONAL",
+      "MRT_DOMINANT",
+      "HYBRID_MRT"
+    ],
+    "pareto": [
+      "MANUAL_CONVENTIONAL"
+    ]
+  },
+  "EXP0_baseline": {
+    "radionuclides": [
+      "F-18",
+      "Tc-99m"
+    ],
+    "patient_counts": {
+      "F-18": 32,
+      "Tc-99m": 18
+    },
+    "bouquet": {
+      "MANUAL_CONVENTIONAL": {
+        "feasible": true,
+        "phys": "FEASIBLE_WITH_UNCALIBRATED_PRODUCTION_CAPACITY",
+        "binding": "none",
+        "capex": 125000.0,
+        "total_project_capex": 125000.0,
+        "known_opex": 1750320.0,
+        "true_total_opex": 6771800.0,
+        "lifecycle": 11869789.674195182,
+        "rank": 1,
+        "pareto": true,
+        "opex_calib": "KNOWN_SUBTOTAL_ONLY_TOTAL_NOT_CALIBRATED"
+      },
+      "AUTOMATED_CONVENTIONAL": {
+        "feasible": true,
+        "phys": "FEASIBLE_WITH_UNCALIBRATED_PRODUCTION_CAPACITY",
+        "binding": "none",
+        "capex": 1925000.0,
+        "total_project_capex": 1925000.0,
+        "known_opex": 1870772.0,
+        "true_total_opex": 6892252.0,
+        "lifecycle": 14478032.398860479,
+        "rank": 2,
+        "pareto": false,
+        "opex_calib": "KNOWN_SUBTOTAL_ONLY_TOTAL_NOT_CALIBRATED"
+      },
+      "MRT_DOMINANT": {
+        "feasible": true,
+        "phys": "FEASIBLE_WITH_UNCALIBRATED_PRODUCTION_CAPACITY",
+        "binding": "none",
+        "capex": 4871000.0,
+        "total_project_capex": 4871000.0,
+        "known_opex": 5721012.95125,
+        "true_total_opex": 5721012.95125,
+        "lifecycle": 43259462.58728571,
+        "rank": 3,
+        "pareto": false,
+        "opex_calib": "KNOWN_SUBTOTAL_ONLY_TOTAL_NOT_CALIBRATED"
+      },
+      "HYBRID_MRT": {
+        "feasible": true,
+        "phys": "FEASIBLE_WITH_UNCALIBRATED_PRODUCTION_CAPACITY",
+        "binding": "none",
+        "capex": 981500.0,
+        "total_project_capex": 981500.0,
+        "known_opex": 6912571.0125,
+        "true_total_opex": 6912571.0125,
+        "lifecycle": 47365414.169838056,
+        "rank": 4,
+        "pareto": false,
+        "opex_calib": "KNOWN_SUBTOTAL_ONLY_TOTAL_NOT_CALIBRATED"
+      }
+    },
+    "ranked": [
+      "MANUAL_CONVENTIONAL",
+      "AUTOMATED_CONVENTIONAL",
+      "MRT_DOMINANT",
+      "HYBRID_MRT"
+    ],
+    "pareto": [
+      "MANUAL_CONVENTIONAL"
+    ],
+    "decay": [
+      {
+        "radionuclide": "F-18",
+        "half_life_min": 109.8,
+        "mode": "MANUAL",
+        "transport_min": 3.908333333333333,
+        "elapsed": 38.90833333333333,
+        "retained": 0.7822185174083393,
+        "admin_mbq": 370.0,
+        "req_upstream_mbq": 473.0136039554405,
+        "status": "DECAY_AUTHORITY_PRESENT"
+      },
+      {
+        "radionuclide": "Tc-99m",
+        "half_life_min": 360.0,
+        "mode": "MANUAL",
+        "transport_min": 3.908333333333333,
+        "elapsed": 38.90833333333333,
+        "retained": 0.9278228593379308,
+        "admin_mbq": 740.0,
+        "req_upstream_mbq": 797.5660359651451,
+        "status": "DECAY_AUTHORITY_PRESENT"
+      }
+    ]
+  },
+  "EXP1_f18": {
+    "radionuclides": [
+      "F-18"
+    ],
+    "patient_counts": {
+      "F-18": 32
+    },
+    "bouquet": {
+      "MANUAL_CONVENTIONAL": {
+        "feasible": true,
+        "phys": "FEASIBLE_WITH_UNCALIBRATED_PRODUCTION_CAPACITY",
+        "binding": "none",
+        "capex": 125000.0,
+        "total_project_capex": 125000.0,
+        "known_opex": 1750320.0,
+        "true_total_opex": 6771800.0,
+        "lifecycle": 11869789.674195182,
+        "rank": 1,
+        "pareto": true,
+        "opex_calib": "KNOWN_SUBTOTAL_ONLY_TOTAL_NOT_CALIBRATED"
+      },
+      "AUTOMATED_CONVENTIONAL": {
+        "feasible": true,
+        "phys": "FEASIBLE_WITH_UNCALIBRATED_PRODUCTION_CAPACITY",
+        "binding": "none",
+        "capex": 1925000.0,
+        "total_project_capex": 1925000.0,
+        "known_opex": 1870772.0,
+        "true_total_opex": 6892252.0,
+        "lifecycle": 14478032.398860479,
+        "rank": 2,
+        "pareto": false,
+        "opex_calib": "KNOWN_SUBTOTAL_ONLY_TOTAL_NOT_CALIBRATED"
+      },
+      "MRT_DOMINANT": {
+        "feasible": true,
+        "phys": "FEASIBLE_WITH_UNCALIBRATED_PRODUCTION_CAPACITY",
+        "binding": "none",
+        "capex": 4871000.0,
+        "total_project_capex": 4871000.0,
+        "known_opex": 5721012.95125,
+        "true_total_opex": 5721012.95125,
+        "lifecycle": 43259462.58728571,
+        "rank": 3,
+        "pareto": false,
+        "opex_calib": "KNOWN_SUBTOTAL_ONLY_TOTAL_NOT_CALIBRATED"
+      },
+      "HYBRID_MRT": {
+        "feasible": true,
+        "phys": "FEASIBLE_WITH_UNCALIBRATED_PRODUCTION_CAPACITY",
+        "binding": "none",
+        "capex": 981500.0,
+        "total_project_capex": 981500.0,
+        "known_opex": 6912571.0125,
+        "true_total_opex": 6912571.0125,
+        "lifecycle": 47365414.169838056,
+        "rank": 4,
+        "pareto": false,
+        "opex_calib": "KNOWN_SUBTOTAL_ONLY_TOTAL_NOT_CALIBRATED"
+      }
+    },
+    "ranked": [
+      "MANUAL_CONVENTIONAL",
+      "AUTOMATED_CONVENTIONAL",
+      "MRT_DOMINANT",
+      "HYBRID_MRT"
+    ],
+    "pareto": [
+      "MANUAL_CONVENTIONAL"
+    ],
+    "decay": [
+      {
+        "radionuclide": "F-18",
+        "half_life_min": 109.8,
+        "mode": "MANUAL",
+        "transport_min": 3.908333333333333,
+        "elapsed": 38.90833333333333,
+        "retained": 0.7822185174083393,
+        "admin_mbq": 370.0,
+        "req_upstream_mbq": 473.0136039554405,
+        "status": "DECAY_AUTHORITY_PRESENT"
+      },
+      {
+        "radionuclide": "F-18",
+        "half_life_min": 109.8,
+        "mode": "MRT",
+        "transport_min": 1.972222222222222,
+        "elapsed": 36.97222222222222,
+        "retained": 0.791837701487374,
+        "admin_mbq": 370.0,
+        "req_upstream_mbq": 467.2674707266382,
+        "status": "DECAY_AUTHORITY_PRESENT"
+      }
+    ]
+  },
+  "EXP2_c11": {
+    "radionuclides": [
+      "C-11"
+    ],
+    "patient_counts": {
+      "C-11": 6
+    },
+    "bouquet": {
+      "MANUAL_CONVENTIONAL": {
+        "feasible": true,
+        "phys": "FEASIBLE_WITH_UNCALIBRATED_PRODUCTION_CAPACITY",
+        "binding": "none",
+        "capex": 125000.0,
+        "total_project_capex": 125000.0,
+        "known_opex": 1750320.0,
+        "true_total_opex": 6771800.0,
+        "lifecycle": 11869789.674195182,
+        "rank": 1,
+        "pareto": true,
+        "opex_calib": "KNOWN_SUBTOTAL_ONLY_TOTAL_NOT_CALIBRATED"
+      },
+      "AUTOMATED_CONVENTIONAL": {
+        "feasible": true,
+        "phys": "FEASIBLE_WITH_UNCALIBRATED_PRODUCTION_CAPACITY",
+        "binding": "none",
+        "capex": 1925000.0,
+        "total_project_capex": 1925000.0,
+        "known_opex": 1870772.0,
+        "true_total_opex": 6892252.0,
+        "lifecycle": 14478032.398860479,
+        "rank": 2,
+        "pareto": false,
+        "opex_calib": "KNOWN_SUBTOTAL_ONLY_TOTAL_NOT_CALIBRATED"
+      },
+      "MRT_DOMINANT": {
+        "feasible": true,
+        "phys": "FEASIBLE_WITH_UNCALIBRATED_PRODUCTION_CAPACITY",
+        "binding": "none",
+        "capex": 4871000.0,
+        "total_project_capex": 4871000.0,
+        "known_opex": 5721012.95125,
+        "true_total_opex": 5721012.95125,
+        "lifecycle": 43259462.58728571,
+        "rank": 3,
+        "pareto": false,
+        "opex_calib": "KNOWN_SUBTOTAL_ONLY_TOTAL_NOT_CALIBRATED"
+      },
+      "HYBRID_MRT": {
+        "feasible": true,
+        "phys": "FEASIBLE_WITH_UNCALIBRATED_PRODUCTION_CAPACITY",
+        "binding": "none",
+        "capex": 981500.0,
+        "total_project_capex": 981500.0,
+        "known_opex": 6912571.0125,
+        "true_total_opex": 6912571.0125,
+        "lifecycle": 47365414.169838056,
+        "rank": 4,
+        "pareto": false,
+        "opex_calib": "KNOWN_SUBTOTAL_ONLY_TOTAL_NOT_CALIBRATED"
+      }
+    },
+    "ranked": [
+      "MANUAL_CONVENTIONAL",
+      "AUTOMATED_CONVENTIONAL",
+      "MRT_DOMINANT",
+      "HYBRID_MRT"
+    ],
+    "pareto": [
+      "MANUAL_CONVENTIONAL"
+    ],
+    "decay": [
+      {
+        "radionuclide": "C-11",
+        "half_life_min": 20.3,
+        "mode": "MANUAL",
+        "transport_min": 3.908333333333333,
+        "elapsed": 38.90833333333333,
+        "retained": 0.2648657735898238,
+        "admin_mbq": 555.0,
+        "req_upstream_mbq": 2095.4009741533596,
+        "status": "DECAY_AUTHORITY_PRESENT"
+      },
+      {
+        "radionuclide": "C-11",
+        "half_life_min": 20.3,
+        "mode": "MRT",
+        "transport_min": 1.972222222222222,
+        "elapsed": 36.97222222222222,
+        "retained": 0.28296749936950416,
+        "admin_mbq": 555.0,
+        "req_upstream_mbq": 1961.355990481687,
+        "status": "DECAY_AUTHORITY_PRESENT"
+      }
+    ]
+  },
+  "EXP3_n13": {
+    "radionuclides": [
+      "N-13"
+    ],
+    "patient_counts": {
+      "N-13": 6
+    },
+    "bouquet": {
+      "MANUAL_CONVENTIONAL": {
+        "feasible": true,
+        "phys": "FEASIBLE_WITH_UNCALIBRATED_PRODUCTION_CAPACITY",
+        "binding": "none",
+        "capex": 125000.0,
+        "total_project_capex": 125000.0,
+        "known_opex": 1750320.0,
+        "true_total_opex": 6771800.0,
+        "lifecycle": 11869789.674195182,
+        "rank": 1,
+        "pareto": true,
+        "opex_calib": "KNOWN_SUBTOTAL_ONLY_TOTAL_NOT_CALIBRATED"
+      },
+      "AUTOMATED_CONVENTIONAL": {
+        "feasible": true,
+        "phys": "FEASIBLE_WITH_UNCALIBRATED_PRODUCTION_CAPACITY",
+        "binding": "none",
+        "capex": 1925000.0,
+        "total_project_capex": 1925000.0,
+        "known_opex": 1870772.0,
+        "true_total_opex": 6892252.0,
+        "lifecycle": 14478032.398860479,
+        "rank": 2,
+        "pareto": false,
+        "opex_calib": "KNOWN_SUBTOTAL_ONLY_TOTAL_NOT_CALIBRATED"
+      },
+      "MRT_DOMINANT": {
+        "feasible": true,
+        "phys": "FEASIBLE_WITH_UNCALIBRATED_PRODUCTION_CAPACITY",
+        "binding": "none",
+        "capex": 4871000.0,
+        "total_project_capex": 4871000.0,
+        "known_opex": 5721012.95125,
+        "true_total_opex": 5721012.95125,
+        "lifecycle": 43259462.58728571,
+        "rank": 3,
+        "pareto": false,
+        "opex_calib": "KNOWN_SUBTOTAL_ONLY_TOTAL_NOT_CALIBRATED"
+      },
+      "HYBRID_MRT": {
+        "feasible": true,
+        "phys": "FEASIBLE_WITH_UNCALIBRATED_PRODUCTION_CAPACITY",
+        "binding": "none",
+        "capex": 981500.0,
+        "total_project_capex": 981500.0,
+        "known_opex": 6912571.0125,
+        "true_total_opex": 6912571.0125,
+        "lifecycle": 47365414.169838056,
+        "rank": 4,
+        "pareto": false,
+        "opex_calib": "KNOWN_SUBTOTAL_ONLY_TOTAL_NOT_CALIBRATED"
+      }
+    },
+    "ranked": [
+      "MANUAL_CONVENTIONAL",
+      "AUTOMATED_CONVENTIONAL",
+      "MRT_DOMINANT",
+      "HYBRID_MRT"
+    ],
+    "pareto": [
+      "MANUAL_CONVENTIONAL"
+    ],
+    "decay": [
+      {
+        "radionuclide": "N-13",
+        "half_life_min": 9.97,
+        "mode": "MANUAL",
+        "transport_min": 3.908333333333333,
+        "elapsed": 38.90833333333333,
+        "retained": 0.06686796598630762,
+        "admin_mbq": 740.0,
+        "req_upstream_mbq": 11066.584560857254,
+        "status": "DECAY_AUTHORITY_PRESENT"
+      },
+      {
+        "radionuclide": "N-13",
+        "half_life_min": 9.97,
+        "mode": "MRT",
+        "transport_min": 1.972222222222222,
+        "elapsed": 36.97222222222222,
+        "retained": 0.07650260774285993,
+        "admin_mbq": 740.0,
+        "req_upstream_mbq": 9672.872884115051,
+        "status": "DECAY_AUTHORITY_PRESENT"
+      }
+    ]
+  },
+  "EXP4_o15": {
+    "radionuclides": [
+      "O-15"
+    ],
+    "patient_counts": {
+      "O-15": 6
+    },
+    "bouquet": {
+      "MANUAL_CONVENTIONAL": {
+        "feasible": true,
+        "phys": "FEASIBLE_WITH_UNCALIBRATED_PRODUCTION_CAPACITY",
+        "binding": "none",
+        "capex": 125000.0,
+        "total_project_capex": 125000.0,
+        "known_opex": 1750320.0,
+        "true_total_opex": 6771800.0,
+        "lifecycle": 11869789.674195182,
+        "rank": 1,
+        "pareto": true,
+        "opex_calib": "KNOWN_SUBTOTAL_ONLY_TOTAL_NOT_CALIBRATED"
+      },
+      "AUTOMATED_CONVENTIONAL": {
+        "feasible": true,
+        "phys": "FEASIBLE_WITH_UNCALIBRATED_PRODUCTION_CAPACITY",
+        "binding": "none",
+        "capex": 1925000.0,
+        "total_project_capex": 1925000.0,
+        "known_opex": 1870772.0,
+        "true_total_opex": 6892252.0,
+        "lifecycle": 14478032.398860479,
+        "rank": 2,
+        "pareto": false,
+        "opex_calib": "KNOWN_SUBTOTAL_ONLY_TOTAL_NOT_CALIBRATED"
+      },
+      "MRT_DOMINANT": {
+        "feasible": true,
+        "phys": "FEASIBLE_WITH_UNCALIBRATED_PRODUCTION_CAPACITY",
+        "binding": "none",
+        "capex": 4871000.0,
+        "total_project_capex": 4871000.0,
+        "known_opex": 5721012.95125,
+        "true_total_opex": 5721012.95125,
+        "lifecycle": 43259462.58728571,
+        "rank": 3,
+        "pareto": false,
+        "opex_calib": "KNOWN_SUBTOTAL_ONLY_TOTAL_NOT_CALIBRATED"
+      },
+      "HYBRID_MRT": {
+        "feasible": true,
+        "phys": "FEASIBLE_WITH_UNCALIBRATED_PRODUCTION_CAPACITY",
+        "binding": "none",
+        "capex": 981500.0,
+        "total_project_capex": 981500.0,
+        "known_opex": 6912571.0125,
+        "true_total_opex": 6912571.0125,
+        "lifecycle": 47365414.169838056,
+        "rank": 4,
+        "pareto": false,
+        "opex_calib": "KNOWN_SUBTOTAL_ONLY_TOTAL_NOT_CALIBRATED"
+      }
+    },
+    "ranked": [
+      "MANUAL_CONVENTIONAL",
+      "AUTOMATED_CONVENTIONAL",
+      "MRT_DOMINANT",
+      "HYBRID_MRT"
+    ],
+    "pareto": [
+      "MANUAL_CONVENTIONAL"
+    ],
+    "decay": [
+      {
+        "radionuclide": "O-15",
+        "half_life_min": 2.04,
+        "mode": "MANUAL",
+        "transport_min": 3.908333333333333,
+        "elapsed": 38.90833333333333,
+        "retained": 1.8135998175107485e-06,
+        "admin_mbq": 1110.0,
+        "req_upstream_mbq": 612042408.2990521,
+        "status": "DECAY_AUTHORITY_PRESENT"
+      },
+      {
+        "radionuclide": "O-15",
+        "half_life_min": 2.04,
+        "mode": "MRT",
+        "transport_min": 1.972222222222222,
+        "elapsed": 36.97222222222222,
+        "retained": 3.5013959721976787e-06,
+        "admin_mbq": 1110.0,
+        "req_upstream_mbq": 317016415.3993985,
+        "status": "DECAY_AUTHORITY_PRESENT"
+      }
+    ]
+  },
+  "EXP11_mixed_pet": {
+    "radionuclides": [
+      "F-18",
+      "C-11",
+      "N-13",
+      "O-15"
+    ],
+    "patient_counts": {
+      "F-18": 20,
+      "C-11": 5,
+      "N-13": 5,
+      "O-15": 5
+    },
+    "bouquet": {
+      "MANUAL_CONVENTIONAL": {
+        "feasible": true,
+        "phys": "FEASIBLE_WITH_UNCALIBRATED_PRODUCTION_CAPACITY",
+        "binding": "none",
+        "capex": 125000.0,
+        "total_project_capex": 125000.0,
+        "known_opex": 1750320.0,
+        "true_total_opex": 6771800.0,
+        "lifecycle": 11869789.674195182,
+        "rank": 1,
+        "pareto": true,
+        "opex_calib": "KNOWN_SUBTOTAL_ONLY_TOTAL_NOT_CALIBRATED"
+      },
+      "AUTOMATED_CONVENTIONAL": {
+        "feasible": true,
+        "phys": "FEASIBLE_WITH_UNCALIBRATED_PRODUCTION_CAPACITY",
+        "binding": "none",
+        "capex": 1925000.0,
+        "total_project_capex": 1925000.0,
+        "known_opex": 1870772.0,
+        "true_total_opex": 6892252.0,
+        "lifecycle": 14478032.398860479,
+        "rank": 2,
+        "pareto": false,
+        "opex_calib": "KNOWN_SUBTOTAL_ONLY_TOTAL_NOT_CALIBRATED"
+      },
+      "MRT_DOMINANT": {
+        "feasible": true,
+        "phys": "FEASIBLE_WITH_UNCALIBRATED_PRODUCTION_CAPACITY",
+        "binding": "none",
+        "capex": 4871000.0,
+        "total_project_capex": 4871000.0,
+        "known_opex": 5721012.95125,
+        "true_total_opex": 5721012.95125,
+        "lifecycle": 43259462.58728571,
+        "rank": 3,
+        "pareto": false,
+        "opex_calib": "KNOWN_SUBTOTAL_ONLY_TOTAL_NOT_CALIBRATED"
+      },
+      "HYBRID_MRT": {
+        "feasible": true,
+        "phys": "FEASIBLE_WITH_UNCALIBRATED_PRODUCTION_CAPACITY",
+        "binding": "none",
+        "capex": 981500.0,
+        "total_project_capex": 981500.0,
+        "known_opex": 6912571.0125,
+        "true_total_opex": 6912571.0125,
+        "lifecycle": 47365414.169838056,
+        "rank": 4,
+        "pareto": false,
+        "opex_calib": "KNOWN_SUBTOTAL_ONLY_TOTAL_NOT_CALIBRATED"
+      }
+    },
+    "ranked": [
+      "MANUAL_CONVENTIONAL",
+      "AUTOMATED_CONVENTIONAL",
+      "MRT_DOMINANT",
+      "HYBRID_MRT"
+    ],
+    "pareto": [
+      "MANUAL_CONVENTIONAL"
+    ],
+    "decay": [
+      {
+        "radionuclide": "F-18",
+        "half_life_min": 109.8,
+        "mode": "MRT",
+        "transport_min": 1.972222222222222,
+        "elapsed": 36.97222222222222,
+        "retained": 0.791837701487374,
+        "admin_mbq": 370.0,
+        "req_upstream_mbq": 467.2674707266382,
+        "status": "DECAY_AUTHORITY_PRESENT"
+      },
+      {
+        "radionuclide": "C-11",
+        "half_life_min": 20.3,
+        "mode": "MRT",
+        "transport_min": 1.972222222222222,
+        "elapsed": 36.97222222222222,
+        "retained": 0.28296749936950416,
+        "admin_mbq": 555.0,
+        "req_upstream_mbq": 1961.355990481687,
+        "status": "DECAY_AUTHORITY_PRESENT"
+      },
+      {
+        "radionuclide": "N-13",
+        "half_life_min": 9.97,
+        "mode": "MRT",
+        "transport_min": 1.972222222222222,
+        "elapsed": 36.97222222222222,
+        "retained": 0.07650260774285993,
+        "admin_mbq": 740.0,
+        "req_upstream_mbq": 9672.872884115051,
+        "status": "DECAY_AUTHORITY_PRESENT"
+      },
+      {
+        "radionuclide": "O-15",
+        "half_life_min": 2.04,
+        "mode": "MRT",
+        "transport_min": 1.972222222222222,
+        "elapsed": 36.97222222222222,
+        "retained": 3.5013959721976787e-06,
+        "admin_mbq": 1110.0,
+        "req_upstream_mbq": 317016415.3993985,
+        "status": "DECAY_AUTHORITY_PRESENT"
+      }
+    ]
+  },
+  "EXP12_mixed_pet_spect": {
+    "radionuclides": [
+      "F-18",
+      "Tc-99m",
+      "Ga-68"
+    ],
+    "patient_counts": {
+      "F-18": 24,
+      "Tc-99m": 16,
+      "Ga-68": 6
+    },
+    "bouquet": {
+      "MANUAL_CONVENTIONAL": {
+        "feasible": true,
+        "phys": "FEASIBLE_WITH_UNCALIBRATED_PRODUCTION_CAPACITY",
+        "binding": "none",
+        "capex": 125000.0,
+        "total_project_capex": 125000.0,
+        "known_opex": 1750320.0,
+        "true_total_opex": 6771800.0,
+        "lifecycle": 11869789.674195182,
+        "rank": 1,
+        "pareto": true,
+        "opex_calib": "KNOWN_SUBTOTAL_ONLY_TOTAL_NOT_CALIBRATED"
+      },
+      "AUTOMATED_CONVENTIONAL": {
+        "feasible": true,
+        "phys": "FEASIBLE_WITH_UNCALIBRATED_PRODUCTION_CAPACITY",
+        "binding": "none",
+        "capex": 1925000.0,
+        "total_project_capex": 1925000.0,
+        "known_opex": 1870772.0,
+        "true_total_opex": 6892252.0,
+        "lifecycle": 14478032.398860479,
+        "rank": 2,
+        "pareto": false,
+        "opex_calib": "KNOWN_SUBTOTAL_ONLY_TOTAL_NOT_CALIBRATED"
+      },
+      "MRT_DOMINANT": {
+        "feasible": true,
+        "phys": "FEASIBLE_WITH_UNCALIBRATED_PRODUCTION_CAPACITY",
+        "binding": "none",
+        "capex": 4871000.0,
+        "total_project_capex": 4871000.0,
+        "known_opex": 5721012.95125,
+        "true_total_opex": 5721012.95125,
+        "lifecycle": 43259462.58728571,
+        "rank": 3,
+        "pareto": false,
+        "opex_calib": "KNOWN_SUBTOTAL_ONLY_TOTAL_NOT_CALIBRATED"
+      },
+      "HYBRID_MRT": {
+        "feasible": true,
+        "phys": "FEASIBLE_WITH_UNCALIBRATED_PRODUCTION_CAPACITY",
+        "binding": "none",
+        "capex": 981500.0,
+        "total_project_capex": 981500.0,
+        "known_opex": 6912571.0125,
+        "true_total_opex": 6912571.0125,
+        "lifecycle": 47365414.169838056,
+        "rank": 4,
+        "pareto": false,
+        "opex_calib": "KNOWN_SUBTOTAL_ONLY_TOTAL_NOT_CALIBRATED"
+      }
+    },
+    "ranked": [
+      "MANUAL_CONVENTIONAL",
+      "AUTOMATED_CONVENTIONAL",
+      "MRT_DOMINANT",
+      "HYBRID_MRT"
+    ],
+    "pareto": [
+      "MANUAL_CONVENTIONAL"
+    ],
+    "decay": [
+      {
+        "radionuclide": "F-18",
+        "half_life_min": 109.8,
+        "mode": "MRT",
+        "transport_min": 1.972222222222222,
+        "elapsed": 36.97222222222222,
+        "retained": 0.791837701487374,
+        "admin_mbq": 370.0,
+        "req_upstream_mbq": 467.2674707266382,
+        "status": "DECAY_AUTHORITY_PRESENT"
+      },
+      {
+        "radionuclide": "Tc-99m",
+        "half_life_min": 360.0,
+        "mode": "MRT",
+        "transport_min": 1.972222222222222,
+        "elapsed": 36.97222222222222,
+        "retained": 0.9312880572179829,
+        "admin_mbq": 740.0,
+        "req_upstream_mbq": 794.5983997803927,
+        "status": "DECAY_AUTHORITY_PRESENT"
+      },
+      {
+        "radionuclide": "Ga-68",
+        "half_life_min": 67.7,
+        "mode": "MRT",
+        "transport_min": 1.972222222222222,
+        "elapsed": 36.97222222222222,
+        "retained": 0.6848602362601556,
+        "admin_mbq": 185.0,
+        "req_upstream_mbq": 270.1281081965528,
+        "status": "DECAY_AUTHORITY_PRESENT"
+      }
+    ]
+  },
+  "EXP9A_ga68_cyc": {
+    "radionuclides": [
+      "Ga-68"
+    ],
+    "patient_counts": {
+      "Ga-68": 10
+    },
+    "bouquet": {
+      "MANUAL_CONVENTIONAL": {
+        "feasible": true,
+        "phys": "FEASIBLE_WITH_UNCALIBRATED_PRODUCTION_CAPACITY",
+        "binding": "none",
+        "capex": 125000.0,
+        "total_project_capex": 125000.0,
+        "known_opex": 1750320.0,
+        "true_total_opex": 6771800.0,
+        "lifecycle": 11869789.674195182,
+        "rank": 1,
+        "pareto": true,
+        "opex_calib": "KNOWN_SUBTOTAL_ONLY_TOTAL_NOT_CALIBRATED"
+      },
+      "AUTOMATED_CONVENTIONAL": {
+        "feasible": true,
+        "phys": "FEASIBLE_WITH_UNCALIBRATED_PRODUCTION_CAPACITY",
+        "binding": "none",
+        "capex": 1925000.0,
+        "total_project_capex": 1925000.0,
+        "known_opex": 1870772.0,
+        "true_total_opex": 6892252.0,
+        "lifecycle": 14478032.398860479,
+        "rank": 2,
+        "pareto": false,
+        "opex_calib": "KNOWN_SUBTOTAL_ONLY_TOTAL_NOT_CALIBRATED"
+      },
+      "MRT_DOMINANT": {
+        "feasible": true,
+        "phys": "FEASIBLE_WITH_UNCALIBRATED_PRODUCTION_CAPACITY",
+        "binding": "none",
+        "capex": 4871000.0,
+        "total_project_capex": 4871000.0,
+        "known_opex": 5721012.95125,
+        "true_total_opex": 5721012.95125,
+        "lifecycle": 43259462.58728571,
+        "rank": 3,
+        "pareto": false,
+        "opex_calib": "KNOWN_SUBTOTAL_ONLY_TOTAL_NOT_CALIBRATED"
+      },
+      "HYBRID_MRT": {
+        "feasible": true,
+        "phys": "FEASIBLE_WITH_UNCALIBRATED_PRODUCTION_CAPACITY",
+        "binding": "none",
+        "capex": 981500.0,
+        "total_project_capex": 981500.0,
+        "known_opex": 6912571.0125,
+        "true_total_opex": 6912571.0125,
+        "lifecycle": 47365414.169838056,
+        "rank": 4,
+        "pareto": false,
+        "opex_calib": "KNOWN_SUBTOTAL_ONLY_TOTAL_NOT_CALIBRATED"
+      }
+    },
+    "ranked": [
+      "MANUAL_CONVENTIONAL",
+      "AUTOMATED_CONVENTIONAL",
+      "MRT_DOMINANT",
+      "HYBRID_MRT"
+    ],
+    "pareto": [
+      "MANUAL_CONVENTIONAL"
+    ],
+    "decay": [
+      {
+        "radionuclide": "Ga-68",
+        "half_life_min": 67.7,
+        "mode": "MANUAL",
+        "transport_min": 3.908333333333333,
+        "elapsed": 38.90833333333333,
+        "retained": 0.671417996270695,
+        "admin_mbq": 185.0,
+        "req_upstream_mbq": 275.5362546544161,
+        "status": "DECAY_AUTHORITY_PRESENT"
+      },
+      {
+        "radionuclide": "Ga-68",
+        "half_life_min": 67.7,
+        "mode": "MRT",
+        "transport_min": 1.972222222222222,
+        "elapsed": 36.97222222222222,
+        "retained": 0.6848602362601556,
+        "admin_mbq": 185.0,
+        "req_upstream_mbq": 270.1281081965528,
+        "status": "DECAY_AUTHORITY_PRESENT"
+      }
+    ]
+  },
+  "EXP9B_ga68_gen": {
+    "radionuclides": [
+      "Ga-68"
+    ],
+    "patient_counts": {
+      "Ga-68": 10
+    },
+    "bouquet": {
+      "MANUAL_CONVENTIONAL": {
+        "feasible": true,
+        "phys": "FEASIBLE_WITH_UNCALIBRATED_PRODUCTION_CAPACITY",
+        "binding": "none",
+        "capex": 125000.0,
+        "total_project_capex": 125000.0,
+        "known_opex": 1750320.0,
+        "true_total_opex": 6771800.0,
+        "lifecycle": 11869789.674195182,
+        "rank": 1,
+        "pareto": true,
+        "opex_calib": "KNOWN_SUBTOTAL_ONLY_TOTAL_NOT_CALIBRATED"
+      },
+      "AUTOMATED_CONVENTIONAL": {
+        "feasible": true,
+        "phys": "FEASIBLE_WITH_UNCALIBRATED_PRODUCTION_CAPACITY",
+        "binding": "none",
+        "capex": 1925000.0,
+        "total_project_capex": 1925000.0,
+        "known_opex": 1870772.0,
+        "true_total_opex": 6892252.0,
+        "lifecycle": 14478032.398860479,
+        "rank": 2,
+        "pareto": false,
+        "opex_calib": "KNOWN_SUBTOTAL_ONLY_TOTAL_NOT_CALIBRATED"
+      },
+      "MRT_DOMINANT": {
+        "feasible": true,
+        "phys": "FEASIBLE_WITH_UNCALIBRATED_PRODUCTION_CAPACITY",
+        "binding": "none",
+        "capex": 4871000.0,
+        "total_project_capex": 4871000.0,
+        "known_opex": 5721012.95125,
+        "true_total_opex": 5721012.95125,
+        "lifecycle": 43259462.58728571,
+        "rank": 3,
+        "pareto": false,
+        "opex_calib": "KNOWN_SUBTOTAL_ONLY_TOTAL_NOT_CALIBRATED"
+      },
+      "HYBRID_MRT": {
+        "feasible": true,
+        "phys": "FEASIBLE_WITH_UNCALIBRATED_PRODUCTION_CAPACITY",
+        "binding": "none",
+        "capex": 981500.0,
+        "total_project_capex": 981500.0,
+        "known_opex": 6912571.0125,
+        "true_total_opex": 6912571.0125,
+        "lifecycle": 47365414.169838056,
+        "rank": 4,
+        "pareto": false,
+        "opex_calib": "KNOWN_SUBTOTAL_ONLY_TOTAL_NOT_CALIBRATED"
+      }
+    },
+    "ranked": [
+      "MANUAL_CONVENTIONAL",
+      "AUTOMATED_CONVENTIONAL",
+      "MRT_DOMINANT",
+      "HYBRID_MRT"
+    ],
+    "pareto": [
+      "MANUAL_CONVENTIONAL"
+    ],
+    "decay": [
+      {
+        "radionuclide": "Ga-68",
+        "half_life_min": 67.7,
+        "mode": "MANUAL",
+        "transport_min": 3.908333333333333,
+        "elapsed": 38.90833333333333,
+        "retained": 0.671417996270695,
+        "admin_mbq": 185.0,
+        "req_upstream_mbq": 275.5362546544161,
+        "status": "DECAY_AUTHORITY_PRESENT"
+      },
+      {
+        "radionuclide": "Ga-68",
+        "half_life_min": 67.7,
+        "mode": "MRT",
+        "transport_min": 1.972222222222222,
+        "elapsed": 36.97222222222222,
+        "retained": 0.6848602362601556,
+        "admin_mbq": 185.0,
+        "req_upstream_mbq": 270.1281081965528,
+        "status": "DECAY_AUTHORITY_PRESENT"
+      }
+    ]
+  },
+  "EXP5_short_half_life": [
+    {
+      "radionuclide": "F-18",
+      "half_life_min": 109.8,
+      "mode": "MANUAL",
+      "transport_min": 3.908333333333333,
+      "elapsed": 38.90833333333333,
+      "retained": 0.7822185174083393,
+      "admin_mbq": 370.0,
+      "req_upstream_mbq": 473.0136039554405,
+      "status": "DECAY_AUTHORITY_PRESENT"
+    },
+    {
+      "radionuclide": "F-18",
+      "half_life_min": 109.8,
+      "mode": "MRT",
+      "transport_min": 1.972222222222222,
+      "elapsed": 36.97222222222222,
+      "retained": 0.791837701487374,
+      "admin_mbq": 370.0,
+      "req_upstream_mbq": 467.2674707266382,
+      "status": "DECAY_AUTHORITY_PRESENT"
+    },
+    {
+      "radionuclide": "C-11",
+      "half_life_min": 20.3,
+      "mode": "MANUAL",
+      "transport_min": 3.908333333333333,
+      "elapsed": 38.90833333333333,
+      "retained": 0.2648657735898238,
+      "admin_mbq": 555.0,
+      "req_upstream_mbq": 2095.4009741533596,
+      "status": "DECAY_AUTHORITY_PRESENT"
+    },
+    {
+      "radionuclide": "C-11",
+      "half_life_min": 20.3,
+      "mode": "MRT",
+      "transport_min": 1.972222222222222,
+      "elapsed": 36.97222222222222,
+      "retained": 0.28296749936950416,
+      "admin_mbq": 555.0,
+      "req_upstream_mbq": 1961.355990481687,
+      "status": "DECAY_AUTHORITY_PRESENT"
+    },
+    {
+      "radionuclide": "N-13",
+      "half_life_min": 9.97,
+      "mode": "MANUAL",
+      "transport_min": 3.908333333333333,
+      "elapsed": 38.90833333333333,
+      "retained": 0.06686796598630762,
+      "admin_mbq": 740.0,
+      "req_upstream_mbq": 11066.584560857254,
+      "status": "DECAY_AUTHORITY_PRESENT"
+    },
+    {
+      "radionuclide": "N-13",
+      "half_life_min": 9.97,
+      "mode": "MRT",
+      "transport_min": 1.972222222222222,
+      "elapsed": 36.97222222222222,
+      "retained": 0.07650260774285993,
+      "admin_mbq": 740.0,
+      "req_upstream_mbq": 9672.872884115051,
+      "status": "DECAY_AUTHORITY_PRESENT"
+    },
+    {
+      "radionuclide": "O-15",
+      "half_life_min": 2.04,
+      "mode": "MANUAL",
+      "transport_min": 3.908333333333333,
+      "elapsed": 38.90833333333333,
+      "retained": 1.8135998175107485e-06,
+      "admin_mbq": 1110.0,
+      "req_upstream_mbq": 612042408.2990521,
+      "status": "DECAY_AUTHORITY_PRESENT"
+    },
+    {
+      "radionuclide": "O-15",
+      "half_life_min": 2.04,
+      "mode": "MRT",
+      "transport_min": 1.972222222222222,
+      "elapsed": 36.97222222222222,
+      "retained": 3.5013959721976787e-06,
+      "admin_mbq": 1110.0,
+      "req_upstream_mbq": 317016415.3993985,
+      "status": "DECAY_AUTHORITY_PRESENT"
+    }
+  ],
+  "EXP6_distance": {
+    "F-18": [
+      {
+        "mult": 0.5,
+        "distance_m": 47.5,
+        "vertical_m": 16.0,
+        "transitions": 2,
+        "manual_min": 3.2041666666666666,
+        "mrt_min": 1.6194444444444442,
+        "manual_retained": 0.7857034333994153,
+        "mrt_retained": 0.7936031058610216
+      },
+      {
+        "mult": 1.0,
+        "distance_m": 95.0,
+        "vertical_m": 32.0,
+        "transitions": 2,
+        "manual_min": 3.908333333333333,
+        "mrt_min": 1.972222222222222,
+        "manual_retained": 0.7822185174083393,
+        "mrt_retained": 0.791837701487374
+      },
+      {
+        "mult": 1.5,
+        "distance_m": 142.5,
+        "vertical_m": 48.0,
+        "transitions": 2,
+        "manual_min": 4.6125,
+        "mrt_min": 2.325,
+        "manual_retained": 0.7787490584446206,
+        "mrt_retained": 0.7900762243319788
+      },
+      {
+        "mult": 2.0,
+        "distance_m": 190.0,
+        "vertical_m": 64.0,
+        "transitions": 2,
+        "manual_min": 5.316666666666666,
+        "mrt_min": 2.6777777777777776,
+        "manual_retained": 0.7752949879500228,
+        "mrt_retained": 0.7883186656585695
+      },
+      {
+        "mult": 3.0,
+        "distance_m": 285.0,
+        "vertical_m": 96.0,
+        "transitions": 2,
+        "manual_min": 6.725,
+        "mrt_min": 3.3833333333333333,
+        "manual_retained": 0.7684327396543144,
+        "mrt_retained": 0.7848152689097698
+      }
+    ],
+    "C-11": [
+      {
+        "mult": 0.5,
+        "distance_m": 47.5,
+        "vertical_m": 16.0,
+        "transitions": 2,
+        "manual_min": 3.2041666666666666,
+        "mrt_min": 1.6194444444444442,
+        "manual_retained": 0.27131135733013073,
+        "mrt_retained": 0.28639664167273987
+      },
+      {
+        "mult": 1.0,
+        "distance_m": 95.0,
+        "vertical_m": 32.0,
+        "transitions": 2,
+        "manual_min": 3.908333333333333,
+        "mrt_min": 1.972222222222222,
+        "manual_retained": 0.2648657735898238,
+        "mrt_retained": 0.28296749936950416
+      },
+      {
+        "mult": 1.5,
+        "distance_m": 142.5,
+        "vertical_m": 48.0,
+        "transitions": 2,
+        "manual_min": 4.6125,
+        "mrt_min": 2.325,
+        "manual_retained": 0.25857331852854515,
+        "mrt_retained": 0.27957941556774785
+      },
+      {
+        "mult": 2.0,
+        "distance_m": 190.0,
+        "vertical_m": 64.0,
+        "transitions": 2,
+        "manual_min": 5.316666666666666,
+        "mrt_min": 2.6777777777777776,
+        "manual_retained": 0.25243035424579013,
+        "mrt_retained": 0.2762318986575014
+      },
+      {
+        "mult": 3.0,
+        "distance_m": 285.0,
+        "vertical_m": 96.0,
+        "transitions": 2,
+        "manual_min": 6.725,
+        "mrt_min": 3.3833333333333333,
+        "manual_retained": 0.2405787764912758,
+        "mrt_retained": 0.26965662843240135
+      }
+    ],
+    "N-13": [
+      {
+        "mult": 0.5,
+        "distance_m": 47.5,
+        "vertical_m": 16.0,
+        "transitions": 2,
+        "manual_min": 3.2041666666666666,
+        "mrt_min": 1.6194444444444442,
+        "manual_retained": 0.07022300754072472,
+        "mrt_retained": 0.07840213031791612
+      },
+      {
+        "mult": 1.0,
+        "distance_m": 95.0,
+        "vertical_m": 32.0,
+        "transitions": 2,
+        "manual_min": 3.908333333333333,
+        "mrt_min": 1.972222222222222,
+        "manual_retained": 0.06686796598630762,
+        "mrt_retained": 0.07650260774285993
+      },
+      {
+        "mult": 1.5,
+        "distance_m": 142.5,
+        "vertical_m": 48.0,
+        "transitions": 2,
+        "manual_min": 4.6125,
+        "mrt_min": 2.325,
+        "manual_retained": 0.06367321810523309,
+        "mrt_retained": 0.07464910669806721
+      },
+      {
+        "mult": 2.0,
+        "distance_m": 190.0,
+        "vertical_m": 64.0,
+        "transitions": 2,
+        "manual_min": 5.316666666666666,
+        "mrt_min": 2.6777777777777776,
+        "manual_retained": 0.06063110555369319,
+        "mrt_retained": 0.07284051217639066
+      },
+      {
+        "mult": 3.0,
+        "distance_m": 285.0,
+        "vertical_m": 96.0,
+        "transitions": 2,
+        "manual_min": 6.725,
+        "mrt_min": 3.3833333333333333,
+        "manual_retained": 0.054975965044545154,
+        "mrt_retained": 0.06935371709095899
+      }
+    ],
+    "O-15": [
+      {
+        "mult": 0.5,
+        "distance_m": 47.5,
+        "vertical_m": 16.0,
+        "transitions": 2,
+        "manual_min": 3.2041666666666666,
+        "mrt_min": 1.6194444444444442,
+        "manual_retained": 2.3038325958881213e-06,
+        "mrt_retained": 3.947284509007944e-06
+      },
+      {
+        "mult": 1.0,
+        "distance_m": 95.0,
+        "vertical_m": 32.0,
+        "transitions": 2,
+        "manual_min": 3.908333333333333,
+        "mrt_min": 1.972222222222222,
+        "manual_retained": 1.8135998175107485e-06,
+        "mrt_retained": 3.5013959721976787e-06
+      },
+      {
+        "mult": 1.5,
+        "distance_m": 142.5,
+        "vertical_m": 48.0,
+        "transitions": 2,
+        "manual_min": 4.6125,
+        "mrt_min": 2.325,
+        "manual_retained": 1.427683723177409e-06,
+        "mrt_retained": 3.1058753748670954e-06
+      },
+      {
+        "mult": 2.0,
+        "distance_m": 190.0,
+        "vertical_m": 64.0,
+        "transitions": 2,
+        "manual_min": 5.316666666666666,
+        "mrt_min": 2.6777777777777776,
+        "manual_retained": 1.1238867548097465e-06,
+        "mrt_retained": 2.755033112736223e-06
+      },
+      {
+        "mult": 3.0,
+        "distance_m": 285.0,
+        "vertical_m": 96.0,
+        "transitions": 2,
+        "manual_min": 6.725,
+        "mrt_min": 3.3833333333333333,
+        "manual_retained": 6.964719699688056e-07,
+        "mrt_retained": 2.1677660888805408e-06
+      }
+    ]
+  },
+  "EXP7_speed": {
+    "F-18": [
+      {
+        "label": "SLOW",
+        "hs": 1.5,
+        "vs": 0.75,
+        "mrt_min": 2.6777777777777776,
+        "retained": 0.7883186656585695
+      },
+      {
+        "label": "BASELINE",
+        "hs": 3.0,
+        "vs": 1.5,
+        "mrt_min": 1.972222222222222,
+        "retained": 0.791837701487374
+      },
+      {
+        "label": "FAST",
+        "hs": 6.0,
+        "vs": 3.0,
+        "mrt_min": 1.6194444444444442,
+        "retained": 0.7936031058610216
+      },
+      {
+        "label": "VERY_FAST",
+        "hs": 9.0,
+        "vs": 4.5,
+        "mrt_min": 1.501851851851852,
+        "retained": 0.7941924482135144
+      }
+    ],
+    "C-11": [
+      {
+        "label": "SLOW",
+        "hs": 1.5,
+        "vs": 0.75,
+        "mrt_min": 2.6777777777777776,
+        "retained": 0.2762318986575014
+      },
+      {
+        "label": "BASELINE",
+        "hs": 3.0,
+        "vs": 1.5,
+        "mrt_min": 1.972222222222222,
+        "retained": 0.28296749936950416
+      },
+      {
+        "label": "FAST",
+        "hs": 6.0,
+        "vs": 3.0,
+        "mrt_min": 1.6194444444444442,
+        "retained": 0.28639664167273987
+      },
+      {
+        "label": "VERY_FAST",
+        "hs": 9.0,
+        "vs": 4.5,
+        "mrt_min": 1.501851851851852,
+        "retained": 0.28754889904492137
+      }
+    ],
+    "N-13": [
+      {
+        "label": "SLOW",
+        "hs": 1.5,
+        "vs": 0.75,
+        "mrt_min": 2.6777777777777776,
+        "retained": 0.07284051217639066
+      },
+      {
+        "label": "BASELINE",
+        "hs": 3.0,
+        "vs": 1.5,
+        "mrt_min": 1.972222222222222,
+        "retained": 0.07650260774285993
+      },
+      {
+        "label": "FAST",
+        "hs": 6.0,
+        "vs": 3.0,
+        "mrt_min": 1.6194444444444442,
+        "retained": 0.07840213031791612
+      },
+      {
+        "label": "VERY_FAST",
+        "hs": 9.0,
+        "vs": 4.5,
+        "mrt_min": 1.501851851851852,
+        "retained": 0.07904572820806416
+      }
+    ],
+    "O-15": [
+      {
+        "label": "SLOW",
+        "hs": 1.5,
+        "vs": 0.75,
+        "mrt_min": 2.6777777777777776,
+        "retained": 2.755033112736223e-06
+      },
+      {
+        "label": "BASELINE",
+        "hs": 3.0,
+        "vs": 1.5,
+        "mrt_min": 1.972222222222222,
+        "retained": 3.5013959721976787e-06
+      },
+      {
+        "label": "FAST",
+        "hs": 6.0,
+        "vs": 3.0,
+        "mrt_min": 1.6194444444444442,
+        "retained": 3.947284509007944e-06
+      },
+      {
+        "label": "VERY_FAST",
+        "hs": 9.0,
+        "vs": 4.5,
+        "mrt_min": 1.501851851851852,
+        "retained": 4.108192931723936e-06
+      }
+    ]
+  },
+  "EXP8_source": [
+    {
+      "radionuclide": "C-11",
+      "kind": "CYCLOTRON",
+      "model": "IBA_CYCLONE_KIUBE"
+    },
+    {
+      "radionuclide": "C-11",
+      "kind": "CYCLOTRON",
+      "model": "GE_PETTRACE_800"
+    },
+    {
+      "radionuclide": "C-11",
+      "kind": "CYCLOTRON",
+      "model": "SIEMENS_CTI_ECLIPSE_HP"
+    },
+    {
+      "radionuclide": "C-11",
+      "kind": "CYCLOTRON",
+      "model": "ACSI_TR_19"
+    },
+    {
+      "radionuclide": "N-13",
+      "kind": "CYCLOTRON",
+      "model": "IBA_CYCLONE_KIUBE"
+    },
+    {
+      "radionuclide": "N-13",
+      "kind": "CYCLOTRON",
+      "model": "GE_PETTRACE_800"
+    },
+    {
+      "radionuclide": "N-13",
+      "kind": "CYCLOTRON",
+      "model": "SIEMENS_CTI_RDS_111"
+    },
+    {
+      "radionuclide": "N-13",
+      "kind": "CYCLOTRON",
+      "model": "ACSI_TR_19"
+    },
+    {
+      "radionuclide": "O-15",
+      "kind": "CYCLOTRON",
+      "model": "IBA_CYCLONE_KIUBE"
+    },
+    {
+      "radionuclide": "O-15",
+      "kind": "CYCLOTRON",
+      "model": "GE_PETTRACE_800"
+    },
+    {
+      "radionuclide": "O-15",
+      "kind": "CYCLOTRON",
+      "model": "SIEMENS_CTI_ECLIPSE_HP"
+    },
+    {
+      "radionuclide": "O-15",
+      "kind": "CYCLOTRON",
+      "model": "ACSI_TR_19"
+    }
+  ],
+  "EXP10_demand": [
+    {
+      "radionuclide": "F-18",
+      "level": "LOW",
+      "count": 8,
+      "total_mbq": 2960.0,
+      "scanners": 1,
+      "prod_gate": "PRODUCTION_SUFFICIENT",
+      "status": "RESOLVED_ADMISSIBLE"
+    },
+    {
+      "radionuclide": "F-18",
+      "level": "BASELINE",
+      "count": 32,
+      "total_mbq": 11840.0,
+      "scanners": 2,
+      "prod_gate": "PRODUCTION_SUFFICIENT",
+      "status": "RESOLVED_ADMISSIBLE"
+    },
+    {
+      "radionuclide": "F-18",
+      "level": "HIGH",
+      "count": 64,
+      "total_mbq": 23680.0,
+      "scanners": 4,
+      "prod_gate": "PRODUCTION_SUFFICIENT",
+      "status": "RESOLVED_ADMISSIBLE"
+    },
+    {
+      "radionuclide": "C-11",
+      "level": "LOW",
+      "count": 2,
+      "total_mbq": 1110.0,
+      "scanners": 1,
+      "prod_gate": "PRODUCTION_NOT_CALIBRATED",
+      "status": "RESOLVED_WITH_UNCALIBRATED_PRODUCTION"
+    },
+    {
+      "radionuclide": "C-11",
+      "level": "BASELINE",
+      "count": 6,
+      "total_mbq": 3330.0,
+      "scanners": 1,
+      "prod_gate": "PRODUCTION_NOT_CALIBRATED",
+      "status": "RESOLVED_WITH_UNCALIBRATED_PRODUCTION"
+    },
+    {
+      "radionuclide": "C-11",
+      "level": "HIGH",
+      "count": 12,
+      "total_mbq": 6660.0,
+      "scanners": 1,
+      "prod_gate": "PRODUCTION_NOT_CALIBRATED",
+      "status": "RESOLVED_WITH_UNCALIBRATED_PRODUCTION"
+    },
+    {
+      "radionuclide": "N-13",
+      "level": "LOW",
+      "count": 2,
+      "total_mbq": 1480.0,
+      "scanners": 1,
+      "prod_gate": "PRODUCTION_NOT_CALIBRATED",
+      "status": "RESOLVED_WITH_UNCALIBRATED_PRODUCTION"
+    },
+    {
+      "radionuclide": "N-13",
+      "level": "BASELINE",
+      "count": 6,
+      "total_mbq": 4440.0,
+      "scanners": 1,
+      "prod_gate": "PRODUCTION_NOT_CALIBRATED",
+      "status": "RESOLVED_WITH_UNCALIBRATED_PRODUCTION"
+    },
+    {
+      "radionuclide": "N-13",
+      "level": "HIGH",
+      "count": 12,
+      "total_mbq": 8880.0,
+      "scanners": 1,
+      "prod_gate": "PRODUCTION_NOT_CALIBRATED",
+      "status": "RESOLVED_WITH_UNCALIBRATED_PRODUCTION"
+    },
+    {
+      "radionuclide": "O-15",
+      "level": "LOW",
+      "count": 2,
+      "total_mbq": 2220.0,
+      "scanners": 1,
+      "prod_gate": "PRODUCTION_NOT_CALIBRATED",
+      "status": "RESOLVED_WITH_UNCALIBRATED_PRODUCTION"
+    },
+    {
+      "radionuclide": "O-15",
+      "level": "BASELINE",
+      "count": 6,
+      "total_mbq": 6660.0,
+      "scanners": 1,
+      "prod_gate": "PRODUCTION_NOT_CALIBRATED",
+      "status": "RESOLVED_WITH_UNCALIBRATED_PRODUCTION"
+    },
+    {
+      "radionuclide": "O-15",
+      "level": "HIGH",
+      "count": 12,
+      "total_mbq": 13320.0,
+      "scanners": 1,
+      "prod_gate": "PRODUCTION_NOT_CALIBRATED",
+      "status": "RESOLVED_WITH_UNCALIBRATED_PRODUCTION"
+    },
+    {
+      "radionuclide": "Ga-68",
+      "level": "LOW",
+      "count": 3,
+      "total_mbq": 555.0,
+      "scanners": 1,
+      "prod_gate": "PRODUCTION_NOT_CALIBRATED",
+      "status": "RESOLVED_WITH_UNCALIBRATED_PRODUCTION"
+    },
+    {
+      "radionuclide": "Ga-68",
+      "level": "BASELINE",
+      "count": 10,
+      "total_mbq": 1850.0,
+      "scanners": 1,
+      "prod_gate": "PRODUCTION_NOT_CALIBRATED",
+      "status": "RESOLVED_WITH_UNCALIBRATED_PRODUCTION"
+    },
+    {
+      "radionuclide": "Ga-68",
+      "level": "HIGH",
+      "count": 20,
+      "total_mbq": 3700.0,
+      "scanners": 1,
+      "prod_gate": "PRODUCTION_NOT_CALIBRATED",
+      "status": "RESOLVED_WITH_UNCALIBRATED_PRODUCTION"
+    }
+  ],
+  "EXP13_crossover": {
+    "stable_ranking": [
+      "MANUAL_CONVENTIONAL",
+      "AUTOMATED_CONVENTIONAL",
+      "MRT_DOMINANT",
+      "HYBRID_MRT"
+    ],
+    "manual_rank1": true,
+    "mrt_pareto": false,
+    "hybrid_pareto": false,
+    "mrt_crossover": false,
+    "hybrid_crossover": false,
+    "conclusion": "NO_MRT_CROSSOVER_OBSERVED: across every tested radionuclide/source/demand condition the cost-only ranking was stable (MANUAL_CONVENTIONAL < AUTOMATED_CONVENTIONAL < MRT_DOMINANT < HYBRID_MRT) at the validated benchmark basis. MRT's measured advantage is in retained-activity physics (shorter route time), NOT in the derived lifecycle cost at this basis -- reported honestly, not forced."
+  },
+  "part3e2_envelope": {
+    "principal_baseline_decision_driver": "KNOWN_OPEX_DOMINANT",
+    "annuity_factor": 6.710081398941442,
+    "mrt_dominant_decision_region": "NO_MRT_DOMINANT_DECISION_REGION_OBSERVED",
+    "hybrid_decision_region": "NO_HYBRID_DECISION_REGION_OBSERVED",
+    "manual_decision_region": "YES",
+    "automated_decision_region": "NO",
+    "mrt_speed_crossover_found": false,
+    "baseline_deltas": [
+      {
+        "arch": "MANUAL_CONVENTIONAL",
+        "dcapex": 0.0,
+        "dknown_opex": 0.0,
+        "dlifecycle": 0.0
+      },
+      {
+        "arch": "AUTOMATED_CONVENTIONAL",
+        "dcapex": 1800000.0,
+        "dknown_opex": 120452.0,
+        "dlifecycle": 2608242.724665297
+      },
+      {
+        "arch": "MRT_DOMINANT",
+        "dcapex": 4746000.0,
+        "dknown_opex": 3970692.95125,
+        "dlifecycle": 31389672.91309053
+      },
+      {
+        "arch": "HYBRID_MRT",
+        "dcapex": 856500.0,
+        "dknown_opex": 5162251.0125,
+        "dlifecycle": 35495624.49564287
+      }
+    ],
+    "physical_effect_deltas": [
+      {
+        "radionuclide": "F-18",
+        "dtransport_min": -1.9361111111111111,
+        "dretained": 0.009619184079034726,
+        "dreq_upstream_mbq": -5.746133228802307
+      },
+      {
+        "radionuclide": "C-11",
+        "dtransport_min": -1.9361111111111111,
+        "dretained": 0.018101725779680333,
+        "dreq_upstream_mbq": -134.04498367167253
+      },
+      {
+        "radionuclide": "N-13",
+        "dtransport_min": -1.9361111111111111,
+        "dretained": 0.009634641756552306,
+        "dreq_upstream_mbq": -1393.711676742203
+      },
+      {
+        "radionuclide": "O-15",
+        "dtransport_min": -1.9361111111111111,
+        "dretained": 1.6877961546869302e-06,
+        "dreq_upstream_mbq": -295025992.8996536
+      },
+      {
+        "radionuclide": "Ga-68",
+        "dtransport_min": -1.9361111111111111,
+        "dretained": 0.013442239989460592,
+        "dreq_upstream_mbq": -5.4081464578633245
+      }
+    ]
+  }
+}
