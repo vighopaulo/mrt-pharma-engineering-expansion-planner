@@ -331,6 +331,7 @@ def compute_inbound_room_guideway_extension(
     already_serviced_floors: frozenset[int],
     assumptions: PlannerAssumptions,
     network_assumptions: SharedNetworkAssumptions,
+    guideway_capex_per_m_override: float | None = None,
 ) -> InboundRoomGuidewayExtension:
     floor = geometry.room_floor_by_id[room_id]
     (dist_by_room, vert_by_room, _trans, _manual, _mrt, _edges) = _route_metrics_for_rooms(geometry, (room_id,), assumptions)
@@ -356,7 +357,15 @@ def compute_inbound_room_guideway_extension(
         # H->V and one V->H physical transition (validated transition semantics).
         incremental_transitions = 2
 
-    guideway_capex_per_m = assumptions.mrt_guideway_capex_per_m
+    # RUNTIME MIGRATION: the CURRENT MRT/Hybrid runtime passes the canonical
+    # $2,500/m two-way guideway rate via `guideway_capex_per_m_override`. When
+    # None (legacy inbound-room program + all existing callers/tests), the
+    # unchanged heavy `assumptions.mrt_guideway_capex_per_m` is used exactly as
+    # before -- this override never affects the preserved legacy scope.
+    guideway_capex_per_m = (
+        assumptions.mrt_guideway_capex_per_m if guideway_capex_per_m_override is None
+        else guideway_capex_per_m_override
+    )
     incremental_capex = (
         (incremental_horizontal + incremental_vertical) * guideway_capex_per_m
         + incremental_transitions * network_assumptions.vertical_transition_capex

@@ -610,3 +610,50 @@ MRT_MAINTENANCE_MODEL_STATUS = (
 """Section 22: maintenance provenance. Reuses the existing controlled 10%/year
 Light-MRT maintenance authority (now on the canonical $2,000 carrier CapEx);
 never fabricated as a calibrated number; never merged with electricity."""
+
+
+# ===========================================================================
+# 18. RUNTIME CONFIG (Runtime Migration) -- the explicit seam the CURRENT MRT/
+#     Hybrid/Part 3E runtime path consumes so it prices the canonical compact
+#     MRT hardware, NEVER the preserved heavy PlannerAssumptions defaults.
+# ===========================================================================
+
+@dataclass(frozen=True)
+class MrtRuntimeConfig:
+    """Explicit current-MRT runtime economic configuration threaded into the
+    four-architecture MRT/Hybrid evaluators (and thereby the Part 3E bouquet).
+
+    RUNTIME MIGRATION rationale: the heavy MRT economics
+    (`models.PlannerAssumptions.mrt_guideway_capex_per_m`=$5,000/m,
+    `.mrt_carrier_capex_per_installed_unit`=$10,000, `.mrt_infrastructure_capex`
+    =$6,000,000 flat base; `operational_day_orchestrator.compute_carrier_fleet_capex`
+    hard-coded $10,000/$1,000) are consumed by MANY unrelated/legacy modules
+    (equal_budget, optimization, architecture_optimizer, infrastructure_capex,
+    shared_network, ui_logic, reporting_engine). They must NOT be globally
+    rewritten. Instead the CURRENT runtime path passes THIS config so it prices
+    guideway/carrier/base from the canonical compact MRT authority, while every
+    legacy consumer keeps reading the untouched heavy PlannerAssumptions.
+
+    `None` anywhere this is threaded == preserve exact heavy back-compat
+    behaviour (legacy callers and existing default-arg tests are unaffected)."""
+
+    guideway_capex_per_m: float = TWO_WAY_GUIDEWAY_CAPEX_USD_PER_M          # $2,500/m two-way
+    carrier_capex_per_installed_unit_usd: float = CARRIER_CAPEX_USD          # $2,000/carrier
+    include_flat_infrastructure_base: bool = False                          # canonical has NO $6M flat base
+    max_gross_moving_mass_kg: float = MAX_GROSS_MOVING_MASS_KG               # 5.0 kg gross governor
+    max_straight_speed_m_per_s: float = MAX_STRAIGHT_SPEED_M_PER_S           # 10 m/s straight cruise
+    carrier_maintenance_fraction_per_year: float = 0.10                     # -> $200/carrier-yr on $2,000
+    config_name: str = CANONICAL_CONFIG_NAME
+    provenance: str = "CANONICAL_COMPACT_MRT (mrt_canonical_configuration) -- CONTROLLED_ENGINEERING_ASSUMPTION, not manufacturer-calibrated"
+
+
+def canonical_runtime_config() -> MrtRuntimeConfig:
+    """The single canonical current-MRT runtime config the four-architecture
+    runtime should thread. Reads the canonical authority values -- never a
+    second literal."""
+    return MrtRuntimeConfig()
+
+
+CANONICAL_MRT_RUNTIME_CONFIG = MrtRuntimeConfig()
+"""Shared canonical runtime-config instance for the current MRT/Hybrid/Part 3E
+runtime path."""

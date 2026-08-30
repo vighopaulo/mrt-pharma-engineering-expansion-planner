@@ -100,6 +100,15 @@ from spatial_benchmark import (
     run_native_pathway_pipeline,
 )
 from clinical_resource_identity import resource_id_for_index
+from mrt_canonical_configuration import (
+    MrtRuntimeConfig,
+    CONTROLLED_ELECTRICITY_TARIFF_USD_PER_KWH,
+    compute_mrt_annual_electricity,
+)
+# NOTE: `mrt_transport_energy_maintenance_authority` is imported lazily inside
+# `_build_hybrid_opex_result` (not at module top) to avoid a circular import:
+# that module imports `shared_mrt_multistream_authority`, which in turn imports
+# `HybridEvaluationResult`/`HybridPatientTrace` from THIS module.
 from inbound_patient_program import compute_inbound_room_guideway_extension
 from operating_day_scheduler import DEDICATED_ROOM_RESOURCE_INDEX
 from radiopharm_workflow_staffing import RadiopharmWorkflowStaffingResult, compute_radiopharm_workflow_staffing
@@ -319,6 +328,8 @@ def _build_hybrid_opex_result(
     mrt_transitions: int,
     staffing: RadiopharmWorkflowStaffingResult,
     assumptions: PlannerAssumptions,
+    mrt_runtime_config: "MrtRuntimeConfig | None" = None,
+    mrt_carrier_km_per_day: float = 0.0,
 ) -> InfrastructureOpexResult:
     """Section 3-20: decomposition/classification of every Hybrid OPEX term,
     reused verbatim from `conv_config`/`mrt_config` (the SAME
@@ -363,7 +374,72 @@ def _build_hybrid_opex_result(
     Cyclotron/Other energy, Consumables, Production variable cost, MRT base/
     endpoint annual O&M, Guideway/vertical-transition maintenance, MRT support
     labor.
+
+    RUNTIME MIGRATION (SPEED & OPEX): when `mrt_runtime_config` is supplied
+    (the CURRENT MRT/Hybrid/Part 3E runtime always passes the canonical
+    config; every legacy caller/test passes None), the MRT ENERGY and
+    MAINTENANCE streams are sourced from the canonical authorities instead of
+    the heavy legacy `PlannerAssumptions` values, WITHOUT merging the distinct
+    streams and WITHOUT zero-filling any NOT_CALIBRATED component:
+      - ENERGY (single "MRT energy" row, category ENERGY): motion electricity
+        is computed by `mrt_canonical_configuration.compute_mrt_annual_electricity`
+        (E=P*t) from the REAL workload-derived `mrt_carrier_km_per_day` (round-
+        trip carrier-km from the actual scheduled MRT missions -- never
+        fabricated). Standby/controls/cooling remain NOT_CALIBRATED and are
+        NEVER $0-filled (they are simply not added). The canonical MOTION kWh
+        replaces the static per-scenario `annual_mrt_energy_kwh` (=25,000) as
+        the generic-fallback kWh for this row; the tariff stays separate.
+      - MAINTENANCE (category MRT, kept distinct from energy):
+        "MRT carrier maintenance" unit cost = canonical
+        `compute_mrt_carrier_annual_maintenance_usd` per-unit (=10% x $2,000 =
+        $200/carrier-yr, replacing heavy $500); "Guideway annual maintenance"
+        per-m-year = canonical guideway CapEx ($2,500/m) x canonical guideway
+        maintenance fraction (10%) = $250/m-yr (replacing the heavy $5,000/m x
+        3% fallback). "MRT carrier allocated electricity" (a THIRD, distinct
+        electricity-adjacent term) is deliberately left UNCHANGED.
+      When `mrt_runtime_config is None`, every MRT energy/maintenance term is
+      byte-for-byte the prior heavy behaviour.
     """
+    # RUNTIME MIGRATION (OPEX): canonical MRT energy + maintenance sourcing.
+    # None everywhere -> heavy legacy back-compat (existing default-arg tests).
+    _mrt_energy_kwh_override: float | None = None
+    _mrt_carrier_maintenance_per_unit_override: float | None = None
+    _mrt_guideway_maintenance_per_m_year_override: float | None = None
+    _mrt_energy_electricity: "object | None" = None
+    if mrt_active and mrt_runtime_config is not None:
+        # Lazy import (breaks the shared_mrt_multistream_authority <-> this-module
+        # circular import; see module-top note).
+        from mrt_transport_energy_maintenance_authority import (
+            MRT_GUIDEWAY_MAINTENANCE_FRACTION_PER_YEAR,
+            compute_mrt_carrier_annual_maintenance_usd,
+        )
+        # ENERGY: canonical motion electricity from the REAL carrier-km/day
+        # workload (standby/controls/cooling left NOT_CALIBRATED -> not added,
+        # never $0-filled). Physical kWh is kept separate from the tariff.
+        _mrt_energy_electricity = compute_mrt_annual_electricity(
+            carrier_km_per_day=float(mrt_carrier_km_per_day),
+            operating_days_per_year=int(assumptions.operating_days_per_year),
+            active_power_case="BASE",
+            standby_kwh_per_day=None,
+            controls_kwh_per_day=None,
+            cooling_kwh_per_day=None,
+            tariff_usd_per_kwh=CONTROLLED_ELECTRICITY_TARIFF_USD_PER_KWH,
+        )
+        _mrt_energy_kwh_override = float(_mrt_energy_electricity.total_known_kwh_per_year)
+        # MAINTENANCE (distinct stream): carrier per-unit from canonical authority.
+        _mrt_carrier_maintenance_per_unit_override = compute_mrt_carrier_annual_maintenance_usd(
+            carrier_count=1,
+            carrier_capex_usd=mrt_runtime_config.carrier_capex_per_installed_unit_usd,
+            fraction_per_year=mrt_runtime_config.carrier_maintenance_fraction_per_year,
+        )
+        # MAINTENANCE (distinct stream): guideway $/m-year from canonical guideway
+        # CapEx x canonical guideway maintenance fraction (>0 -> used directly,
+        # never the heavy $5,000/m x 3% fraction-of-capex fallback).
+        _mrt_guideway_maintenance_per_m_year_override = (
+            float(mrt_runtime_config.guideway_capex_per_m)
+            * float(MRT_GUIDEWAY_MAINTENANCE_FRACTION_PER_YEAR.active_value)
+        )
+
     energy_ledger_input = PathwayEnergyLedgerInput(
         cyclotron=build_ledger_energy_component(
             component_name="Cyclotron energy", calculated_energy_kwh=0.0, calibration_status="NOT_CALIBRATED",
@@ -380,7 +456,12 @@ def _build_hybrid_opex_result(
         mrt=(
             build_ledger_energy_component(
                 component_name="MRT energy", calculated_energy_kwh=0.0, calibration_status="NOT_CALIBRATED",
-                generic_fallback_annual_kwh=mrt_config.annual_mrt_energy_kwh, uncalibrated_state_minutes=1440.0,
+                generic_fallback_annual_kwh=(
+                    _mrt_energy_kwh_override
+                    if _mrt_energy_kwh_override is not None
+                    else mrt_config.annual_mrt_energy_kwh
+                ),
+                uncalibrated_state_minutes=1440.0,
             )
             if mrt_active else None
         ),
@@ -434,12 +515,31 @@ def _build_hybrid_opex_result(
             operated_guideway_length_m=mrt_guideway_length_m,
             operated_vertical_transitions=mrt_transitions,
             guideway_capex_per_m=mrt_config.guideway_capex_per_m,
-            guideway_maintenance_per_m_year=mrt_config.guideway_maintenance_per_m_year,
+            # MAINTENANCE stream (canonical when runtime config supplied): $/m-year
+            # override (>0 -> used directly) else heavy fraction-of-capex fallback.
+            guideway_maintenance_per_m_year=(
+                _mrt_guideway_maintenance_per_m_year_override
+                if _mrt_guideway_maintenance_per_m_year_override is not None
+                else mrt_config.guideway_maintenance_per_m_year
+            ),
             mrt_base_annual_opex_per_unit=mrt_config.mrt_base_annual_opex_per_unit,
             vertical_transition_annual_opex_per_unit=mrt_config.vertical_transition_annual_opex_per_unit,
             building_connection_annual_opex_per_unit=mrt_config.building_connection_annual_opex_per_unit,
-            annual_mrt_energy_kwh=mrt_config.annual_mrt_energy_kwh,
-            electricity_cost_per_kwh=mrt_config.electricity_cost_per_kwh,
+            # ENERGY stream (canonical motion kWh when runtime config supplied,
+            # else static per-scenario kWh). Kept a SINGLE "MRT energy" row.
+            annual_mrt_energy_kwh=(
+                _mrt_energy_kwh_override
+                if _mrt_energy_kwh_override is not None
+                else mrt_config.annual_mrt_energy_kwh
+            ),
+            electricity_cost_per_kwh=(
+                CONTROLLED_ELECTRICITY_TARIFF_USD_PER_KWH
+                if mrt_runtime_config is not None
+                else mrt_config.electricity_cost_per_kwh
+            ),
+            # MAINTENANCE stream (canonical carrier maintenance per-unit when
+            # runtime config supplied; None -> heavy PlannerAssumptions $500/unit).
+            mrt_carrier_maintenance_opex_per_installed_unit_year=_mrt_carrier_maintenance_per_unit_override,
             mrt_support_staff_fte=mrt_config.mrt_support_staff_fte,
             mrt_support_staff_loaded_cost_per_fte=mrt_config.mrt_support_staff_loaded_cost_per_fte,
             assumptions=assumptions,
@@ -483,9 +583,18 @@ def evaluate_hybrid_zone_candidate(
     network_assumptions: SharedNetworkAssumptions,
     seed: int = 1,
     retention_threshold: float | None = None,
+    mrt_runtime_config: "MrtRuntimeConfig | None" = None,
 ) -> HybridEvaluationResult:
     """Evaluate one Hybrid zone-assignment candidate through ONE joint
-    Conventional+MRT clinical schedule (see module docstring)."""
+    Conventional+MRT clinical schedule (see module docstring).
+
+    RUNTIME MIGRATION: `mrt_runtime_config` (None by default) lets the CURRENT
+    four-architecture MRT/Hybrid runtime price the MRT hardware from the
+    canonical compact MRT authority (guideway $2,500/m two-way, carrier $2,000,
+    NO $6,000,000 flat base). When None -- every legacy caller and existing
+    default-arg test -- the exact heavy `assumptions.*` behaviour is preserved
+    unchanged (mrt_guideway_capex_per_m=$5,000, mrt_carrier_capex_per_installed_unit
+    =$10,000, mrt_infrastructure_capex=$6,000,000)."""
     effective_threshold = (
         float(assumptions.minimum_release_to_administration_retention_fraction) if retention_threshold is None else float(retention_threshold)
     )
@@ -527,8 +636,16 @@ def evaluate_hybrid_zone_candidate(
         demand=demand, pathway_layout=layout, production_basis=production_basis, assumptions=assumptions, seed=seed,
     )
     conv_result = run_native_pathway_pipeline(conv_request, pathway="Conventional")
+    # RUNTIME MIGRATION (SPEED): the MRT pathway's STRAIGHT/HORIZONTAL route-time
+    # cruise speed is sourced from the canonical runtime config (10.0 m/s) when
+    # present; None -> heavy legacy assumptions.mrt_horizontal_speed_m_per_s. The
+    # Conventional request above is deliberately left unchanged (fairness: Manual
+    # / Automated Conventional route physics are untouched).
     mrt_request = _build_request(
         demand=demand, pathway_layout=layout, production_basis=production_basis, assumptions=assumptions, seed=seed,
+        mrt_straight_speed_m_per_s_override=(
+            mrt_runtime_config.max_straight_speed_m_per_s if mrt_runtime_config is not None else None
+        ),
     )
     mrt_result = run_native_pathway_pipeline(mrt_request, pathway="MRT")
 
@@ -693,10 +810,14 @@ def evaluate_hybrid_zone_candidate(
     mrt_transitions = 0
     mrt_guideway_capex = 0.0
     cumulative_mrt_floors: set[int] = set()
+    # RUNTIME MIGRATION: canonical guideway unit cost ($2,500/m two-way) when a
+    # runtime config is supplied; else None -> heavy assumptions.mrt_guideway_capex_per_m.
+    _guideway_override = None if mrt_runtime_config is None else mrt_runtime_config.guideway_capex_per_m
     for room_id in sorted(mrt_rooms):
         extension = compute_inbound_room_guideway_extension(
             geometry=geometry, room_id=room_id, already_serviced_floors=frozenset(cumulative_mrt_floors),
             assumptions=assumptions, network_assumptions=network_assumptions,
+            guideway_capex_per_m_override=_guideway_override,
         )
         mrt_horizontal += extension.incremental_horizontal_m
         mrt_vertical += extension.incremental_vertical_m
@@ -711,9 +832,21 @@ def evaluate_hybrid_zone_candidate(
     )
     cyclotron_capex = assumptions.cyclotron_purchase_capex + assumptions.cyclotron_installation_capex
     conventional_capex = 125_000.0 if conv_rooms else 0.0
-    mrt_base_capex = assumptions.mrt_infrastructure_capex if mrt_rooms else 0.0
+    # RUNTIME MIGRATION: canonical compact MRT has NO $6,000,000 flat base
+    # (include_flat_infrastructure_base=False) and prices carriers at $2,000.
+    # When mrt_runtime_config is None, the heavy $6M base + $10,000/carrier are
+    # preserved exactly (legacy back-compat).
+    if mrt_runtime_config is None:
+        mrt_base_capex = assumptions.mrt_infrastructure_capex if mrt_rooms else 0.0
+        mrt_carrier_unit_capex = assumptions.mrt_carrier_capex_per_installed_unit
+    else:
+        mrt_base_capex = (
+            assumptions.mrt_infrastructure_capex
+            if (mrt_rooms and mrt_runtime_config.include_flat_infrastructure_base) else 0.0
+        )
+        mrt_carrier_unit_capex = mrt_runtime_config.carrier_capex_per_installed_unit_usd
     mrt_endpoint_capex = len(mrt_rooms) * assumptions.endpoint_capex
-    mrt_carrier_capex = mrt_carriers * assumptions.mrt_carrier_capex_per_installed_unit
+    mrt_carrier_capex = mrt_carriers * mrt_carrier_unit_capex
     total_capex = (
         scanner_uptake_injection_capex + cyclotron_capex + conventional_capex
         + mrt_base_capex + mrt_endpoint_capex + mrt_carrier_capex + mrt_guideway_capex
@@ -729,6 +862,18 @@ def evaluate_hybrid_zone_candidate(
         operating_days_per_year=int(assumptions.operating_days_per_year),
     )
 
+    # RUNTIME MIGRATION (OPEX energy): REAL workload-derived MRT carrier-km/day
+    # for the canonical motion-electricity authority (E=P*t). Each scheduled MRT
+    # job's one-way route length is the sum of its route segment lengths; the
+    # carrier returns (round trip), so daily carrier-km = 2 * sum(one-way m)/1000.
+    # No fabrication: derived from the ACTUAL scheduled MRT missions for the day.
+    mrt_carrier_km_per_day = 0.0
+    if mrt_transport_schedule is not None:
+        one_way_m = sum(
+            float(segment.length_m) for job in mrt_transport_schedule.jobs for segment in job.route
+        )
+        mrt_carrier_km_per_day = 2.0 * one_way_m / 1000.0
+
     # ONE authoritative OPEX ledger (this build, sections 5-6/41): REPLACES
     # the old bespoke scanner_uptake_injection_opex/conv_transport_labor_opex/
     # mrt_carrier_opex/production_labor_opex/total_annual_opex formula, which
@@ -738,6 +883,8 @@ def evaluate_hybrid_zone_candidate(
         conv_active=bool(conv_rooms), mrt_active=bool(mrt_rooms), conv_transporters=conv_transporters,
         mrt_carriers=mrt_carriers, mrt_endpoint_count=len(mrt_rooms), mrt_guideway_length_m=mrt_horizontal + mrt_vertical,
         mrt_transitions=mrt_transitions, staffing=staffing, assumptions=assumptions,
+        mrt_runtime_config=mrt_runtime_config,
+        mrt_carrier_km_per_day=mrt_carrier_km_per_day,
     )
     production_labor_opex = next(row.annual_cost for row in opex_result.ledger if row.component == "Production labor")
 

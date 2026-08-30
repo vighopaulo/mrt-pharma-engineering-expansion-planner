@@ -734,7 +734,12 @@ def test_shared_carrier_fleet_sizing(baseline):
 
 
 def test_operational_only_mrt_carrier_shortage(baseline):
-    constrained = evaluate_mrt_dominant_operational_only_carrier_shortage(baseline, installed_carriers=7)
+    # MRT RUNTIME MIGRATION: the canonical 5 kg mass governor now routes bulky
+    # CLEAN_LINEN (13.5 kg fully loaded) to Manual fallback instead of MRT, so
+    # the MRT-assigned workload is lighter and a small fleet clears the queue
+    # sooner. A genuinely-insufficient fixed fleet is now installed_carriers=1
+    # (93 late), which still proves degraded service is never auto-expanded away.
+    constrained = evaluate_mrt_dominant_operational_only_carrier_shortage(baseline, installed_carriers=1)
     sufficient = evaluate_mrt_dominant_operational_only_carrier_shortage(baseline, installed_carriers=50)
     assert constrained.late + constrained.unmet > 0  # genuine degraded service under a fixed, insufficient fleet
     assert sufficient.late == 0 and sufficient.unmet == 0  # never auto-expanded, but sufficient fleet clears the queue
@@ -1106,11 +1111,30 @@ class TestBuild2RLightMrtDesignPointCorrection:
         # physical guideway/floors, since $6M flat + $350k/transition are dropped.
         assert light.architecture_specific_capex < heavy.architecture_specific_capex
 
-    def test_heavy_mrt_configuration_remains_preserved(self, baseline):
-        """evaluate_mrt_dominant (heavy) must still exist and be unaffected."""
-        heavy = evaluate_mrt_dominant(baseline, development_context="RETROFIT", study_scope="CAPITAL_PLANNING")
-        assert heavy.architecture == "MRT_DOMINANT"
-        assert heavy.architecture_specific_capex > 10_000_000.0  # unchanged, still the heavy figure
+    def test_current_mrt_dominant_uses_canonical_not_heavy(self, baseline):
+        """MRT RUNTIME MIGRATION: evaluate_mrt_dominant is now the CURRENT
+        canonical bouquet path (guideway $2,500/m two-way, carrier $2,000, NO
+        $6,000,000 flat base) -- it must NO LONGER return the old heavy
+        >$10,000,000 figure. The heavy MRT configuration is preserved separately
+        (models.PlannerAssumptions / operational_day_orchestrator), not inside
+        this evaluator."""
+        current = evaluate_mrt_dominant(baseline, development_context="RETROFIT", study_scope="CAPITAL_PLANNING")
+        assert current.architecture == "MRT_DOMINANT"
+        # Current canonical economics are far below the old heavy $11.48M figure.
+        assert current.architecture_specific_capex < 10_000_000.0
+        assert current.architecture_specific_capex > 0.0
+
+    def test_heavy_configuration_still_preserved_at_its_own_authority(self):
+        """The heavy MRT configuration is NOT deleted -- it remains for legacy
+        consumers at its own authority, untouched by the runtime migration."""
+        from models import PlannerAssumptions
+        import operational_day_orchestrator as ody
+        heavy = PlannerAssumptions()
+        assert heavy.mrt_guideway_capex_per_m == 5_000.0
+        assert heavy.mrt_carrier_capex_per_installed_unit == 10_000.0
+        assert heavy.mrt_infrastructure_capex == 6_000_000.0
+        assert ody.NUCLEAR_SHIELDED_CARRIER_CAPEX_USD == 10_000.0
+        assert ody.GENERAL_LIGHT_CARRIER_CAPEX_USD == 1_000.0
 
     def test_demand_identical_across_light_mrt_and_heavy_mrt(self, baseline):
         heavy = evaluate_mrt_dominant(baseline, development_context="RETROFIT", study_scope="CAPITAL_PLANNING")

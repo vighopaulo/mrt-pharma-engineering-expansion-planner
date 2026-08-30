@@ -130,6 +130,7 @@ from dedicated_rp_pts_authority import (
     DedicatedRpPtsNuclearEvaluation,
 )
 from editable_default_authority import RP_PTS_OPERATING_SPEED_M_PER_S, RP_PTS_SHIELDED_CARRIER_MASS_LIMIT_KG
+from mrt_canonical_configuration import MrtRuntimeConfig, CANONICAL_MRT_RUNTIME_CONFIG
 import canonical_spatial_authority as _canonical_spatial_authority
 import campus_retrofit_benchmark as _campus_retrofit_benchmark
 
@@ -1039,9 +1040,16 @@ def _nuclear_result(
     mrt_floors: frozenset[int],
     demand: int | None = None,
     clinical_resources: ClinicalResourceInputs | None = None,
+    mrt_runtime_config: "MrtRuntimeConfig | None" = None,
 ) -> HybridEvaluationResult:
     """Section 38/94: ONE nuclear evaluation authority for all 4
     architectures -- MRT floor coverage is the only thing that varies.
+
+    RUNTIME MIGRATION: `mrt_runtime_config` (None default = heavy back-compat
+    for any direct caller) is forwarded to `evaluate_hybrid_zone_candidate` so
+    the CURRENT MRT/Hybrid runtime prices MRT hardware from the canonical
+    compact MRT authority. The four-architecture MRT/Hybrid evaluators pass
+    the canonical runtime config; nothing else changes.
     Returns a result whose `patient_traces` carry validated
     `canonical_patient_id` values (section 3/75) -- CANONICAL_WHOLE_ONCOLOGY
     execution, never the LEGACY_COMPONENT_BENCHMARK synthetic-only path.
@@ -1075,6 +1083,7 @@ def _nuclear_result(
     raw_result = evaluate_hybrid_zone_candidate(
         geometry=baseline.geometry, candidate=candidate, demand=resolved_demand, production_basis=baseline.production_basis,
         assumptions=baseline.assumptions, network_assumptions=baseline.network_assumptions,
+        mrt_runtime_config=mrt_runtime_config,
     )
     adapted_result, mapping = attach_canonical_patient_ids(raw_result, canonical_subset)
     validate_canonical_execution(mapping)
@@ -2636,10 +2645,24 @@ def _general_mrt_missions_and_containers(baseline: WholeOncologyBaseline, *, mrt
         fallback_cart_capacity = DEFAULT_LINEN_CART.payload_capacity if stream == "CLEAN_LINEN" else DEFAULT_GENERAL_CART.payload_capacity
         stream_demands = tuple(d for d in baseline.corrected_demands if d.stream == stream)
         loads = consolidate_demands_into_loads_with_window(demands=stream_demands, max_quantity_per_load=fallback_cart_capacity, consolidation_window_minutes=90.0)
+        # RUNTIME MIGRATION (canonical 5 kg mass governor, Sec 8-9/19): every
+        # MRT-assigned modeled stream is passed through the EXISTING per-stream
+        # fully-loaded-mass authority (`evaluate_light_mrt_stream_compatibility`,
+        # whose ceiling is bound to the canonical MAX_GROSS_MOVING_MASS_KG=5.0).
+        # A stream whose fully-loaded moving mass exceeds 5.0 kg is
+        # UNSUPPORTED_BY_LIGHT_MRT and is ALWAYS routed to Manual fallback,
+        # never MRT, regardless of ward coverage. This is a GENERAL mass gate,
+        # not a name check: CLEAN_LINEN (13.5 kg) falls out as a consequence of
+        # its mass, and any modeled stream that ever exceeded 5 kg would too.
+        # No per-mission masses are fabricated -- the per-stream figures are the
+        # repository's existing controlled assumptions. MRT is never enlarged;
+        # no robot/AGV/AMR is auto-inserted -- the default fallback is MANUAL.
+        _compat = evaluate_light_mrt_stream_compatibility(stream)
+        canonically_excluded = not _compat.compatible
         mrt_missions = []
         fallback_missions = []
         for load in loads:
-            covered = mrt_ward_coverage is None or load.destination in mrt_ward_coverage
+            covered = (mrt_ward_coverage is None or load.destination in mrt_ward_coverage) and not canonically_excluded
             if covered:
                 mrt_missions.extend(convert_load_to_shared_mrt_missions(load=load, subtype=subtype))
             else:
@@ -2672,7 +2695,16 @@ def _evaluate_mrt_style_architecture(
     study_scope: StudyScope, mrt_floors: frozenset[int], hybrid_fallback_mode: HybridFallbackMode = "MANUAL_CONVENTIONAL",
     nuclear_demand_override: int | None = None,
 ) -> ArchitectureResult:
-    nuclear = _nuclear_result(baseline, mrt_floors=mrt_floors, demand=nuclear_demand_override)
+    # RUNTIME MIGRATION: the CURRENT four-architecture MRT/Hybrid runtime prices
+    # MRT hardware from the canonical compact MRT authority (guideway $2,500/m
+    # two-way, carrier $2,000, NO $6,000,000 flat base) -- never the preserved
+    # heavy PlannerAssumptions/heavy-fleet defaults, which remain intact for
+    # legacy consumers. Both the embedded nuclear CapEx (via _nuclear_result ->
+    # evaluate_hybrid_zone_candidate) and the incremental fleet CapEx (via
+    # compute_shared_mrt_economic_result -> compute_heterogeneous_shared_carrier_fleet)
+    # consume this single canonical runtime config.
+    runtime_config = CANONICAL_MRT_RUNTIME_CONFIG
+    nuclear = _nuclear_result(baseline, mrt_floors=mrt_floors, demand=nuclear_demand_override, mrt_runtime_config=runtime_config)
     mrt_ward_coverage = None if architecture == "MRT_DOMINANT" else frozenset(f"WARD-F{n}" for n in mrt_floors)
     missions_by_stream, fallback_missions_by_stream = _general_mrt_missions_and_containers(baseline, mrt_ward_coverage=mrt_ward_coverage)
 
@@ -2687,6 +2719,7 @@ def _evaluate_mrt_style_architecture(
         architecture=architecture, hybrid_result=nuclear, general_windows=windows, container_requirements=reqs,
         containers=containers_by_class, study_scope=study_scope, inpatient_count=baseline.census.inpatients, average_los_days=7.0,
         cyclotron_count=len(baseline.production_basis.cyclotron_fleet.assets),
+        mrt_runtime_config=runtime_config,
     )
 
     if hybrid_fallback_mode == "AUTOMATED_CONVENTIONAL" and fallback_missions_by_stream and any(fallback_missions_by_stream.values()):

@@ -772,10 +772,21 @@ def build_carrier_accessible_presentation(service_class: str) -> CarrierAccessib
     )
 
 
-def compute_carrier_fleet_capex(*, nuclear_count: int, general_light_count: int) -> float:
-    """C_fleet = N_nuclear * $10,000 + N_general_light * $1,000 -- NEVER
-    N_total * $10,000 unless every carrier is genuinely nuclear-shielded."""
-    return nuclear_count * NUCLEAR_SHIELDED_CARRIER_CAPEX_USD + general_light_count * GENERAL_LIGHT_CARRIER_CAPEX_USD
+def compute_carrier_fleet_capex(
+    *, nuclear_count: int, general_light_count: int,
+    nuclear_unit_capex_usd: float | None = None, general_light_unit_capex_usd: float | None = None,
+) -> float:
+    """C_fleet = N_nuclear * unit_nuclear + N_general_light * unit_general -- NEVER
+    N_total * $10,000 unless every carrier is genuinely nuclear-shielded.
+
+    RUNTIME MIGRATION: the unit-price overrides (both None by default) let the
+    CURRENT MRT/Hybrid runtime price the incremental fleet at the canonical
+    compact carrier CapEx ($2,000). When None (every legacy caller and existing
+    test) the preserved heavy $10,000/$1,000 hardware prices are used exactly
+    as before."""
+    unit_nuclear = NUCLEAR_SHIELDED_CARRIER_CAPEX_USD if nuclear_unit_capex_usd is None else nuclear_unit_capex_usd
+    unit_general = GENERAL_LIGHT_CARRIER_CAPEX_USD if general_light_unit_capex_usd is None else general_light_unit_capex_usd
+    return nuclear_count * unit_nuclear + general_light_count * unit_general
 
 
 @dataclass(frozen=True)

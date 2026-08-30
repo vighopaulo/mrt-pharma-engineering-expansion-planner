@@ -329,6 +329,12 @@ class NativeDecisionPipelineScenario:
     production_horizon_minutes: float | None = None
     batch_target_patients_per_batch: int = 20
     lifecycle_throughput_mode: Literal["actual_completed"] = "actual_completed"
+    # RUNTIME MIGRATION (SPEED): canonical STRAIGHT/HORIZONTAL route-time cruise
+    # speed override (m/s). When None (default) every legacy caller preserves the
+    # heavy PlannerAssumptions.mrt_horizontal_speed_m_per_s (3.0 m/s) unchanged.
+    # When set (canonical current-runtime = 10.0 m/s) only the horizontal segment
+    # time is affected; vertical (1.5 m/s) / curve / transition are NOT touched.
+    mrt_straight_speed_m_per_s_override: float | None = None
 
     def __post_init__(self) -> None:
         if not isinstance(self.project_name, str) or not self.project_name.strip():
@@ -1385,6 +1391,7 @@ def _build_schedule_for_batches(
         conventional_payload_capacity_doses=pathway_config.conventional_payload_capacity_doses,
         mrt_payload_capacity_doses=pathway_config.mrt_payload_capacity_doses,
         finalized_cycle_assignment_by_radionuclide=finalized_cycle_assignment_by_radionuclide,
+        mrt_straight_speed_m_per_s_override=request.mrt_straight_speed_m_per_s_override,
     )
     return build_production_clinical_schedule(schedule)
 

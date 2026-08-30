@@ -91,6 +91,9 @@ class _FakeMrtScenario:
     transport_minutes: float
     transport_minutes_source: str = "SCENARIO_SUPPLIED"
     planner_assumptions: object = None
+    # Mirrors ProductionClinicalScenario.mrt_straight_speed_m_per_s_override
+    # (RUNTIME MIGRATION SPEED seam); None preserves heavy horizontal speed.
+    mrt_straight_speed_m_per_s_override: float | None = None
 
 
 def test_mrt_live_route_profile_automatically_prefers_real_geometry_over_scenario_constant():

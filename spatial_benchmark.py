@@ -1379,6 +1379,7 @@ def _build_request(
     production_basis: ProductionBasis,
     assumptions: PlannerAssumptions,
     seed: int,
+    mrt_straight_speed_m_per_s_override: float | None = None,
 ) -> NativeDecisionPipelineScenario:
     conventional, mrt = _build_pathway_scenarios(pathway_layout)
     return NativeDecisionPipelineScenario(
@@ -1401,6 +1402,7 @@ def _build_request(
         production_horizon_minutes=BENCHMARK_PRODUCTION_END_MINUTE,
         batch_target_patients_per_batch=20,
         facility_engineering_model=pathway_layout.model_with_anchor,
+        mrt_straight_speed_m_per_s_override=mrt_straight_speed_m_per_s_override,
     )
 
 

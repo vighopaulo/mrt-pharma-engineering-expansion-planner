@@ -124,6 +124,13 @@ class ProductionClinicalScenario:
     through to OperatingDayInputs unchanged) -- see operating_day_scheduler.py
     ::OperatingDayInputs docstring. Empty (default) is byte-for-byte identical
     to prior behavior for every existing caller."""
+    # RUNTIME MIGRATION (SPEED): canonical STRAIGHT/HORIZONTAL route-time cruise
+    # speed override (m/s). When None (default) route resolution preserves the
+    # heavy planner_assumptions.mrt_horizontal_speed_m_per_s (3.0 m/s). When set
+    # (canonical current-runtime = 10.0 m/s) only the horizontal segment time is
+    # affected in _resolve_mrt_route_profile; vertical (1.5 m/s) / curve /
+    # transition / station times are NOT touched.
+    mrt_straight_speed_m_per_s_override: float | None = None
 
     def __post_init__(self) -> None:
         if self.pathway not in {"Conventional", "MRT"}:
@@ -750,7 +757,16 @@ def _resolve_mrt_route_profile(
         )
     )
 
-    horizontal_seconds = horizontal_distance_m / max(assumptions.mrt_horizontal_speed_m_per_s, 1e-12)
+    # RUNTIME MIGRATION (SPEED): the STRAIGHT/HORIZONTAL cruise speed is sourced
+    # from the canonical override when supplied (current MRT/Hybrid/Part3E
+    # runtime = 10.0 m/s), else the heavy legacy assumptions.mrt_horizontal_speed
+    # _m_per_s (3.0 m/s). Vertical / transition / station physics are UNCHANGED.
+    horizontal_speed = (
+        scenario.mrt_straight_speed_m_per_s_override
+        if scenario.mrt_straight_speed_m_per_s_override is not None
+        else assumptions.mrt_horizontal_speed_m_per_s
+    )
+    horizontal_seconds = horizontal_distance_m / max(horizontal_speed, 1e-12)
     vertical_seconds = vertical_distance_m / max(assumptions.mrt_vertical_speed_m_per_s, 1e-12)
     transition_seconds = hv_transition_count * assumptions.mrt_transition_time_seconds
     station_seconds = assumptions.mrt_station_loading_time_seconds + assumptions.mrt_station_unloading_time_seconds

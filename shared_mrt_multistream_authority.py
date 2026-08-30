@@ -41,7 +41,10 @@ from hybrid_optimization import HybridEvaluationResult, HybridPatientTrace
 from infrastructure_capex import CapexLedgerItem
 from infrastructure_opex import OpexLedgerItem, merge_shared_and_mode_specific_ledgers, recompute_ledger_totals
 from mrt_carrier_fleet import MrtCarrierFleetResult, resolve_mrt_carrier_fleet
-from mrt_canonical_configuration import TWO_WAY_GUIDEWAY_CAPEX_USD_PER_M as _CANONICAL_TWO_WAY_GUIDEWAY_CAPEX_PER_M
+from mrt_canonical_configuration import (
+    TWO_WAY_GUIDEWAY_CAPEX_USD_PER_M as _CANONICAL_TWO_WAY_GUIDEWAY_CAPEX_PER_M,
+    MrtRuntimeConfig,
+)
 
 # NOTE: `CarrierHardwareClass`/`CARRIER_HARDWARE_REGISTRY`/`compute_carrier_fleet_capex`
 # are the ESTABLISHED nuclear-shielded/general-light hardware-class authority,
@@ -482,6 +485,7 @@ class HeterogeneousSharedFleetResult:
 def compute_heterogeneous_shared_carrier_fleet(
     nuclear_windows: tuple[MrtMissionWindow, ...], general_windows: tuple[MrtMissionWindow, ...], *,
     baseline_nuclear_installed_carriers: int,
+    carrier_unit_capex_usd_override: float | None = None,
 ) -> HeterogeneousSharedFleetResult:
     """Section 16-18/37 CORRECTED: replaces the defective call pattern where
     `compute_shared_carrier_fleet(combined_windows, installed_carriers=hybrid_result.mrt_carriers,
@@ -546,10 +550,21 @@ def compute_heterogeneous_shared_carrier_fleet(
             carrier_energy_status="PROJECT_PLANNING_ASSUMPTION",
         )
 
+    # RUNTIME MIGRATION: price the incremental fleet at the canonical compact
+    # carrier CapEx ($2,000) when the current runtime supplies an override;
+    # otherwise the preserved heavy $10,000/$1,000 pricing is used. The SAME
+    # unit price is applied to both fleet_capex_total and the baseline so the
+    # incremental delta stays internally consistent.
     fleet_capex_total = compute_carrier_fleet_capex(
         nuclear_count=nuclear_fleet.installed_carriers, general_light_count=general_light_fleet.installed_carriers,
+        nuclear_unit_capex_usd=carrier_unit_capex_usd_override,
+        general_light_unit_capex_usd=carrier_unit_capex_usd_override,
     )
-    baseline_nuclear_only_capex = compute_carrier_fleet_capex(nuclear_count=baseline_nuclear_installed_carriers, general_light_count=0)
+    baseline_nuclear_only_capex = compute_carrier_fleet_capex(
+        nuclear_count=baseline_nuclear_installed_carriers, general_light_count=0,
+        nuclear_unit_capex_usd=carrier_unit_capex_usd_override,
+        general_light_unit_capex_usd=carrier_unit_capex_usd_override,
+    )
 
     return HeterogeneousSharedFleetResult(
         nuclear_fleet=nuclear_fleet, general_light_fleet=general_light_fleet,
@@ -879,6 +894,7 @@ def compute_shared_mrt_economic_result(
     general_windows: tuple[MrtMissionWindow, ...], container_requirements: tuple[ContainerRequirement, ...],
     containers: Mapping[str, MrtContainerClass], study_scope: StudyScope,
     inpatient_count: int | None = None, average_los_days: float | None = None, cyclotron_count: int = 0,
+    mrt_runtime_config: "MrtRuntimeConfig | None" = None,
 ) -> SharedMrtEconomicResult:
     """Section 69-71: combines the PROTECTED nuclear Hybrid/MRT-Dominant
     result with the general-logistics MRT layer -- nuclear CapEx/OPEX values
@@ -895,9 +911,14 @@ def compute_shared_mrt_economic_result(
     pass it, preserving prior behavior exactly."""
     from canonical_spatial_authority import MRT_VESTIBULE_CAPEX_USD
 
+    # RUNTIME MIGRATION: when the current runtime supplies a config, price the
+    # incremental carrier fleet at the canonical compact carrier CapEx; else
+    # (None) preserve the heavy $10,000/$1,000 pricing exactly.
+    _carrier_override = None if mrt_runtime_config is None else mrt_runtime_config.carrier_capex_per_installed_unit_usd
     nuclear_windows = tuple(w for w in (nuclear_trace_to_window(t) for t in hybrid_result.patient_traces) if w is not None)
     heterogeneous_fleet = compute_heterogeneous_shared_carrier_fleet(
         nuclear_windows, general_windows, baseline_nuclear_installed_carriers=hybrid_result.mrt_carriers,
+        carrier_unit_capex_usd_override=_carrier_override,
     )
     vestibule_capex = cyclotron_count * MRT_VESTIBULE_CAPEX_USD
 
