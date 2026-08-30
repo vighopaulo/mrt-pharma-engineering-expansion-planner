@@ -1,0 +1,804 @@
+{
+  "controlled_benchmark_register": [
+    {
+      "parameter": "FLOOR_AGV_LIGHT_LENGTH_M",
+      "transport_mode": "FLOOR_AGV_AMR",
+      "value": 0.7,
+      "unit": "m",
+      "provenance": "CONTROLLED_ENGINEERING_ASSUMPTION",
+      "rationale": "Compact clinical courier AMR planning envelope",
+      "editable": true,
+      "calibration_status": "CONTROLLED_ENGINEERING_ASSUMPTION",
+      "replacement_data_needed": "vendor/facility-confirmed value"
+    },
+    {
+      "parameter": "FLOOR_AGV_LIGHT_WIDTH_M",
+      "transport_mode": "FLOOR_AGV_AMR",
+      "value": 0.55,
+      "unit": "m",
+      "provenance": "CONTROLLED_ENGINEERING_ASSUMPTION",
+      "rationale": "Compact clinical courier AMR planning envelope",
+      "editable": true,
+      "calibration_status": "CONTROLLED_ENGINEERING_ASSUMPTION",
+      "replacement_data_needed": "vendor/facility-confirmed value"
+    },
+    {
+      "parameter": "FLOOR_AGV_LIGHT_HEIGHT_M",
+      "transport_mode": "FLOOR_AGV_AMR",
+      "value": 1.2,
+      "unit": "m",
+      "provenance": "CONTROLLED_ENGINEERING_ASSUMPTION",
+      "rationale": "Compact clinical courier AMR planning envelope",
+      "editable": true,
+      "calibration_status": "CONTROLLED_ENGINEERING_ASSUMPTION",
+      "replacement_data_needed": "vendor/facility-confirmed value"
+    },
+    {
+      "parameter": "FLOOR_AGV_LIGHT_PAYLOAD_KG",
+      "transport_mode": "FLOOR_AGV_AMR",
+      "value": 40.0,
+      "unit": "kg",
+      "provenance": "CONTROLLED_ENGINEERING_ASSUMPTION",
+      "rationale": "Secure-compartment clinical courier payload planning limit",
+      "editable": true,
+      "calibration_status": "CONTROLLED_ENGINEERING_ASSUMPTION",
+      "replacement_data_needed": "vendor/facility-confirmed value"
+    },
+    {
+      "parameter": "FLOOR_AGV_LIGHT_VOLUME_L",
+      "transport_mode": "FLOOR_AGV_AMR",
+      "value": 60.0,
+      "unit": "L",
+      "provenance": "CONTROLLED_ENGINEERING_ASSUMPTION",
+      "rationale": "Secure-compartment clinical courier volume planning limit",
+      "editable": true,
+      "calibration_status": "CONTROLLED_ENGINEERING_ASSUMPTION",
+      "replacement_data_needed": "vendor/facility-confirmed value"
+    },
+    {
+      "parameter": "FLOOR_AGV_LIGHT_SPEED_M_PER_S",
+      "transport_mode": "FLOOR_AGV_AMR",
+      "value": 1.2,
+      "unit": "m/s",
+      "provenance": "CONTROLLED_ENGINEERING_ASSUMPTION",
+      "rationale": "Indoor clinical AMR nominal travel-speed planning default",
+      "editable": true,
+      "calibration_status": "CONTROLLED_ENGINEERING_ASSUMPTION",
+      "replacement_data_needed": "vendor/facility-confirmed value"
+    },
+    {
+      "parameter": "FLOOR_AGV_LIGHT_LOAD_MIN",
+      "transport_mode": "FLOOR_AGV_AMR",
+      "value": 1.5,
+      "unit": "min",
+      "provenance": "CONTROLLED_ENGINEERING_ASSUMPTION",
+      "rationale": "Automated secure-compartment load planning default",
+      "editable": true,
+      "calibration_status": "CONTROLLED_ENGINEERING_ASSUMPTION",
+      "replacement_data_needed": "vendor/facility-confirmed value"
+    },
+    {
+      "parameter": "FLOOR_AGV_LIGHT_UNLOAD_MIN",
+      "transport_mode": "FLOOR_AGV_AMR",
+      "value": 1.5,
+      "unit": "min",
+      "provenance": "CONTROLLED_ENGINEERING_ASSUMPTION",
+      "rationale": "Automated secure-compartment unload planning default",
+      "editable": true,
+      "calibration_status": "CONTROLLED_ENGINEERING_ASSUMPTION",
+      "replacement_data_needed": "vendor/facility-confirmed value"
+    },
+    {
+      "parameter": "FLOOR_AGV_LIGHT_BATTERY_KWH",
+      "transport_mode": "FLOOR_AGV_AMR",
+      "value": 1.0,
+      "unit": "kWh",
+      "provenance": "CONTROLLED_ENGINEERING_ASSUMPTION",
+      "rationale": "Compact clinical AMR battery planning default",
+      "editable": true,
+      "calibration_status": "CONTROLLED_ENGINEERING_ASSUMPTION",
+      "replacement_data_needed": "vendor/facility-confirmed value"
+    },
+    {
+      "parameter": "FLOOR_AGV_LIGHT_USABLE_SOC_FRACTION",
+      "transport_mode": "FLOOR_AGV_AMR",
+      "value": 0.8,
+      "unit": "fraction",
+      "provenance": "CONTROLLED_ENGINEERING_ASSUMPTION",
+      "rationale": "SoC operating window (20-100%) planning default",
+      "editable": true,
+      "calibration_status": "CONTROLLED_ENGINEERING_ASSUMPTION",
+      "replacement_data_needed": "vendor/facility-confirmed value"
+    },
+    {
+      "parameter": "FLOOR_AGV_LIGHT_ENERGY_KWH_PER_KM",
+      "transport_mode": "FLOOR_AGV_AMR",
+      "value": 0.1,
+      "unit": "kWh/km",
+      "provenance": "CONTROLLED_ENGINEERING_ASSUMPTION",
+      "rationale": "Compact indoor AMR traction-energy planning default",
+      "editable": true,
+      "calibration_status": "CONTROLLED_ENGINEERING_ASSUMPTION",
+      "replacement_data_needed": "vendor/facility-confirmed value"
+    },
+    {
+      "parameter": "FLOOR_AGV_LIGHT_IDLE_KW",
+      "transport_mode": "FLOOR_AGV_AMR",
+      "value": 0.05,
+      "unit": "kW",
+      "provenance": "CONTROLLED_ENGINEERING_ASSUMPTION",
+      "rationale": "Onboard-controls/idle draw planning default",
+      "editable": true,
+      "calibration_status": "CONTROLLED_ENGINEERING_ASSUMPTION",
+      "replacement_data_needed": "vendor/facility-confirmed value"
+    },
+    {
+      "parameter": "FLOOR_AGV_LIGHT_CHARGE_KW",
+      "transport_mode": "FLOOR_AGV_AMR",
+      "value": 0.6,
+      "unit": "kW",
+      "provenance": "CONTROLLED_ENGINEERING_ASSUMPTION",
+      "rationale": "Contact/inductive clinical AMR charging planning default",
+      "editable": true,
+      "calibration_status": "CONTROLLED_ENGINEERING_ASSUMPTION",
+      "replacement_data_needed": "vendor/facility-confirmed value"
+    },
+    {
+      "parameter": "FLOOR_AGV_LIGHT_CHARGE_EFF",
+      "transport_mode": "FLOOR_AGV_AMR",
+      "value": 0.9,
+      "unit": "fraction",
+      "provenance": "CONTROLLED_ENGINEERING_ASSUMPTION",
+      "rationale": "Charging efficiency planning default",
+      "editable": true,
+      "calibration_status": "CONTROLLED_ENGINEERING_ASSUMPTION",
+      "replacement_data_needed": "vendor/facility-confirmed value"
+    },
+    {
+      "parameter": "FLOOR_AGV_LIGHT_VEHICLE_CAPEX",
+      "transport_mode": "FLOOR_AGV_AMR",
+      "value": 90000.0,
+      "unit": "USD/vehicle",
+      "provenance": "CONTROLLED_ENGINEERING_ASSUMPTION",
+      "rationale": "Clinical courier AMR unit planning benchmark",
+      "editable": true,
+      "calibration_status": "CONTROLLED_ENGINEERING_ASSUMPTION",
+      "replacement_data_needed": "vendor/facility-confirmed value"
+    },
+    {
+      "parameter": "FLOOR_AGV_LIGHT_MAINT_USD_YR",
+      "transport_mode": "FLOOR_AGV_AMR",
+      "value": 3500.0,
+      "unit": "USD/vehicle-yr",
+      "provenance": "CONTROLLED_ENGINEERING_ASSUMPTION",
+      "rationale": "Clinical AMR preventive+corrective maintenance planning default",
+      "editable": true,
+      "calibration_status": "CONTROLLED_ENGINEERING_ASSUMPTION",
+      "replacement_data_needed": "vendor/facility-confirmed value"
+    },
+    {
+      "parameter": "FLOOR_AGV_LIGHT_BATTERY_REPLACEMENT_USD",
+      "transport_mode": "FLOOR_AGV_AMR",
+      "value": 2000.0,
+      "unit": "USD/battery",
+      "provenance": "CONTROLLED_ENGINEERING_ASSUMPTION",
+      "rationale": "Li-ion pack replacement planning benchmark",
+      "editable": true,
+      "calibration_status": "CONTROLLED_ENGINEERING_ASSUMPTION",
+      "replacement_data_needed": "vendor/facility-confirmed value"
+    },
+    {
+      "parameter": "FLOOR_AGV_LIGHT_BATTERY_LIFE_YR",
+      "transport_mode": "FLOOR_AGV_AMR",
+      "value": 4.0,
+      "unit": "years",
+      "provenance": "CONTROLLED_ENGINEERING_ASSUMPTION",
+      "rationale": "Duty-cycle battery lifetime planning default",
+      "editable": true,
+      "calibration_status": "CONTROLLED_ENGINEERING_ASSUMPTION",
+      "replacement_data_needed": "vendor/facility-confirmed value"
+    },
+    {
+      "parameter": "FLOOR_AGV_HEAVY_LENGTH_M",
+      "transport_mode": "FLOOR_AGV_AMR",
+      "value": 1.3,
+      "unit": "m",
+      "provenance": "CONTROLLED_ENGINEERING_ASSUMPTION",
+      "rationale": "Tug/cart logistics AMR planning envelope",
+      "editable": true,
+      "calibration_status": "CONTROLLED_ENGINEERING_ASSUMPTION",
+      "replacement_data_needed": "vendor/facility-confirmed value"
+    },
+    {
+      "parameter": "FLOOR_AGV_HEAVY_WIDTH_M",
+      "transport_mode": "FLOOR_AGV_AMR",
+      "value": 0.8,
+      "unit": "m",
+      "provenance": "CONTROLLED_ENGINEERING_ASSUMPTION",
+      "rationale": "Tug/cart logistics AMR planning envelope",
+      "editable": true,
+      "calibration_status": "CONTROLLED_ENGINEERING_ASSUMPTION",
+      "replacement_data_needed": "vendor/facility-confirmed value"
+    },
+    {
+      "parameter": "FLOOR_AGV_HEAVY_HEIGHT_M",
+      "transport_mode": "FLOOR_AGV_AMR",
+      "value": 1.6,
+      "unit": "m",
+      "provenance": "CONTROLLED_ENGINEERING_ASSUMPTION",
+      "rationale": "Tug/cart logistics AMR planning envelope",
+      "editable": true,
+      "calibration_status": "CONTROLLED_ENGINEERING_ASSUMPTION",
+      "replacement_data_needed": "vendor/facility-confirmed value"
+    },
+    {
+      "parameter": "FLOOR_AGV_HEAVY_PAYLOAD_KG",
+      "transport_mode": "FLOOR_AGV_AMR",
+      "value": 300.0,
+      "unit": "kg",
+      "provenance": "CONTROLLED_ENGINEERING_ASSUMPTION",
+      "rationale": "Towed/onboard hospital-cart logistics payload planning limit",
+      "editable": true,
+      "calibration_status": "CONTROLLED_ENGINEERING_ASSUMPTION",
+      "replacement_data_needed": "vendor/facility-confirmed value"
+    },
+    {
+      "parameter": "FLOOR_AGV_HEAVY_VOLUME_L",
+      "transport_mode": "FLOOR_AGV_AMR",
+      "value": 900.0,
+      "unit": "L",
+      "provenance": "CONTROLLED_ENGINEERING_ASSUMPTION",
+      "rationale": "Hospital-cart logistics volume planning limit",
+      "editable": true,
+      "calibration_status": "CONTROLLED_ENGINEERING_ASSUMPTION",
+      "replacement_data_needed": "vendor/facility-confirmed value"
+    },
+    {
+      "parameter": "FLOOR_AGV_HEAVY_SPEED_M_PER_S",
+      "transport_mode": "FLOOR_AGV_AMR",
+      "value": 1.0,
+      "unit": "m/s",
+      "provenance": "CONTROLLED_ENGINEERING_ASSUMPTION",
+      "rationale": "Loaded logistics AMR nominal travel-speed planning default",
+      "editable": true,
+      "calibration_status": "CONTROLLED_ENGINEERING_ASSUMPTION",
+      "replacement_data_needed": "vendor/facility-confirmed value"
+    },
+    {
+      "parameter": "FLOOR_AGV_HEAVY_LOAD_MIN",
+      "transport_mode": "FLOOR_AGV_AMR",
+      "value": 4.0,
+      "unit": "min",
+      "provenance": "CONTROLLED_ENGINEERING_ASSUMPTION",
+      "rationale": "Cart hitch/load planning default",
+      "editable": true,
+      "calibration_status": "CONTROLLED_ENGINEERING_ASSUMPTION",
+      "replacement_data_needed": "vendor/facility-confirmed value"
+    },
+    {
+      "parameter": "FLOOR_AGV_HEAVY_UNLOAD_MIN",
+      "transport_mode": "FLOOR_AGV_AMR",
+      "value": 4.0,
+      "unit": "min",
+      "provenance": "CONTROLLED_ENGINEERING_ASSUMPTION",
+      "rationale": "Cart unhitch/unload planning default",
+      "editable": true,
+      "calibration_status": "CONTROLLED_ENGINEERING_ASSUMPTION",
+      "replacement_data_needed": "vendor/facility-confirmed value"
+    },
+    {
+      "parameter": "FLOOR_AGV_HEAVY_BATTERY_KWH",
+      "transport_mode": "FLOOR_AGV_AMR",
+      "value": 4.0,
+      "unit": "kWh",
+      "provenance": "CONTROLLED_ENGINEERING_ASSUMPTION",
+      "rationale": "Logistics tug battery planning default",
+      "editable": true,
+      "calibration_status": "CONTROLLED_ENGINEERING_ASSUMPTION",
+      "replacement_data_needed": "vendor/facility-confirmed value"
+    },
+    {
+      "parameter": "FLOOR_AGV_HEAVY_USABLE_SOC_FRACTION",
+      "transport_mode": "FLOOR_AGV_AMR",
+      "value": 0.8,
+      "unit": "fraction",
+      "provenance": "CONTROLLED_ENGINEERING_ASSUMPTION",
+      "rationale": "SoC operating window planning default",
+      "editable": true,
+      "calibration_status": "CONTROLLED_ENGINEERING_ASSUMPTION",
+      "replacement_data_needed": "vendor/facility-confirmed value"
+    },
+    {
+      "parameter": "FLOOR_AGV_HEAVY_ENERGY_KWH_PER_KM",
+      "transport_mode": "FLOOR_AGV_AMR",
+      "value": 0.4,
+      "unit": "kWh/km",
+      "provenance": "CONTROLLED_ENGINEERING_ASSUMPTION",
+      "rationale": "Loaded logistics AMR traction-energy planning default",
+      "editable": true,
+      "calibration_status": "CONTROLLED_ENGINEERING_ASSUMPTION",
+      "replacement_data_needed": "vendor/facility-confirmed value"
+    },
+    {
+      "parameter": "FLOOR_AGV_HEAVY_IDLE_KW",
+      "transport_mode": "FLOOR_AGV_AMR",
+      "value": 0.08,
+      "unit": "kW",
+      "provenance": "CONTROLLED_ENGINEERING_ASSUMPTION",
+      "rationale": "Onboard-controls/idle draw planning default",
+      "editable": true,
+      "calibration_status": "CONTROLLED_ENGINEERING_ASSUMPTION",
+      "replacement_data_needed": "vendor/facility-confirmed value"
+    },
+    {
+      "parameter": "FLOOR_AGV_HEAVY_CHARGE_KW",
+      "transport_mode": "FLOOR_AGV_AMR",
+      "value": 2.0,
+      "unit": "kW",
+      "provenance": "CONTROLLED_ENGINEERING_ASSUMPTION",
+      "rationale": "Logistics AMR charging planning default",
+      "editable": true,
+      "calibration_status": "CONTROLLED_ENGINEERING_ASSUMPTION",
+      "replacement_data_needed": "vendor/facility-confirmed value"
+    },
+    {
+      "parameter": "FLOOR_AGV_HEAVY_CHARGE_EFF",
+      "transport_mode": "FLOOR_AGV_AMR",
+      "value": 0.9,
+      "unit": "fraction",
+      "provenance": "CONTROLLED_ENGINEERING_ASSUMPTION",
+      "rationale": "Charging efficiency planning default",
+      "editable": true,
+      "calibration_status": "CONTROLLED_ENGINEERING_ASSUMPTION",
+      "replacement_data_needed": "vendor/facility-confirmed value"
+    },
+    {
+      "parameter": "FLOOR_AGV_HEAVY_VEHICLE_CAPEX",
+      "transport_mode": "FLOOR_AGV_AMR",
+      "value": 130000.0,
+      "unit": "USD/vehicle",
+      "provenance": "CONTROLLED_ENGINEERING_ASSUMPTION",
+      "rationale": "Logistics tug/cart AMR unit planning benchmark",
+      "editable": true,
+      "calibration_status": "CONTROLLED_ENGINEERING_ASSUMPTION",
+      "replacement_data_needed": "vendor/facility-confirmed value"
+    },
+    {
+      "parameter": "FLOOR_AGV_HEAVY_MAINT_USD_YR",
+      "transport_mode": "FLOOR_AGV_AMR",
+      "value": 6000.0,
+      "unit": "USD/vehicle-yr",
+      "provenance": "CONTROLLED_ENGINEERING_ASSUMPTION",
+      "rationale": "Logistics AMR preventive+corrective maintenance planning default",
+      "editable": true,
+      "calibration_status": "CONTROLLED_ENGINEERING_ASSUMPTION",
+      "replacement_data_needed": "vendor/facility-confirmed value"
+    },
+    {
+      "parameter": "FLOOR_AGV_HEAVY_BATTERY_REPLACEMENT_USD",
+      "transport_mode": "FLOOR_AGV_AMR",
+      "value": 5000.0,
+      "unit": "USD/battery",
+      "provenance": "CONTROLLED_ENGINEERING_ASSUMPTION",
+      "rationale": "Logistics-tug Li-ion pack replacement planning benchmark",
+      "editable": true,
+      "calibration_status": "CONTROLLED_ENGINEERING_ASSUMPTION",
+      "replacement_data_needed": "vendor/facility-confirmed value"
+    },
+    {
+      "parameter": "FLOOR_AGV_HEAVY_BATTERY_LIFE_YR",
+      "transport_mode": "FLOOR_AGV_AMR",
+      "value": 4.0,
+      "unit": "years",
+      "provenance": "CONTROLLED_ENGINEERING_ASSUMPTION",
+      "rationale": "Duty-cycle battery lifetime planning default",
+      "editable": true,
+      "calibration_status": "CONTROLLED_ENGINEERING_ASSUMPTION",
+      "replacement_data_needed": "vendor/facility-confirmed value"
+    },
+    {
+      "parameter": "FLOOR_AGV_ELECTRICITY_TARIFF",
+      "transport_mode": "FLOOR_AGV_AMR",
+      "value": 0.15,
+      "unit": "USD/kWh",
+      "provenance": "CONTROLLED_ENGINEERING_ASSUMPTION",
+      "rationale": "Controlled electricity tariff (matches repo $0.12-0.18 range)",
+      "editable": true,
+      "calibration_status": "CONTROLLED_ENGINEERING_ASSUMPTION",
+      "replacement_data_needed": "vendor/facility-confirmed value"
+    },
+    {
+      "parameter": "FLOOR_AGV_CHARGING_STATION_CAPEX",
+      "transport_mode": "FLOOR_AGV_AMR",
+      "value": 12000.0,
+      "unit": "USD/station",
+      "provenance": "CONTROLLED_ENGINEERING_ASSUMPTION",
+      "rationale": "Charging dock planning benchmark",
+      "editable": true,
+      "calibration_status": "CONTROLLED_ENGINEERING_ASSUMPTION",
+      "replacement_data_needed": "vendor/facility-confirmed value"
+    },
+    {
+      "parameter": "FLOOR_AGV_CHARGING_STATION_MAINT",
+      "transport_mode": "FLOOR_AGV_AMR",
+      "value": 800.0,
+      "unit": "USD/station-yr",
+      "provenance": "CONTROLLED_ENGINEERING_ASSUMPTION",
+      "rationale": "Charging dock maintenance planning default",
+      "editable": true,
+      "calibration_status": "CONTROLLED_ENGINEERING_ASSUMPTION",
+      "replacement_data_needed": "vendor/facility-confirmed value"
+    },
+    {
+      "parameter": "FLOOR_AGV_FLEET_MANAGER_CAPEX",
+      "transport_mode": "FLOOR_AGV_AMR",
+      "value": 120000.0,
+      "unit": "USD (once)",
+      "provenance": "CONTROLLED_ENGINEERING_ASSUMPTION",
+      "rationale": "Fleet-management hardware/software integration planning benchmark (charged once, NOT per vehicle)",
+      "editable": true,
+      "calibration_status": "CONTROLLED_ENGINEERING_ASSUMPTION",
+      "replacement_data_needed": "vendor/facility-confirmed value"
+    },
+    {
+      "parameter": "FLOOR_AGV_FLEET_SOFTWARE_USD_YR",
+      "transport_mode": "FLOOR_AGV_AMR",
+      "value": 30000.0,
+      "unit": "USD/yr (once)",
+      "provenance": "CONTROLLED_ENGINEERING_ASSUMPTION",
+      "rationale": "Fleet-management software/support subscription planning default (once, NOT per vehicle)",
+      "editable": true,
+      "calibration_status": "CONTROLLED_ENGINEERING_ASSUMPTION",
+      "replacement_data_needed": "vendor/facility-confirmed value"
+    },
+    {
+      "parameter": "FLOOR_AGV_ELEVATOR_INTEGRATION_CAPEX",
+      "transport_mode": "FLOOR_AGV_AMR",
+      "value": 25000.0,
+      "unit": "USD/elevator",
+      "provenance": "CONTROLLED_ENGINEERING_ASSUMPTION",
+      "rationale": "Elevator-call integration planning benchmark",
+      "editable": true,
+      "calibration_status": "CONTROLLED_ENGINEERING_ASSUMPTION",
+      "replacement_data_needed": "vendor/facility-confirmed value"
+    },
+    {
+      "parameter": "FLOOR_AGV_DOOR_INTEGRATION_CAPEX",
+      "transport_mode": "FLOOR_AGV_AMR",
+      "value": 3000.0,
+      "unit": "USD/door",
+      "provenance": "CONTROLLED_ENGINEERING_ASSUMPTION",
+      "rationale": "Automatic-door/access-control integration planning benchmark",
+      "editable": true,
+      "calibration_status": "CONTROLLED_ENGINEERING_ASSUMPTION",
+      "replacement_data_needed": "vendor/facility-confirmed value"
+    },
+    {
+      "parameter": "FLOOR_AGV_INSTALL_COMMISSION",
+      "transport_mode": "FLOOR_AGV_AMR",
+      "value": 40000.0,
+      "unit": "USD (once)",
+      "provenance": "CONTROLLED_ENGINEERING_ASSUMPTION",
+      "rationale": "Install/commissioning/training planning benchmark (once)",
+      "editable": true,
+      "calibration_status": "CONTROLLED_ENGINEERING_ASSUMPTION",
+      "replacement_data_needed": "vendor/facility-confirmed value"
+    },
+    {
+      "parameter": "FLOOR_AGV_SUPERVISION_FTE",
+      "transport_mode": "FLOOR_AGV_AMR",
+      "value": 0.2,
+      "unit": "FTE",
+      "provenance": "CONTROLLED_ENGINEERING_ASSUMPTION",
+      "rationale": "Residual human fleet-supervision planning default",
+      "editable": true,
+      "calibration_status": "CONTROLLED_ENGINEERING_ASSUMPTION",
+      "replacement_data_needed": "vendor/facility-confirmed value"
+    },
+    {
+      "parameter": "FLOOR_AGV_ELEVATOR_WAIT_MIN",
+      "transport_mode": "FLOOR_AGV_AMR",
+      "value": 2.5,
+      "unit": "min",
+      "provenance": "CONTROLLED_ENGINEERING_ASSUMPTION",
+      "rationale": "Automated elevator-call wait planning default",
+      "editable": true,
+      "calibration_status": "CONTROLLED_ENGINEERING_ASSUMPTION",
+      "replacement_data_needed": "vendor/facility-confirmed value"
+    },
+    {
+      "parameter": "FLOOR_AGV_ELEVATOR_RIDE_MIN",
+      "transport_mode": "FLOOR_AGV_AMR",
+      "value": 1.0,
+      "unit": "min",
+      "provenance": "CONTROLLED_ENGINEERING_ASSUMPTION",
+      "rationale": "Per-transition elevator ride+enter/exit planning default",
+      "editable": true,
+      "calibration_status": "CONTROLLED_ENGINEERING_ASSUMPTION",
+      "replacement_data_needed": "vendor/facility-confirmed value"
+    },
+    {
+      "parameter": "FLOOR_AGV_DOOR_DELAY_MIN",
+      "transport_mode": "FLOOR_AGV_AMR",
+      "value": 0.25,
+      "unit": "min",
+      "provenance": "CONTROLLED_ENGINEERING_ASSUMPTION",
+      "rationale": "Per automatic-door negotiation planning default",
+      "editable": true,
+      "calibration_status": "CONTROLLED_ENGINEERING_ASSUMPTION",
+      "replacement_data_needed": "vendor/facility-confirmed value"
+    },
+    {
+      "parameter": "FLOOR_AGV_AVAILABILITY_PCT",
+      "transport_mode": "FLOOR_AGV_AMR",
+      "value": 90.0,
+      "unit": "percent",
+      "provenance": "CONTROLLED_ENGINEERING_ASSUMPTION",
+      "rationale": "Fleet mechanical/charging availability planning default",
+      "editable": true,
+      "calibration_status": "CONTROLLED_ENGINEERING_ASSUMPTION",
+      "replacement_data_needed": "vendor/facility-confirmed value"
+    }
+  ],
+  "eligibility_matrix": {
+    "RADIOPHARMACEUTICAL_NUCLEAR": {
+      "MANUAL": "ELIGIBLE",
+      "PTS": "QUALIFICATION_REQUIRED",
+      "DEDICATED_RP_PTS": "ELIGIBLE",
+      "AGV_AMR_LIGHT_CLINICAL": "QUALIFICATION_REQUIRED",
+      "AGV_AMR_HEAVY_LOGISTICS": "QUALIFICATION_REQUIRED",
+      "MRT": "ELIGIBLE"
+    },
+    "SPECIMEN_BLOOD": {
+      "MANUAL": "ELIGIBLE",
+      "PTS": "ELIGIBLE",
+      "DEDICATED_RP_PTS": "INELIGIBLE",
+      "AGV_AMR_LIGHT_CLINICAL": "ELIGIBLE",
+      "AGV_AMR_HEAVY_LOGISTICS": "INELIGIBLE",
+      "MRT": "ELIGIBLE"
+    },
+    "PHARMACY_INFUSION": {
+      "MANUAL": "ELIGIBLE",
+      "PTS": "ELIGIBLE",
+      "DEDICATED_RP_PTS": "INELIGIBLE",
+      "AGV_AMR_LIGHT_CLINICAL": "ELIGIBLE",
+      "AGV_AMR_HEAVY_LOGISTICS": "INELIGIBLE",
+      "MRT": "ELIGIBLE"
+    },
+    "STERILE_CLEAN_SUPPLY": {
+      "MANUAL": "ELIGIBLE",
+      "PTS": "INELIGIBLE",
+      "DEDICATED_RP_PTS": "INELIGIBLE",
+      "AGV_AMR_LIGHT_CLINICAL": "ELIGIBLE",
+      "AGV_AMR_HEAVY_LOGISTICS": "ELIGIBLE",
+      "MRT": "ELIGIBLE"
+    },
+    "CLEAN_LINEN": {
+      "MANUAL": "ELIGIBLE",
+      "PTS": "INELIGIBLE",
+      "DEDICATED_RP_PTS": "INELIGIBLE",
+      "AGV_AMR_LIGHT_CLINICAL": "INELIGIBLE",
+      "AGV_AMR_HEAVY_LOGISTICS": "ELIGIBLE",
+      "MRT": "INELIGIBLE"
+    }
+  },
+  "floor_agv_light_economics": {
+    "capex_ledger": [
+      [
+        "Vehicles",
+        3.0,
+        90000.0,
+        "CONTROLLED_ENGINEERING_ASSUMPTION"
+      ],
+      [
+        "Charging stations",
+        2.0,
+        12000.0,
+        "CONTROLLED_ENGINEERING_ASSUMPTION"
+      ],
+      [
+        "Fleet-management hardware/software (once)",
+        1.0,
+        120000.0,
+        "CONTROLLED_ENGINEERING_ASSUMPTION"
+      ],
+      [
+        "Elevator integration",
+        2.0,
+        25000.0,
+        "CONTROLLED_ENGINEERING_ASSUMPTION"
+      ],
+      [
+        "Door/access integration",
+        4.0,
+        3000.0,
+        "CONTROLLED_ENGINEERING_ASSUMPTION"
+      ],
+      [
+        "Install/commissioning/training (once)",
+        1.0,
+        40000.0,
+        "CONTROLLED_ENGINEERING_ASSUMPTION"
+      ]
+    ],
+    "capex_subtotal": 516000.0,
+    "capex_unknown": [
+      "Facility network/server upgrades allocation (NOT_CALIBRATED)"
+    ],
+    "opex_ledger": [
+      [
+        "Electricity (motion+idle+charging losses)",
+        60.0,
+        "CONTROLLED_ENGINEERING_ASSUMPTION"
+      ],
+      [
+        "Vehicle maintenance",
+        10500.0,
+        "CONTROLLED_ENGINEERING_ASSUMPTION"
+      ],
+      [
+        "Battery replacement (amortized)",
+        1500.0,
+        "CONTROLLED_ENGINEERING_ASSUMPTION"
+      ],
+      [
+        "Charging-station maintenance",
+        1600.0,
+        "CONTROLLED_ENGINEERING_ASSUMPTION"
+      ],
+      [
+        "Fleet-management software/support (once)",
+        30000.0,
+        "CONTROLLED_ENGINEERING_ASSUMPTION"
+      ],
+      [
+        "Residual human supervision",
+        14000.0,
+        "CONTROLLED_ENGINEERING_ASSUMPTION"
+      ]
+    ],
+    "opex_subtotal": 57660.0,
+    "opex_unknown": [
+      "Vendor service contract (NOT_CALIBRATED)",
+      "Facility charging-network standby electricity (NOT_CALIBRATED)"
+    ],
+    "energy_kwh_year": 400.0,
+    "energy_boundary": "motion(traction) + onboard idle + charging losses; facility charging-network standby NOT_CALIBRATED"
+  },
+  "floor_agv_heavy_economics": {
+    "capex_ledger": [
+      [
+        "Vehicles",
+        3.0,
+        130000.0,
+        "CONTROLLED_ENGINEERING_ASSUMPTION"
+      ],
+      [
+        "Charging stations",
+        2.0,
+        12000.0,
+        "CONTROLLED_ENGINEERING_ASSUMPTION"
+      ],
+      [
+        "Fleet-management hardware/software (once)",
+        1.0,
+        120000.0,
+        "CONTROLLED_ENGINEERING_ASSUMPTION"
+      ],
+      [
+        "Elevator integration",
+        2.0,
+        25000.0,
+        "CONTROLLED_ENGINEERING_ASSUMPTION"
+      ],
+      [
+        "Door/access integration",
+        4.0,
+        3000.0,
+        "CONTROLLED_ENGINEERING_ASSUMPTION"
+      ],
+      [
+        "Install/commissioning/training (once)",
+        1.0,
+        40000.0,
+        "CONTROLLED_ENGINEERING_ASSUMPTION"
+      ]
+    ],
+    "capex_subtotal": 636000.0,
+    "capex_unknown": [
+      "Facility network/server upgrades allocation (NOT_CALIBRATED)"
+    ],
+    "opex_ledger": [
+      [
+        "Electricity (motion+idle+charging losses)",
+        240.0,
+        "CONTROLLED_ENGINEERING_ASSUMPTION"
+      ],
+      [
+        "Vehicle maintenance",
+        18000.0,
+        "CONTROLLED_ENGINEERING_ASSUMPTION"
+      ],
+      [
+        "Battery replacement (amortized)",
+        3750.0,
+        "CONTROLLED_ENGINEERING_ASSUMPTION"
+      ],
+      [
+        "Charging-station maintenance",
+        1600.0,
+        "CONTROLLED_ENGINEERING_ASSUMPTION"
+      ],
+      [
+        "Fleet-management software/support (once)",
+        30000.0,
+        "CONTROLLED_ENGINEERING_ASSUMPTION"
+      ],
+      [
+        "Residual human supervision",
+        14000.0,
+        "CONTROLLED_ENGINEERING_ASSUMPTION"
+      ]
+    ],
+    "opex_subtotal": 67590.0,
+    "opex_unknown": [
+      "Vendor service contract (NOT_CALIBRATED)",
+      "Facility charging-network standby electricity (NOT_CALIBRATED)"
+    ],
+    "energy_kwh_year": 1600.0,
+    "energy_boundary": "motion(traction) + onboard idle + charging losses; facility charging-network standby NOT_CALIBRATED"
+  },
+  "floor_agv_light_physical": {
+    "vehicle_class": "AGV_AMR_LIGHT_CLINICAL",
+    "length_m": 0.7,
+    "width_m": 0.55,
+    "height_m": 1.2,
+    "payload_mass_limit_kg": 40.0,
+    "payload_volume_limit_l": 60.0,
+    "speed_m_per_s": 1.2,
+    "battery_capacity_kwh": 1.0,
+    "usable_battery_fraction": 0.8,
+    "energy_kwh_per_km": 0.1,
+    "charging_power_kw": 0.6,
+    "availability_pct": 90.0,
+    "supported_streams": [
+      "PHARMACY_INFUSION",
+      "SPECIMEN_BLOOD",
+      "STERILE_CLEAN_SUPPLY"
+    ],
+    "radiopharm": "QUALIFICATION_REQUIRED"
+  },
+  "floor_agv_heavy_physical": {
+    "vehicle_class": "AGV_AMR_HEAVY_LOGISTICS",
+    "length_m": 1.3,
+    "width_m": 0.8,
+    "height_m": 1.6,
+    "payload_mass_limit_kg": 300.0,
+    "payload_volume_limit_l": 900.0,
+    "speed_m_per_s": 1.0,
+    "battery_capacity_kwh": 4.0,
+    "usable_battery_fraction": 0.8,
+    "energy_kwh_per_km": 0.4,
+    "charging_power_kw": 2.0,
+    "availability_pct": 90.0,
+    "supported_streams": [
+      "CLEAN_LINEN",
+      "STERILE_CLEAN_SUPPLY"
+    ],
+    "radiopharm": "QUALIFICATION_REQUIRED"
+  },
+  "pts_profiles": {
+    "PTS_STANDARD_110MM": {
+      "capsule_kg": 2.0,
+      "speed_m_per_s": 6.0,
+      "diameter_mm": 110.0,
+      "provenance": "CONTROLLED_ENGINEERING_ASSUMPTION (common 110 mm hospital PTS carrier planning profile; active repo benchmark preserved)"
+    },
+    "PTS_LARGE_160MM": {
+      "capsule_kg": 3.0,
+      "speed_m_per_s": 6.0,
+      "diameter_mm": 160.0,
+      "provenance": "CONTROLLED_ENGINEERING_ASSUMPTION (larger-bore hospital PTS carrier planning profile; NOT vendor-calibrated)"
+    }
+  }
+}

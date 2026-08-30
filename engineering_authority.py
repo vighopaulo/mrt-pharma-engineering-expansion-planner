@@ -1215,3 +1215,60 @@ def run_full_authority_validation(
         economic_reconciliation=tuple(economic_reconciliation_checks),
         optimality_status=optimality_status,
     )
+
+
+# ===========================================================================
+# SUPER-BUILD GOVERNANCE (KIRO Super-Build 1) -- extends this existing
+# governance owner (never a second hierarchy). Machine-readable principles the
+# Super-Builds operate under; metadata only, no physics re-implemented.
+# ===========================================================================
+
+SuperBuildPrinciple = Literal[
+    "PHYSICAL_REPOSITORY_IS_AUTHORITATIVE", "AUTHORITY_FIRST", "ONE_AUTHORITY_PER_CONCEPT",
+    "NO_DUPLICATE_ENGINE", "SUPER_BUILD_CONTINUATION", "INTERNAL_TEST_GATES", "REAL_BLOCKER_DEFINITION",
+    "TEST_LOCKING_OLD_TRUTH", "NO_SILENT_ASSUMPTIONS", "CONTROLLED_BENCHMARK_ALLOWED_WITH_PROVENANCE",
+    "NO_ZERO_FILLING_UNKNOWN_COSTS", "TECHNOLOGY_FAIRNESS", "PAYLOAD_ELIGIBILITY_BEFORE_OPTIMIZATION",
+    "FALLBACK_CONSERVATION", "NO_DOUBLE_COUNTING", "EXPERIMENT_FREEZE", "SENTINEL_RUNTIME_PROOFS",
+    "HISTORICAL_RESULTS_PRESERVED", "REPORT_ALL_TABLES", "RECOVERY_AFTER_SHUTDOWN", "SCOPE_GOVERNOR",
+    "DEFINITION_OF_DONE", "PRODUCT_GOAL_ALIGNMENT",
+]
+
+
+@dataclass(frozen=True)
+class SuperBuildGovernanceRule:
+    principle: SuperBuildPrinciple
+    statement: str
+    enforcement: str
+
+
+SUPER_BUILD_GOVERNANCE_REGISTRY: tuple[SuperBuildGovernanceRule, ...] = (
+    SuperBuildGovernanceRule("PHYSICAL_REPOSITORY_IS_AUTHORITATIVE", "The physical working tree is the source of truth; never reconstruct from memory.", "precheck + engine-scope governor"),
+    SuperBuildGovernanceRule("AUTHORITY_FIRST", "Read + trace existing authorities before writing code.", "TRANSPORT_PARITY_AUTHORITY_TRACE"),
+    SuperBuildGovernanceRule("ONE_AUTHORITY_PER_CONCEPT", "Each governed concept has exactly one owner; extend, never duplicate.", "forensic trace classification"),
+    SuperBuildGovernanceRule("NO_DUPLICATE_ENGINE", "No *_v2 duplicate engines unless a genuine ownership gap is proven.", "forensic trace"),
+    SuperBuildGovernanceRule("SUPER_BUILD_CONTINUATION", "A super-build runs through all its gates; only a REAL blocker stops it early.", "milestone gates"),
+    SuperBuildGovernanceRule("INTERNAL_TEST_GATES", "Each major authority is tested before proceeding.", "per-authority test files"),
+    SuperBuildGovernanceRule("REAL_BLOCKER_DEFINITION", "A test locking old truth / NOT_CALIBRATED value / timeout is NOT a blocker.", "blocker classification"),
+    SuperBuildGovernanceRule("TEST_LOCKING_OLD_TRUTH", "Update only the narrow superseded assertion, after proving conflict with new authority.", "TEST_LOCKING_OLD_TRUTH label"),
+    SuperBuildGovernanceRule("NO_SILENT_ASSUMPTIONS", "Every physical/economic value carries provenance + calibration status.", "EditableParameter / provenance fields"),
+    SuperBuildGovernanceRule("CONTROLLED_BENCHMARK_ALLOWED_WITH_PROVENANCE", "Controlled benchmarks may fill uncertain commercial terms if editable + unit + source + status explicit.", "Controlled Benchmark Register"),
+    SuperBuildGovernanceRule("NO_ZERO_FILLING_UNKNOWN_COSTS", "Unknown CapEx/OPEX/energy/capacity != 0/infinite; listed separately.", "no-silent-zero sentinel"),
+    SuperBuildGovernanceRule("TECHNOLOGY_FAIRNESS", "No technology favored by omitting its costs or another's limitations.", "fairness governor"),
+    SuperBuildGovernanceRule("PAYLOAD_ELIGIBILITY_BEFORE_OPTIMIZATION", "PAYLOAD -> ELIGIBILITY -> ALLOWED MODES -> OPTIMIZATION; economics never make an ineligible mode valid.", "transport_mode_eligibility_authority"),
+    SuperBuildGovernanceRule("FALLBACK_CONSERVATION", "INPUT_MISSIONS == ASSIGNED + UNMET; no mission loss, no silent fallback.", "transport_mode_scope_authority.assign_missions_within_scope"),
+    SuperBuildGovernanceRule("NO_DOUBLE_COUNTING", "Infrastructure/vehicle/labor/energy/maintenance/software/integration each counted once.", "no-double-count audit"),
+    SuperBuildGovernanceRule("EXPERIMENT_FREEZE", "MRT canonical config + Part 3E experiment logic are frozen during non-experiment builds.", "MRT/experiment preservation tests"),
+    SuperBuildGovernanceRule("SENTINEL_RUNTIME_PROOFS", "Isolation/exclusion/eligibility claims proven by deterministic sentinels, not assertion.", "sentinel controls"),
+    SuperBuildGovernanceRule("HISTORICAL_RESULTS_PRESERVED", "Superseded reports are preserved + labeled, never overwritten/deleted.", "SUPERSEDED_PRE_CANONICAL_MRT label"),
+    SuperBuildGovernanceRule("REPORT_ALL_TABLES", "Required report tables appear inline; narrative never substitutes for a required table.", "report table audit"),
+    SuperBuildGovernanceRule("RECOVERY_AFTER_SHUTDOWN", "State is re-derived from the physical tree after interruption/compaction.", "precheck re-confirm"),
+    SuperBuildGovernanceRule("SCOPE_GOVERNOR", "Every changed/untracked file is classified; out-of-scope changes stop the build.", "engine-scope governor"),
+    SuperBuildGovernanceRule("DEFINITION_OF_DONE", "Hard completion gates must all pass before COMPLETE is declared.", "hard completion gates"),
+    SuperBuildGovernanceRule("PRODUCT_GOAL_ALIGNMENT", "Work advances the modeled transport-comparison product goal without forcing a winner.", "no-forced-winner governor"),
+)
+
+
+def super_build_governance_present() -> bool:
+    """Sec 5-6: the Super-Build governance principles are registered under this
+    existing governance owner (never a second hierarchy)."""
+    return len(SUPER_BUILD_GOVERNANCE_REGISTRY) >= 20

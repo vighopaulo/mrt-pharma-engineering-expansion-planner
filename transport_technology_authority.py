@@ -49,10 +49,16 @@ invariant."""
 
 FloorAgvImplementationStatus = Literal["NOT_IMPLEMENTED", "IMPLEMENTED"]
 
-FLOOR_AGV_AMR_IMPLEMENTATION_STATUS: FloorAgvImplementationStatus = "NOT_IMPLEMENTED"
-"""Section 6: remains NOT_IMPLEMENTED unless the repository gains a
-truthful, separately-calibrated free-roaming floor-navigation model of its
-own -- never silently upgraded to reuse RGHT's/PTS's/MRT's assumptions."""
+FLOOR_AGV_AMR_IMPLEMENTATION_STATUS: FloorAgvImplementationStatus = "IMPLEMENTED"
+"""Section 6: was NOT_IMPLEMENTED until KIRO Super-Build 1 established a
+truthful, SEPARATELY-authored free-roaming floor AGV/AMR model in its own
+authority module `floor_agv_amr_authority.py` (two distinct classes:
+AGV_AMR_LIGHT_CLINICAL + AGV_AMR_HEAVY_LOGISTICS, with independent dimensions/
+payload/speed/battery/charging/elevator-door/fleet/energy/maintenance/CapEx/
+OPEX). It does NOT reuse RGHT's/PTS's/MRT's assumptions -- the
+`RGHT != FLOOR_AGV_AMR` invariant is preserved (RGHT remains the legacy
+rail-guided `conventional_transport_authority.AgvModelClass` economics; the new
+module owns the free-roaming class exclusively)."""
 
 RGHT_ECONOMIC_STATUS = "CONTROLLED_ENGINEERING_ASSUMPTION"
 RGHT_VENDOR_QUOTE_CALIBRATION = "NOT_CALIBRATED_TO_CURRENT_VENDOR_QUOTE"
