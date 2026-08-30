@@ -36,12 +36,18 @@ def test_3_max_payload_is_3kg():
     assert mtem.EMPTY_MRT_CARRIER_MASS_KG + mtem.MAX_MRT_PAYLOAD_KG == pytest.approx(mtem.FULLY_LOADED_MRT_CARRIER_MASS_KG)
 
 
-def test_4_mrt_carrier_capex_is_5000():
-    assert mtem.MRT_CARRIER_CAPEX_USD.active_value == pytest.approx(5_000.0)
+def test_4_mrt_carrier_capex_is_canonical_2000():
+    # MRT CANONICAL CONFIGURATION CORRECTION: carrier CapEx corrected from the
+    # prior divergent $5,000 to the canonical $2,000 (bound to
+    # mrt_canonical_configuration.CARRIER_CAPEX_USD).
+    assert mtem.MRT_CARRIER_CAPEX_USD.active_value == pytest.approx(2_000.0)
 
 
-def test_5_mrt_guideway_capex_per_m_is_2000():
-    assert mtem.MRT_GUIDEWAY_CAPEX_PER_M_USD == pytest.approx(2_000.0)
+def test_5_mrt_guideway_capex_per_m_is_canonical_2500():
+    # MRT CANONICAL CONFIGURATION CORRECTION: two-way guideway CapEx corrected
+    # from the prior divergent $2,000/m to the canonical $2,500/m (complete
+    # two-way, never per-lane-doubled).
+    assert mtem.MRT_GUIDEWAY_CAPEX_PER_M_USD == pytest.approx(2_500.0)
 
 
 def test_6_carrier_and_guideway_costs_remain_separate():
@@ -82,7 +88,9 @@ def test_9_napkin_route_reconciles():
 
 def test_10_carrier_maintenance_defaults_to_10_percent():
     assert mtem.MRT_CARRIER_MAINTENANCE_FRACTION_PER_YEAR.active_value == pytest.approx(0.10)
-    assert mtem.compute_mrt_carrier_annual_maintenance_usd(carrier_count=1) == pytest.approx(500.0)
+    # MRT CANONICAL CONFIGURATION CORRECTION: 10% of the canonical $2,000
+    # carrier CapEx = $200/carrier-year (was $500 at the prior divergent $5,000).
+    assert mtem.compute_mrt_carrier_annual_maintenance_usd(carrier_count=1) == pytest.approx(200.0)
 
 
 def test_11_guideway_maintenance_defaults_to_10_percent():

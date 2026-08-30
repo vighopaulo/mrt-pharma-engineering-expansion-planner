@@ -41,6 +41,7 @@ from hybrid_optimization import HybridEvaluationResult, HybridPatientTrace
 from infrastructure_capex import CapexLedgerItem
 from infrastructure_opex import OpexLedgerItem, merge_shared_and_mode_specific_ledgers, recompute_ledger_totals
 from mrt_carrier_fleet import MrtCarrierFleetResult, resolve_mrt_carrier_fleet
+from mrt_canonical_configuration import TWO_WAY_GUIDEWAY_CAPEX_USD_PER_M as _CANONICAL_TWO_WAY_GUIDEWAY_CAPEX_PER_M
 
 # NOTE: `CarrierHardwareClass`/`CARRIER_HARDWARE_REGISTRY`/`compute_carrier_fleet_capex`
 # are the ESTABLISHED nuclear-shielded/general-light hardware-class authority,
@@ -159,11 +160,15 @@ LIGHT_MRT_LOADED_MASS_CEILING_KG = 5.0
 integral shielding where required + all moving hardware), not payload alone.
 USER_SUPPLIED_CONTROLLED_SCENARIO_ASSUMPTION."""
 
-LIGHT_MRT_GUIDEWAY_CAPEX_PER_M = 2_000.0
-"""Section 3: USER_SUPPLIED_CONTROLLED_LIGHT_MRT_COST_ASSUMPTION, NOT vendor-
-calibrated. Replaces (never adds to) the heavy MRT's flat $6,000,000 base
-infrastructure allowance and $350,000/transition charge for LIGHT_MRT only --
-those remain exclusively charged to the preserved heavy configuration."""
+LIGHT_MRT_GUIDEWAY_CAPEX_PER_M = _CANONICAL_TWO_WAY_GUIDEWAY_CAPEX_PER_M
+"""Section 3/13: CONTROLLED_ENGINEERING_ASSUMPTION, NOT vendor-calibrated.
+MRT CANONICAL CONFIGURATION CORRECTION: now bound to the single canonical
+owner `mrt_canonical_configuration.TWO_WAY_GUIDEWAY_CAPEX_USD_PER_M` (=$2,500/m
+for a COMPLETE TWO-WAY guideway, NOT per lane, never doubled). This CORRECTS
+the prior divergent $2,000/m Light-MRT value. It replaces (never adds to) the
+heavy MRT's flat $6,000,000 base infrastructure allowance and $350,000/
+transition charge for the current configuration only -- those remain
+exclusively charged to the preserved heavy configuration (Section 29)."""
 
 LIGHT_MRT_ENDPOINT_CAPEX_PER_UNIT = 1_000.0
 """Section 4: preserves the existing controlled ordinary-endpoint assumption

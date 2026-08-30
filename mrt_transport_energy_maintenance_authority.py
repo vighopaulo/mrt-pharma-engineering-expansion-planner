@@ -78,27 +78,40 @@ from typing import Literal
 
 from editable_default_authority import EditableParameter
 from shared_mrt_multistream_authority import LIGHT_MRT_GUIDEWAY_CAPEX_PER_M, LIGHT_MRT_LOADED_MASS_CEILING_KG
+from mrt_canonical_configuration import (
+    CARRIER_CAPEX_USD as _CANONICAL_CARRIER_CAPEX_USD,
+    EMPTY_CARRIER_MASS_TARGET_LOW_KG as _CANONICAL_EMPTY_CARRIER_MASS_KG,
+    MAX_GROSS_MOVING_MASS_KG as _CANONICAL_MAX_GROSS_MOVING_MASS_KG,
+)
 
 # ---------------------------------------------------------------------------
-# Section 1: Final Light-MRT controlled design basis
+# Section 1: Final MRT canonical controlled design basis (bound to
+# mrt_canonical_configuration -- the single canonical owner).
 # ---------------------------------------------------------------------------
 
 FULLY_LOADED_MRT_CARRIER_MASS_KG = LIGHT_MRT_LOADED_MASS_CEILING_KG
-"""Reuses the EXISTING Light-MRT ceiling verbatim (=5.0 kg) -- never a second,
-independently-drifting mass authority."""
+"""Reuses the EXISTING canonical ceiling verbatim (=5.0 kg, now sourced from
+mrt_canonical_configuration.MAX_GROSS_MOVING_MASS_KG via
+shared_mrt_multistream_authority) -- never a second, independently-drifting
+mass authority."""
 
-EMPTY_MRT_CARRIER_MASS_KG = 2.0
-MAX_MRT_PAYLOAD_KG = 3.0
+EMPTY_MRT_CARRIER_MASS_KG = _CANONICAL_EMPTY_CARRIER_MASS_KG
+"""Canonical empty-carrier target low bound (=2.0 kg). Bound to
+mrt_canonical_configuration -- never a second literal."""
+MAX_MRT_PAYLOAD_KG = _CANONICAL_MAX_GROSS_MOVING_MASS_KG - _CANONICAL_EMPTY_CARRIER_MASS_KG
+"""Derived from the canonical ceiling minus canonical empty target (=3.0 kg),
+so empty + payload can never exceed the 5.0 kg gross ceiling by construction."""
 assert EMPTY_MRT_CARRIER_MASS_KG + MAX_MRT_PAYLOAD_KG == FULLY_LOADED_MRT_CARRIER_MASS_KG
 
 MRT_CARRIER_CAPEX_USD = EditableParameter(
     parameter_id="MRT_CARRIER_CAPEX_USD",
-    default_value=5_000.0,
+    default_value=_CANONICAL_CARRIER_CAPEX_USD,
     units="USD per carrier",
     source=(
-        "Section 1: Light-MRT controlled planning value, replacing the older ~$10,000/carrier assumption "
-        "FOR THIS LIGHT-MRT CONFIGURATION ONLY. Distinct from models.PlannerAssumptions"
-        ".mrt_carrier_capex_per_installed_unit ($10,000, unchanged, preserved for the separate heavy-MRT scope)."
+        "MRT CANONICAL CONFIGURATION CORRECTION (Section 0.7/12): bound to the single canonical owner "
+        "mrt_canonical_configuration.CARRIER_CAPEX_USD (=$2,000/carrier). CORRECTS the prior divergent "
+        "$5,000 Light-MRT value. Distinct from models.PlannerAssumptions.mrt_carrier_capex_per_installed_unit "
+        "($10,000, unchanged, preserved for the separate heavy-MRT scope, Section 29)."
     ),
     source_type="CONTROLLED_ENGINEERING_ASSUMPTION",
     confidence="LOW",
@@ -107,7 +120,8 @@ MRT_CARRIER_CAPEX_USD = EditableParameter(
 
 MRT_GUIDEWAY_CAPEX_PER_M_USD = LIGHT_MRT_GUIDEWAY_CAPEX_PER_M
 """Alias, not a duplicate -- reuses `shared_mrt_multistream_authority.LIGHT_MRT_GUIDEWAY_CAPEX_PER_M`
-(=$2,000/m) verbatim so the two names can never numerically drift apart."""
+(now =$2,500/m, canonical two-way) verbatim so the two names can never
+numerically drift apart."""
 
 # ---------------------------------------------------------------------------
 # Section 3: MRT moving power (electrical draw, NOT kinetic energy)
@@ -152,7 +166,7 @@ MRT_CARRIER_MAINTENANCE_FRACTION_PER_YEAR = EditableParameter(
     parameter_id="MRT_CARRIER_MAINTENANCE_FRACTION_PER_YEAR",
     default_value=0.10,
     units="fraction of carrier CapEx per year",
-    source="Section 7: Light-MRT controlled planning value. At MRT_CARRIER_CAPEX_USD=$5,000, this is $500/carrier-year.",
+    source="Section 7: MRT controlled planning value. At the canonical MRT_CARRIER_CAPEX_USD=$2,000, this is $200/carrier-year.",
     source_type="CONTROLLED_PLANNING_ASSUMPTION",
     confidence="LOW",
 )

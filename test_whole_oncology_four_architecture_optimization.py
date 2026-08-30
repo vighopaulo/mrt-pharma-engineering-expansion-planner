@@ -1082,11 +1082,16 @@ class TestBuild2RLightMrtDesignPointCorrection:
         assert result.compatible
         assert "integral" in result.provenance.lower()
 
-    def test_guideway_cost_is_2000_per_meter(self):
+    def test_guideway_cost_is_canonical_2500_per_meter(self):
+        # MRT CANONICAL CONFIGURATION CORRECTION: the current two-way guideway
+        # CapEx is $2,500/m (bound to
+        # mrt_canonical_configuration.TWO_WAY_GUIDEWAY_CAPEX_USD_PER_M),
+        # correcting the prior divergent $2,000/m. Complete two-way, never
+        # per-lane-doubled: 100 m -> $250,000 (not $500,000).
         from shared_mrt_multistream_authority import compute_light_mrt_capex, LIGHT_MRT_GUIDEWAY_CAPEX_PER_M
-        assert LIGHT_MRT_GUIDEWAY_CAPEX_PER_M == 2_000.0
+        assert LIGHT_MRT_GUIDEWAY_CAPEX_PER_M == 2_500.0
         result = compute_light_mrt_capex(guideway_length_m=100.0, endpoint_count=0, carrier_capex=0.0)
-        assert result.guideway_capex == pytest.approx(200_000.0)
+        assert result.guideway_capex == pytest.approx(250_000.0)
 
     def test_old_6m_base_not_charged_to_light_mrt(self, baseline):
         light = evaluate_light_mrt_dominant(baseline, development_context="RETROFIT", study_scope="CAPITAL_PLANNING")
