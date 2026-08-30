@@ -6,3 +6,6 @@ __pycache__/
 
 .DS_Store
 **/.DS_Store
+
+# Bentley local credential file (protected from Git tracking)
+.env.bentley
