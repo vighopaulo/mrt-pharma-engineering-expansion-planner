@@ -1,0 +1,241 @@
+{
+  "project_classes": [
+    "EXISTING_FACILITY_RETROFIT",
+    "EXISTING_FACILITY_EXPANSION",
+    "GREENFIELD_NEW_FACILITY"
+  ],
+  "project_class_inherits_existing": {
+    "EXISTING_FACILITY_RETROFIT": true,
+    "EXISTING_FACILITY_EXPANSION": true,
+    "GREENFIELD_NEW_FACILITY": false
+  },
+  "asset_economic_states": [
+    "INHERITED_EXISTING",
+    "RETAINED_NO_CHANGE",
+    "MODIFY",
+    "REPLACE",
+    "NEW",
+    "REMOVE",
+    "OUT_OF_SCOPE"
+  ],
+  "asset_baseline_origins": [
+    "EXISTING_BASELINE",
+    "NEW_TO_PROJECT",
+    "OUT_OF_BASELINE_SCOPE"
+  ],
+  "asset_project_actions": [
+    "RETAINED_NO_CHANGE",
+    "MODIFY",
+    "REPLACE",
+    "NEW",
+    "REMOVE",
+    "OUT_OF_SCOPE"
+  ],
+  "state_decomposition": {
+    "INHERITED_EXISTING": [
+      "EXISTING_BASELINE",
+      "RETAINED_NO_CHANGE"
+    ],
+    "RETAINED_NO_CHANGE": [
+      "EXISTING_BASELINE",
+      "RETAINED_NO_CHANGE"
+    ],
+    "MODIFY": [
+      "EXISTING_BASELINE",
+      "MODIFY"
+    ],
+    "REPLACE": [
+      "EXISTING_BASELINE",
+      "REPLACE"
+    ],
+    "NEW": [
+      "NEW_TO_PROJECT",
+      "NEW"
+    ],
+    "REMOVE": [
+      "EXISTING_BASELINE",
+      "REMOVE"
+    ],
+    "OUT_OF_SCOPE": [
+      "OUT_OF_BASELINE_SCOPE",
+      "OUT_OF_SCOPE"
+    ]
+  },
+  "material_categories": [
+    "STRUCTURE",
+    "EXTERIOR_ENVELOPE",
+    "INTERIOR_WALLS",
+    "DOORS",
+    "HVAC",
+    "ELECTRICAL",
+    "PLUMBING",
+    "FIRE_LIFE_SAFETY",
+    "SHIELDING",
+    "VERTICAL_TRANSPORT",
+    "IT_NETWORK",
+    "CLINICAL_ROOMS",
+    "EQUIPMENT",
+    "TRANSPORT_INFRASTRUCTURE",
+    "SITE_WORK",
+    "OTHER"
+  ],
+  "required_transport_package_lines": {
+    "PTS": [
+      "PTS backbone",
+      "PTS blower capacity",
+      "PTS controls",
+      "PTS switches/diverters",
+      "PTS stations",
+      "PTS carriers"
+    ],
+    "RTHS": [
+      "RTHS track",
+      "RTHS stations",
+      "RTHS switches",
+      "RTHS vehicles",
+      "RTHS controls",
+      "RTHS vertical sections"
+    ],
+    "AGV_AMR": [
+      "AGV vehicles (light)",
+      "AGV vehicles (heavy)",
+      "AGV chargers",
+      "AGV fleet-management platform",
+      "AGV door integration",
+      "AGV elevator integration",
+      "AGV network/controls"
+    ],
+    "MRT": [
+      "MRT guideway (m)",
+      "MRT carriers",
+      "MRT endpoints",
+      "MRT controls",
+      "MRT installation/integration"
+    ]
+  },
+  "controls": {
+    "scanner_delta": {
+      "resource": "scanner",
+      "existing": 2,
+      "target": 3,
+      "retained": 2,
+      "replaced": 0,
+      "new": 1,
+      "acquisition": 1,
+      "capex": 2000000.0,
+      "status": "CALIBRATED_FROM_UNIT_COST"
+    },
+    "scanner_replacement": {
+      "resource": "scanner",
+      "existing": 2,
+      "target": 3,
+      "retained": 1,
+      "replaced": 1,
+      "new": 1,
+      "acquisition": 2,
+      "capex": 4000000.0,
+      "status": "CALIBRATED_FROM_UNIT_COST"
+    },
+    "cyclotron_within": {
+      "resource": "cyclotron",
+      "existing": 1,
+      "target": 1,
+      "retained": 1,
+      "replaced": 0,
+      "new": 0,
+      "acquisition": 0,
+      "capex": 0.0,
+      "status": "CALIBRATED_FROM_UNIT_COST"
+    },
+    "cyclotron_shortfall": {
+      "resource": "cyclotron",
+      "existing": 1,
+      "target": 2,
+      "retained": 1,
+      "replaced": 0,
+      "new": 1,
+      "acquisition": 1,
+      "capex": 3000000.0,
+      "status": "CALIBRATED_FROM_UNIT_COST"
+    },
+    "bed_room": {
+      "existing": 30,
+      "new": 20,
+      "target": 50,
+      "existing_charged_as_new": false
+    },
+    "new_wing": {
+      "total_incremental": 15500000.0,
+      "existing_recharged": false
+    },
+    "vertical_expansion": {
+      "total": 12000000.0,
+      "inherited_floors": 4,
+      "new_floors": 4,
+      "all_priced_as_new": false
+    },
+    "retrofit": {
+      "total": 370000.0,
+      "full_recost": false
+    },
+    "greenfield": {
+      "total": 37000000.0,
+      "zero_cost_inheritance": false
+    }
+  },
+  "unknown_opex_identity_example": {
+    "reporting_views": [
+      "X baseline OPEX",
+      "X retained OPEX",
+      "X target OPEX"
+    ],
+    "distinct_sources": [
+      "X:BASELINE"
+    ],
+    "distinct_count": 1
+  },
+  "transport_package_examples": {
+    "guideway_only": {
+      "known": 750000.0,
+      "completeness": "PARTIAL_PACKAGE",
+      "is_total": false
+    }
+  },
+  "material_scope_runtime": {
+    "hvac_on_total": 12000000.0,
+    "hvac_off_total": 10000000.0,
+    "hvac_off_excluded": 2000000.0,
+    "physically_present_but_excluded": [
+      "HVAC-1"
+    ]
+  },
+  "expansion_connection": {
+    "existing_charged": 0.0,
+    "wing": 12000000.0,
+    "connection": 1950000.0,
+    "total": 13950000.0,
+    "identifiable": true
+  },
+  "greenfield_audit_example": {
+    "over_inheritance": true,
+    "zero_cost": [
+      "SNUCK"
+    ]
+  },
+  "consumer_map": {
+    "PROJECT_CLASS_OWNER": "capital_project_inheritance_authority.CapitalProjectScope",
+    "ASSET_STATE_OWNER": "capital_project_inheritance_authority.AssetEconomicState + AssetClassification",
+    "CAPACITY_DELTA_OWNER": "capital_project_inheritance_authority.compute_capacity_delta",
+    "INCREMENTAL_CAPEX_OWNER": "capital_project_inheritance_authority.aggregate_incremental_capex",
+    "OPEX_INHERITANCE_OWNER": "capital_project_inheritance_authority.compute_opex_inheritance",
+    "TRANSPORT_PACKAGE_OWNER": "capital_project_inheritance_authority.reconcile_transport_package",
+    "MATERIAL_SCOPE_CONSUMER": "capital_project_inheritance_authority.apply_material_economic_scope",
+    "EXPANSION_OWNER": "capital_project_inheritance_authority.reconcile_expansion",
+    "GREENFIELD_SENTINEL": "capital_project_inheritance_authority.audit_greenfield_inheritance"
+  },
+  "known_calibration_gaps": [
+    "Illustrative unit costs are CONTROLLED_ENGINEERING_ASSUMPTION, not calibrated facility facts",
+    "Unknown baseline/incremental OPEX preserved as NOT_CALIBRATED (never $0-filled)",
+    "Transport package unit costs where None -> NOT_CALIBRATED"
+  ]
+}
