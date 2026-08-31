@@ -1,0 +1,541 @@
+{
+  "live_connection": {
+    "token_acquired": true,
+    "token_value_shown": false,
+    "itwin_name": "MRTway Development Twin.",
+    "itwin_id": "bdf29ecd-b4a4-404d-861a-ac3061c7b12f",
+    "itwin_id_matches_expected": true,
+    "itwin_status": "Active",
+    "imodel_count": 1,
+    "imodel_name": "MRTway Hospital Campus Development.",
+    "imodel_id": "ea9c0558-45a3-40b8-91a9-f4075b826925",
+    "imodel_state": "initialized",
+    "changeset_count": 13,
+    "latest_changeset": "7e6500eeecf2507c486beb14a763f4056342775c",
+    "mesh_export_count": 2,
+    "mesh_export_status": "Complete"
+  },
+  "live_evidence_table": [
+    {
+      "proof": "TOKEN",
+      "path": "POST ims.bentley.com/connect/token",
+      "http": 200,
+      "result": "acquired (len only)",
+      "classification": "PROVEN_LIVE"
+    },
+    {
+      "proof": "ITWIN_DETAILS",
+      "path": "GET /itwins/{id} (v1)",
+      "http": 200,
+      "representative_id": "bdf29ecd-b4a4-404d-861a-ac3061c7b12f",
+      "classification": "PROVEN_LIVE"
+    },
+    {
+      "proof": "LIST_IMODELS",
+      "path": "GET /imodels?iTwinId=",
+      "http": 200,
+      "count": 1,
+      "classification": "PROVEN_LIVE"
+    },
+    {
+      "proof": "IMODEL_DETAILS",
+      "path": "GET /imodels/{id}",
+      "http": 200,
+      "representative_id": "ea9c0558-45a3-40b8-91a9-f4075b826925",
+      "classification": "PROVEN_LIVE"
+    },
+    {
+      "proof": "CHANGESETS",
+      "path": "GET /imodels/{id}/changesets",
+      "http": 200,
+      "count": 13,
+      "provenance": "7e6500ee...",
+      "classification": "PROVEN_LIVE"
+    },
+    {
+      "proof": "MESH_EXPORT",
+      "path": "GET /mesh-export?iModelId=",
+      "http": 200,
+      "count": 2,
+      "classification": "PROVEN_LIVE"
+    },
+    {
+      "proof": "ELEMENT_INVENTORY",
+      "path": "GET /imodels/{id}/elements",
+      "http": 404,
+      "result": "endpoint unavailable",
+      "classification": "NOT_QUERYABLE_WITH_CURRENT_READ_PATH"
+    },
+    {
+      "proof": "ELEMENT_PROPERTIES",
+      "path": "(via ECSQL/briefcase)",
+      "http": null,
+      "classification": "NOT_QUERYABLE_WITH_CURRENT_READ_PATH"
+    },
+    {
+      "proof": "ELEMENT_SPATIAL",
+      "path": "(via ECSQL/briefcase)",
+      "http": null,
+      "classification": "NOT_QUERYABLE_WITH_CURRENT_READ_PATH"
+    },
+    {
+      "proof": "LIVE_ELEMENT_BINDING",
+      "path": "find_live_element (REST /elements 404)",
+      "http": 404,
+      "classification": "SUPPORTED_BUT_NOT_PRESENT_IN_TEST_IMODEL"
+    }
+  ],
+  "binding_statuses": [
+    "BOUND",
+    "UNBOUND",
+    "IGNORED",
+    "AMBIGUOUS",
+    "UNSUPPORTED_CLASS",
+    "MISSING_REQUIRED_PROPERTY",
+    "STALE_SOURCE_VERSION",
+    "SOURCE_ELEMENT_MISSING"
+  ],
+  "supported_bindable_classes": [
+    "IfcBuilding",
+    "IfcBuildingStorey",
+    "IfcDistributionElement",
+    "IfcDoor",
+    "IfcFlowTerminal",
+    "IfcFurnishingElement",
+    "IfcSite",
+    "IfcSpace",
+    "IfcTransportElement",
+    "IfcWall",
+    "PhysicalObject",
+    "SpatialLocationElement"
+  ],
+  "stable_identity_fields": [
+    "element_id",
+    "federation_guid",
+    "model_id",
+    "changeset_id",
+    "class_name",
+    "itwin_id",
+    "imodel_id",
+    "(label=display only, never identity)"
+  ],
+  "binding_proof": {
+    "status": "BOUND",
+    "mrt_object_id": "RM-101",
+    "economic_state": "RETAINED_NO_CHANGE",
+    "implies_new_capex": false,
+    "bound_at_changeset": "7e6500eeecf2507c486beb14a763f4056342775c"
+  },
+  "geometry_controls": {
+    "sep_100_to_500_delta": 400.0,
+    "sep_500_to_100_delta": -400.0,
+    "round_trip_final_absolute": 100.0,
+    "round_trip_drift": 0.0,
+    "floor_4_to_8_delta": 4,
+    "floor_8_to_12_delta": 4
+  },
+  "supported_transform_types": [
+    "TRANSLATE",
+    "ROTATE",
+    "CHANGE_ELEVATION",
+    "CHANGE_BUILDING_SEPARATION",
+    "CHANGE_FLOOR_COUNT",
+    "CHANGE_FLOOR_HEIGHT",
+    "RESIZE_FOOTPRINT",
+    "RELOCATE_ROOM",
+    "RELOCATE_EQUIPMENT"
+  ],
+  "building_separation_consumers": [
+    {
+      "consequence": "Manual route distance",
+      "authority": "conventional_transport_authority.compute_manual_mission_timing",
+      "readiness": "ADAPTER_AVAILABLE"
+    },
+    {
+      "consequence": "PTS tube/network length",
+      "authority": "conventional_transport_authority.DEFAULT_PTS_NETWORK",
+      "readiness": "ADAPTER_AVAILABLE"
+    },
+    {
+      "consequence": "RTHS track length",
+      "authority": "conventional_transport_authority RGHT",
+      "readiness": "ADAPTER_AVAILABLE"
+    },
+    {
+      "consequence": "AGV route distance",
+      "authority": "floor_agv_amr_authority.compute_floor_agv_mission_timing",
+      "readiness": "ADAPTER_AVAILABLE"
+    },
+    {
+      "consequence": "MRT guideway length",
+      "authority": "mrt_canonical_configuration (READ-ONLY)",
+      "readiness": "ADAPTER_AVAILABLE"
+    },
+    {
+      "consequence": "Patient travel",
+      "authority": "spatial_benchmark route metrics",
+      "readiness": "NOT_YET_INTEGRATED"
+    },
+    {
+      "consequence": "Connection work CapEx",
+      "authority": "capital_project_inheritance_authority",
+      "readiness": "ADAPTER_AVAILABLE"
+    },
+    {
+      "consequence": "Incremental transport CapEx",
+      "authority": "generalized_transport_optimizer + capital inheritance",
+      "readiness": "ADAPTER_AVAILABLE"
+    },
+    {
+      "consequence": "Transport OPEX/energy",
+      "authority": "per-mode OPEX authorities",
+      "readiness": "ADAPTER_AVAILABLE"
+    },
+    {
+      "consequence": "Clinical timing",
+      "authority": "operating_day_scheduler",
+      "readiness": "NOT_YET_INTEGRATED"
+    },
+    {
+      "consequence": "Radionuclide decay consequence",
+      "authority": "multi_isotope_decay",
+      "readiness": "NOT_YET_INTEGRATED"
+    }
+  ],
+  "floor_count_consumers": [
+    {
+      "consequence": "Floor geometry",
+      "authority": "canonical_spatial_authority",
+      "readiness": "ADAPTER_AVAILABLE"
+    },
+    {
+      "consequence": "Vertical travel distance",
+      "authority": "floor_agv_amr_authority elevator model",
+      "readiness": "ADAPTER_AVAILABLE"
+    },
+    {
+      "consequence": "Elevator/vertical transport",
+      "authority": "conventional_transport_authority elevator wait",
+      "readiness": "ADAPTER_AVAILABLE"
+    },
+    {
+      "consequence": "Beds/rooms",
+      "authority": "capital_project_inheritance_authority capacity-delta",
+      "readiness": "ADAPTER_AVAILABLE"
+    },
+    {
+      "consequence": "HVAC",
+      "authority": "capital_project_inheritance_authority material scope",
+      "readiness": "ADAPTER_AVAILABLE"
+    },
+    {
+      "consequence": "Electrical",
+      "authority": "capital_project_inheritance_authority material scope",
+      "readiness": "ADAPTER_AVAILABLE"
+    },
+    {
+      "consequence": "Structure",
+      "authority": "capital_project_inheritance_authority material scope",
+      "readiness": "ADAPTER_AVAILABLE"
+    },
+    {
+      "consequence": "Shielding",
+      "authority": "capital_project_inheritance_authority material scope",
+      "readiness": "NOT_CALIBRATED"
+    },
+    {
+      "consequence": "Transport vertical segments",
+      "authority": "generalized_transport_optimizer",
+      "readiness": "NOT_YET_INTEGRATED"
+    },
+    {
+      "consequence": "Scanner/resource demand",
+      "authority": "engineering.required_scanners / capacity-delta",
+      "readiness": "ADAPTER_AVAILABLE"
+    },
+    {
+      "consequence": "Patient throughput",
+      "authority": "operating_day_scheduler",
+      "readiness": "NOT_YET_INTEGRATED"
+    },
+    {
+      "consequence": "Incremental CapEx",
+      "authority": "capital_project_inheritance_authority",
+      "readiness": "ADAPTER_AVAILABLE"
+    },
+    {
+      "consequence": "Target/incremental OPEX",
+      "authority": "capital_project_inheritance_authority OPEX inheritance",
+      "readiness": "ADAPTER_AVAILABLE"
+    }
+  ],
+  "reactive_engine_integrated_now": false,
+  "viewer_readiness": {
+    "viewer_client_present": false,
+    "viewer_auth_flow": "NOT_IMPLEMENTED",
+    "viewer_itwin_binding": false,
+    "viewer_imodel_binding": false,
+    "viewer_model_load": false,
+    "viewer_selection": false,
+    "viewer_property_panel": false,
+    "viewer_clipping": false,
+    "viewer_ready_status": "NOT_READY (placeholder viewport; needs separate browser-auth viewer build)",
+    "service_secret_in_frontend": false,
+    "service_secret_in_bundle": false,
+    "env_bentley_imported_by_frontend": false,
+    "service_client_reused_as_browser_secret_client": false
+  },
+  "live_mutation_implemented": false,
+  "security": {
+    "secret_exposed_in_output": false,
+    "bentley_env_file_committed": false,
+    "gitignore_narrow_addition": ".env.bentley"
+  },
+  "movement_domain": {
+    "MRT": {
+      "domain": "NETWORK_BOUND",
+      "legal_edge": "MRT"
+    },
+    "RTHS": {
+      "domain": "NETWORK_BOUND",
+      "legal_edge": "AGV_AMR"
+    },
+    "PTS_CONVENTIONAL": {
+      "domain": "NETWORK_BOUND",
+      "legal_edge": "PNEUMATIC_TUBE"
+    },
+    "PTS_NUCLEAR_QUALIFIED": {
+      "domain": "NETWORK_BOUND",
+      "legal_edge": "PNEUMATIC_TUBE"
+    },
+    "AGV_AMR_LIGHT_CLINICAL": {
+      "domain": "NAVIGABLE_SPACE_BOUND",
+      "legal_edge": "AGV_AMR"
+    },
+    "AGV_AMR_HEAVY_LOGISTICS": {
+      "domain": "NAVIGABLE_SPACE_BOUND",
+      "legal_edge": "AGV_AMR"
+    },
+    "MANUAL": {
+      "domain": "NAVIGABLE_SPACE_BOUND",
+      "legal_edge": "WALKING_PORTER"
+    }
+  },
+  "movement_domain_governors": {
+    "MRT_CARRIER_OFF_GUIDEWAY": "NO",
+    "RTHS_VEHICLE_OFF_TRACK": "NO",
+    "PTS_CAPSULE_OUTSIDE_TUBE": "NO",
+    "AGV_CROSSES_WALL": "NO",
+    "MANUAL_ROUTE_CROSSES_WALL": "NO",
+    "DISCONNECTED_NETWORK_TREATED_AS_FEASIBLE": "NO",
+    "ROUTE_LENGTH_IS_TOPOLOGICAL_NOT_EUCLIDEAN": "YES",
+    "GEOMETRIC_SEPARATION_EQUALS_ALL_TRANSPORT_ROUTE_LENGTHS": "NO",
+    "SMART_CONNECTION_POINT_LIES_ON_VALID_NETWORK": "YES",
+    "MRT_CONNECTION_RESTARTS_FROM_SOURCE_BY_DEFAULT": "NO"
+  },
+  "radionuclide_visual_identity": {
+    "F-18": "F18_LIME",
+    "Tc-99m": "TC99M_CYAN",
+    "Ga-68": "GA68_MAGENTA",
+    "Lu-177": "LU177_ORANGE",
+    "I-131": "I131_YELLOW",
+    "Xx-999": "UNKNOWN_GRAY"
+  },
+  "radionuclide_color_governors": {
+    "RADIONUCLIDE_COLOR_CHANGES_WITH_TRANSPORT_MODE": "NO",
+    "RADIONUCLIDE_COLOR_PERSISTS_ACROSS_MODE_TRANSFER": "YES",
+    "RADIONUCLIDE_COLOR_CHANGED_BY_DECAY": "NO"
+  },
+  "payload_streams": [
+    "RADIOPHARMACEUTICAL",
+    "CONVENTIONAL_MEDICATION",
+    "CLEAN_LINEN",
+    "STERILE_SUPPLY",
+    "SPECIMEN",
+    "LAB_SUPPLY"
+  ],
+  "payload_default_endpoints": {
+    "RADIOPHARMACEUTICAL:OUTBOUND": {
+      "origin": "RADIOPHARMACY_RELEASE",
+      "destination": "PATIENT_CLINICAL_ROOM"
+    },
+    "CONVENTIONAL_MEDICATION:OUTBOUND": {
+      "origin": "CENTRAL_PHARMACY",
+      "destination": "PATIENT_CLINICAL_ROOM"
+    },
+    "CLEAN_LINEN:OUTBOUND": {
+      "origin": "LAUNDRY_LINEN_SERVICE",
+      "destination": "PATIENT_CLINICAL_ROOM"
+    },
+    "CLEAN_LINEN:RETURN": {
+      "origin": "PATIENT_CLINICAL_ROOM",
+      "destination": "LAUNDRY_LINEN_SERVICE"
+    },
+    "STERILE_SUPPLY:OUTBOUND": {
+      "origin": "CSSD_STERILE_PROCESSING",
+      "destination": "PATIENT_CLINICAL_ROOM"
+    },
+    "SPECIMEN:OUTBOUND": {
+      "origin": "COLLECTION_POINT",
+      "destination": "LABORATORY"
+    },
+    "LAB_SUPPLY:OUTBOUND": {
+      "origin": "LABORATORY",
+      "destination": "PATIENT_CLINICAL_ROOM"
+    }
+  },
+  "radiopharm_origin_chain": [
+    "CYCLOTRON_GENERATOR_PRODUCTION",
+    "RADIOPHARMACY_RELEASE",
+    "PATIENT_CLINICAL_ROOM"
+  ],
+  "payload_endpoint_governors": {
+    "RADIOPHARMACEUTICAL_PRODUCTION_ORIGIN_EQUALS_TRANSPORT_ORIGIN_BY_DEFAULT": "NO",
+    "SPECIMEN_ORIGIN_ALWAYS_LAB": "NO",
+    "STERILE_SUPPLY_ORIGIN_ALWAYS_LAUNDRY": "NO",
+    "PAYLOAD_STREAM_ENDPOINT_AUTHORITY_COMPLETE": "YES"
+  },
+  "interactive_route_authoring": {
+    "route_network_states": [
+      "BASELINE_NETWORK",
+      "AUTO_GENERATED_SCENARIO_NETWORK",
+      "USER_EDITED_WHATIF_NETWORK"
+    ],
+    "control_point_kinds": [
+      "BEND",
+      "REQUIRED_PASSAGE",
+      "PREFERRED_CORRIDOR",
+      "REQUIRED_DOOR",
+      "REQUIRED_ELEVATOR"
+    ],
+    "route_edit_recompute_targets": [
+      "route_length",
+      "travel_time",
+      "carrier_vehicle_porter_cycle",
+      "fleet_or_fte",
+      "capacity",
+      "energy",
+      "radionuclide_decay",
+      "required_upstream_activity",
+      "production_activity",
+      "batch_requirement",
+      "cyclotron_capacity",
+      "generator_capacity",
+      "scanner_clinical_consequences",
+      "incremental_capex",
+      "target_opex",
+      "incremental_opex",
+      "feasibility"
+    ],
+    "physical_bend_owner_by_mode": {
+      "MRT": "mrt_canonical_configuration / shared_mrt guideway curve authority",
+      "RTHS": "rght_spatial_network_authority (switch/junction/curve)",
+      "PTS_CONVENTIONAL": "pts_spatial_network_authority (tube bend/diverter)",
+      "PTS_NUCLEAR_QUALIFIED": "dedicated_rp_pts_authority (shielded tube bend)",
+      "AGV_AMR_LIGHT_CLINICAL": "navigable-space turn radius (floor_agv_amr_authority)",
+      "AGV_AMR_HEAVY_LOGISTICS": "navigable-space turn radius (floor_agv_amr_authority)",
+      "MANUAL": "pedestrian corridor geometry (canonical_spatial_authority)"
+    },
+    "governors": {
+      "USER_CAN_CREATE_FIXED_NETWORK_ROUTE": "YES",
+      "USER_CAN_INSERT_ROUTE_WAYPOINT": "YES",
+      "USER_CAN_MOVE_ROUTE_WAYPOINT": "YES",
+      "USER_CAN_DELETE_ROUTE_SEGMENT": "YES",
+      "PINNED_ENDPOINT_MOVES_WITH_INTERMEDIATE_WAYPOINT": "NO",
+      "AUTO_ROUTE_AVAILABLE": "YES",
+      "RESTORE_AUTO_ROUTE_AVAILABLE": "YES",
+      "ORTHOGONAL_UI_VERTEX_OVERRIDES_PHYSICAL_BEND_GEOMETRY": "NO",
+      "ROUTE_EDIT_RECOMPUTES_ENGINEERING_CONSEQUENCES": "YES",
+      "AGV_FAKE_FIXED_TRACK_PRESENT": "NO",
+      "MANUAL_FAKE_FIXED_TRACK_PRESENT": "NO",
+      "WHATIF_ROUTE_EDIT_MUTATES_LIVE_BENTLEY": "NO"
+    }
+  },
+  "additive_test_counts": {
+    "movement_domain_tests": 30,
+    "interactive_routing_tests": 38,
+    "campus_multibuilding_tests": 32
+  },
+  "six_dof_pose": {
+    "spatial_transform_supports_6dof": true,
+    "building_translation_restricted_to_single_axis": false,
+    "non_axis_aligned_translation_control": {
+      "a": [
+        0,
+        0,
+        0
+      ],
+      "b": [
+        300,
+        400,
+        0
+      ],
+      "separation_m": 500.0,
+      "pass": true
+    },
+    "xyz_separation_control": {
+      "a": [
+        0,
+        0,
+        0
+      ],
+      "b": [
+        300,
+        400,
+        120
+      ],
+      "delta": [
+        300,
+        400,
+        120
+      ],
+      "pass": true
+    },
+    "rotation_with_fixed_origin_control": "PASS",
+    "six_dof_round_trip_drift_present": false,
+    "child_connection_point_transform_follows_parent": true,
+    "building_rotation_ignored_by_connection_engine": false
+  },
+  "campus_multibuilding": {
+    "building_1_is_global_parent_of_all_buildings": false,
+    "all_transport_modes_share_identical_connectivity_graph": false,
+    "new_building_always_connects_to_building_1": false,
+    "nearest_building_always_selected_as_connection_parent": false,
+    "moving_building_c_automatically_moves_a_or_b": false,
+    "engineering_reaction_implies_physical_movement": false,
+    "transport_connectivity_implies_movement_group": false,
+    "unrelated_network_segments_rebuilt_after_local_move": false,
+    "inherited_network_zero_travel_time": false,
+    "decay_calculated_only_on_incremental_segment": false,
+    "geometric_separation_equals_all_transport_route_lengths": false,
+    "building_a_is_universal_logistics_origin": false,
+    "per_mode_components": {
+      "MRT": [
+        [
+          "A",
+          "B",
+          "D",
+          "E"
+        ]
+      ],
+      "PTS_CONVENTIONAL": [
+        [
+          "A",
+          "B"
+        ]
+      ],
+      "RTHS": [
+        [
+          "B",
+          "C"
+        ]
+      ]
+    },
+    "full_path_mission_control": {
+      "full_route_length_m": 345.0,
+      "incremental_capex_length_m": 145.0,
+      "inherited_length_m": 200.0,
+      "full_path_travel_time_s_at_10mps": 34.5
+    }
+  }
+}
