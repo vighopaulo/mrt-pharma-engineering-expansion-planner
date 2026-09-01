@@ -11,11 +11,13 @@
  * internals. Rendering (the decorator) consumes the resulting AssetInstance[].
  */
 import type { AssetRegistry } from './registry'
+import { adaptCatalogRecordToAssetDefinition, assetFamilyForCatalogModality, type AuthoritativeEquipmentRecord } from './catalogAdapter'
 import {
     IDENTITY_SCALE,
     ROOM_NOT_ASSIGNED,
     ZERO_ROTATION,
     type AssetDefinition,
+    type AssetDimensions,
     type AssetInstallationState,
     type AssetInstance,
     type RoomAssignment,
@@ -161,6 +163,130 @@ export function assignAssetToRoom(inst: AssetInstance, room: RoomAssignment): Co
             assetInstanceId: inst.assetInstanceId,
             projectId: inst.projectId,
             detail: { roomState: room.state, roomId: room.roomId ?? '' },
+        },
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Catalog-backed creation
+// ---------------------------------------------------------------------------
+
+export type CatalogCreateFailure =
+    | 'CATALOG_RECORD_NOT_FOUND'
+    | 'UNSUPPORTED_ASSET_FAMILY'
+    | 'GEOMETRY_NOT_AVAILABLE'
+    | 'GEOMETRY_FAMILY_MISMATCH'
+    | 'INVALID_CATALOG_ADAPTER'
+    | 'DIMENSIONS_NOT_CALIBRATED'
+
+export type CatalogCommandResult =
+    | { ok: true; instance: AssetInstance; definition: AssetDefinition; event: AssetJournalEvent }
+    | { ok: false; reason: CatalogCreateFailure; message: string }
+
+export interface CreateFromCatalogInput {
+    registry: AssetRegistry
+    record: AuthoritativeEquipmentRecord
+    assetDefinitionId: string
+    assetInstanceId: string
+    projectId: string
+    position: SpatialPosition
+    /** Geometry-native / placeholder dims + honest provenance (catalog footprint
+     * is typically NOT_CALIBRATED, so callers must NOT claim CATALOG provenance
+     * unless the record's dimensionsCalibrated is true). */
+    dimensions: AssetDimensions
+    /** Optional explicit geometry id; otherwise resolved by family priority. */
+    explicitGeometryRepresentationId?: string
+    rotation?: SpatialRotation
+    installationState?: AssetInstallationState
+    spatialSource?: SpatialSource
+    roomAssignment?: RoomAssignment
+}
+
+/**
+ * Build a spatial asset instance from an authoritative equipment catalog record:
+ *   1. adapt record → AssetDefinition (label from catalog identity),
+ *   2. resolve a COMPATIBLE geometry representation (family-checked, priority),
+ *   3. register the definition + create a distinct instance,
+ *   4. preserve catalog provenance,
+ *   5. return explicit typed failures at each stage.
+ * No Bentley interaction. Engineering values are referenced, not copied.
+ */
+export function createAssetInstanceFromCatalog(input: CreateFromCatalogInput): CatalogCommandResult {
+    // Guard against claiming calibrated catalog dimensions when the record says otherwise.
+    if (input.dimensions.provenance === 'CATALOG' && !input.record.dimensionsCalibrated) {
+        return {
+            ok: false,
+            reason: 'DIMENSIONS_NOT_CALIBRATED',
+            message: `catalog record ${input.record.catalogRecordId} has no calibrated footprint; cannot label dimensions as CATALOG`,
+        }
+    }
+
+    // 1. adapt (this also determines the asset family from modality).
+    const family = assetFamilyForCatalogModality(input.record.modality, input.record.configurationNote)
+    if (!family) {
+        return { ok: false, reason: 'UNSUPPORTED_ASSET_FAMILY', message: `no family mapping for modality '${input.record.modality}'` }
+    }
+
+    // 2. resolve compatible geometry (family-checked, deterministic priority).
+    const geoRes = input.registry.resolveCompatibleGeometry(family, input.explicitGeometryRepresentationId)
+    if (geoRes.status !== 'RESOLVED') {
+        return { ok: false, reason: 'GEOMETRY_NOT_AVAILABLE', message: `no compatible geometry for family ${family}` }
+    }
+    if (geoRes.representation.assetFamily !== family) {
+        return { ok: false, reason: 'GEOMETRY_FAMILY_MISMATCH', message: `resolved geometry family ${geoRes.representation.assetFamily} != ${family}` }
+    }
+
+    const adapted = adaptCatalogRecordToAssetDefinition(input.record, {
+        assetDefinitionId: input.assetDefinitionId,
+        defaultGeometryRepresentationId: geoRes.representation.geometryRepresentationId,
+        dimensions: input.dimensions,
+    })
+    if (!adapted.ok) {
+        const reason: CatalogCreateFailure = adapted.reason === 'UNSUPPORTED_ASSET_FAMILY' ? 'UNSUPPORTED_ASSET_FAMILY' : 'INVALID_CATALOG_ADAPTER'
+        return { ok: false, reason, message: adapted.message }
+    }
+
+    // 3. register the definition (idempotent-ish: registry validates + family-checks).
+    try {
+        if (!input.registry.getAssetDefinition(adapted.definition.assetDefinitionId)) {
+            input.registry.registerAssetDefinition(adapted.definition)
+        }
+    } catch (e) {
+        return { ok: false, reason: 'INVALID_CATALOG_ADAPTER', message: e instanceof Error ? e.message : String(e) }
+    }
+
+    // 4. create the instance (label comes from the adapted definition).
+    const created = createAssetInstance({
+        registry: input.registry,
+        assetInstanceId: input.assetInstanceId,
+        assetDefinitionId: adapted.definition.assetDefinitionId,
+        projectId: input.projectId,
+        position: input.position,
+        rotation: input.rotation,
+        installationState: input.installationState ?? 'PLACED',
+        spatialSource: input.spatialSource ?? 'CATALOG',
+        roomAssignment: input.roomAssignment,
+        createdFrom: `catalog:${input.record.catalogSource}#${input.record.catalogRecordId}`,
+    })
+    if (!created.ok) {
+        return { ok: false, reason: 'INVALID_CATALOG_ADAPTER', message: created.errors.map((x) => `${x.field} ${x.message}`).join('; ') }
+    }
+    // Ensure the placed instance carries the catalog-derived dimensions/provenance.
+    const instance: AssetInstance = { ...created.instance, dimensions: input.dimensions }
+
+    return {
+        ok: true,
+        instance,
+        definition: adapted.definition,
+        event: {
+            type: 'ASSET_INSTANCE_CREATED',
+            assetInstanceId: instance.assetInstanceId,
+            projectId: instance.projectId,
+            detail: {
+                assetDefinitionId: instance.assetDefinitionId,
+                geometryRepresentationId: instance.geometryRepresentationId,
+                catalogRecordId: input.record.catalogRecordId,
+            },
         },
     }
 }

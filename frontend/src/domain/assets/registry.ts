@@ -10,6 +10,7 @@
 import {
     ASSET_FAMILY_CLASS,
     type AssetDefinition,
+    type AssetFamily,
     type AssetInstance,
     type GeometryRepresentation,
     type GeometryResolution,
@@ -71,6 +72,42 @@ export class AssetRegistry {
     getGeometryResolution(id: string): GeometryResolution {
         const rep = this.geometry.get(id)
         return rep ? { status: 'RESOLVED', representation: rep } : { status: 'GEOMETRY_NOT_AVAILABLE', requestedId: id }
+    }
+
+    /**
+     * Deterministic geometry resolution by priority for a given asset family:
+     *   1. an explicitly-assigned representation id (if compatible with family);
+     *   2. a compatible MANUFACTURER_SPECIFIC representation (AVAILABLE);
+     *   3. a compatible GENERIC representation (AVAILABLE or PLACEHOLDER);
+     *   4. GEOMETRY_NOT_AVAILABLE.
+     * Never returns geometry of a different family (no silent cross-family fallback).
+     * When multiple candidates tie at a priority level, choose by ascending
+     * geometryRepresentationId for determinism.
+     */
+    resolveCompatibleGeometry(family: AssetFamily, explicitId?: string): GeometryResolution {
+        // 1. explicit assignment — only honored if it exists AND matches family.
+        if (explicitId) {
+            const rep = this.geometry.get(explicitId)
+            if (rep && rep.assetFamily === family) return { status: 'RESOLVED', representation: rep }
+            // An explicit-but-incompatible id must NOT silently fall through to a
+            // different family; but it MAY fall through to other same-family reps.
+        }
+        const sameFamily = this.listGeometryRepresentations()
+            .filter((r) => r.assetFamily === family)
+            .sort((a, b) => a.geometryRepresentationId.localeCompare(b.geometryRepresentationId))
+
+        // 2. compatible manufacturer-specific, AVAILABLE.
+        const mfr = sameFamily.find((r) => r.manufacturerSpecific && r.status === 'AVAILABLE')
+        if (mfr) return { status: 'RESOLVED', representation: mfr }
+
+        // 3. compatible generic, AVAILABLE or PLACEHOLDER.
+        const generic = sameFamily.find(
+            (r) => !r.manufacturerSpecific && (r.status === 'AVAILABLE' || r.status === 'PLACEHOLDER'),
+        )
+        if (generic) return { status: 'RESOLVED', representation: generic }
+
+        // 4. nothing compatible.
+        return { status: 'GEOMETRY_NOT_AVAILABLE', requestedId: explicitId ?? `family:${family}` }
     }
 
     /**

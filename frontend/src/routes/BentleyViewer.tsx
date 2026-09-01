@@ -117,6 +117,34 @@ export function BentleyViewer() {
         }
     }, [])
 
+    // Catalog-backed PET/CT (real GE Discovery MI identity, generic geometry).
+    const handleShowCatalogPetCt = useCallback(async () => {
+        try {
+            const mod = await import('../components/spatial/spatialAssetOverlay')
+            const r = mod.showCatalogPetCt()
+            setFitNote(r.ok ? `Catalog PET/CT shown: ${r.instanceId}` : `Show failed: ${r.reason}`)
+        } catch (e) {
+            setFitNote(`Catalog show error: ${e instanceof Error ? e.message : String(e)}`)
+        }
+    }, [])
+    const handleHideCatalogPetCt = useCallback(async () => {
+        try {
+            const mod = await import('../components/spatial/spatialAssetOverlay')
+            mod.hideCatalogPetCt()
+            setFitNote('Catalog PET/CT hidden')
+        } catch (e) {
+            setFitNote(`Catalog hide error: ${e instanceof Error ? e.message : String(e)}`)
+        }
+    }, [])
+    const handleInspectCatalogPetCt = useCallback(async () => {
+        try {
+            const mod = await import('../components/spatial/spatialAssetOverlay')
+            setFitNote(`Catalog asset: ${mod.inspectCatalogPetCt()}`)
+        } catch (e) {
+            setFitNote(`Catalog inspect error: ${e instanceof Error ? e.message : String(e)}`)
+        }
+    }, [])
+
     const handleInspectFeatureAppearance = useCallback(async () => {
         try {
             const mod = await import('../components/viewer/LiveItwinViewer')
@@ -190,6 +218,9 @@ export function BentleyViewer() {
                             <button type="button" onClick={() => void handleShowGenericPetCt()}>SHOW GENERIC PET/CT</button>
                             <button type="button" onClick={() => void handleHideGenericPetCt()}>HIDE GENERIC PET/CT</button>
                             <button type="button" onClick={() => void handleInspectGenericPetCt()}>INSPECT GENERIC PET/CT</button>
+                            <button type="button" onClick={() => void handleShowCatalogPetCt()}>SHOW CATALOG PET/CT</button>
+                            <button type="button" onClick={() => void handleHideCatalogPetCt()}>HIDE CATALOG PET/CT</button>
+                            <button type="button" onClick={() => void handleInspectCatalogPetCt()}>INSPECT CATALOG PET/CT</button>
                             {fitNote && <span className="viewer-fit-note">{fitNote}</span>}
                         </div>
                     </Suspense>

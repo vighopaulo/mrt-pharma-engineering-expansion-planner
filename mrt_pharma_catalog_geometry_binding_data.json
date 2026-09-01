@@ -1,0 +1,171 @@
+{
+  "build": "Real Equipment Catalog -> Generic 3D Geometry Binding",
+  "continues_from_checkpoint": "bf5ebe96f5a3da7f6f7bfcecf5f61d17dcaeb748",
+  "doctrine": "REAL CATALOG RECORD -> EquipmentSpatialAdapter -> AssetDefinition -> AssetInstance -> compatible generic geometry -> Bentley overlay. Engineering/catalog authoritative; geometry is representation; no second catalog in 3D subsystem.",
+  "authoritative_catalogs_found": {
+    "AUTHORITATIVE_SCANNER_CATALOG_FOUND": "YES",
+    "scanner_catalog_files": [
+      "scanner_equipment_catalog.json",
+      "scanner_catalog.py"
+    ],
+    "AUTHORITATIVE_PET_CT_RECORD_FOUND": "YES",
+    "pet_ct_records": [
+      "GE_DISCOVERY_MI",
+      "SIEMENS_BIOGRAPH_VISION"
+    ],
+    "spect_records": [
+      "SIEMENS_SYMBIA_PRO_SPECTA",
+      "GE_NM_CT_870_DR",
+      "GE_NM_CT_860",
+      "PHILIPS_BRIGHTVIEW_XCT"
+    ],
+    "scanner_dimensions_status": "NOT_CALIBRATED (dimensions_footprint_notes) for all scanner records",
+    "AUTHORITATIVE_CYCLOTRON_CATALOG_FOUND": "YES",
+    "cyclotron_catalog_files": [
+      "cyclotron_equipment_catalog.json",
+      "cyclotron_catalog.py"
+    ],
+    "generator_catalog_files": [
+      "generator_equipment_catalog.json",
+      "generator_catalog.py"
+    ]
+  },
+  "adapter": {
+    "CATALOG_SCHEMA_USED": "ScannerCatalogModel (identity-only mirror as TS AuthoritativeEquipmentRecord)",
+    "CATALOG_ADAPTER_IMPLEMENTED": "YES",
+    "record_provenance_types": [
+      "REPOSITORY_SOURCE_DERIVED",
+      "TEST_FIXTURE"
+    ],
+    "engineering_values_copied_into_spatial_domain": false,
+    "CATALOG_RECORD_ID_PRESERVED": "PASS",
+    "ENGINEERING_METADATA_REFERENCE_PRESERVED": "PASS"
+  },
+  "resolver": {
+    "GENERIC_GEOMETRY_COMPATIBILITY_RESOLVER": "PASS",
+    "GEOMETRY_RESOLUTION_PRIORITY": "PASS",
+    "priority_order": [
+      "explicit_if_family_compatible",
+      "compatible_manufacturer_specific_AVAILABLE",
+      "compatible_generic_AVAILABLE_or_PLACEHOLDER",
+      "GEOMETRY_NOT_AVAILABLE"
+    ],
+    "cross_family_silent_fallback": false,
+    "typed_failures": [
+      "CATALOG_RECORD_NOT_FOUND",
+      "UNSUPPORTED_ASSET_FAMILY",
+      "GEOMETRY_NOT_AVAILABLE",
+      "GEOMETRY_FAMILY_MISMATCH",
+      "INVALID_CATALOG_ADAPTER",
+      "DIMENSIONS_NOT_CALIBRATED"
+    ]
+  },
+  "real_pet_ct_proof": {
+    "REAL_PET_CT_SPATIAL_INSTANCE_CREATED": "YES",
+    "REAL_PET_CT_CATALOG_RECORD_ID": "GE_DISCOVERY_MI",
+    "REAL_PET_CT_DISPLAY_LABEL": "GE HealthCare Discovery MI",
+    "catalog_source": "scanner_equipment_catalog.json",
+    "record_provenance": "REPOSITORY_SOURCE_DERIVED",
+    "asset_definition_id": "CATALOG_PET_CT_GE_DISCOVERY_MI",
+    "asset_instance_id": "PETCT-CATALOG-TEST-01",
+    "geometry_representation_id": "GENERIC_PET_CT_SCANNER_V1",
+    "dimensions_m": {
+      "width": 2.2,
+      "depth": 3.0,
+      "height": 2.0
+    },
+    "DIMENSION_PROVENANCE": "GENERIC_ENGINEERING_PLACEHOLDER",
+    "room_assignment": "NOT_ASSIGNED",
+    "installation_state": "PLACED",
+    "spatial_source": "CATALOG"
+  },
+  "identity_separation": {
+    "engineering_definition_id": "CATALOG_PET_CT_GE_DISCOVERY_MI",
+    "spatial_instance_id": "PETCT-CATALOG-TEST-01",
+    "geometry_representation_id": "GENERIC_PET_CT_SCANNER_V1",
+    "all_three_distinct": true
+  },
+  "GENERIC_GEOMETRY_REUSE_ACROSS_CATALOG_IDENTITIES": "PASS",
+  "ENGINEERING_DATA_DUPLICATED_IN_GEOMETRY": "NO",
+  "generic_proof_preserved": {
+    "assetDefinitionId": "GENERIC_PET_CT_ENGINEERING_TEST",
+    "assetInstanceId": "PETCT-TEST-01",
+    "geometryRepresentationId": "GENERIC_PET_CT_SCANNER_V1"
+  },
+  "targeted_correction": {
+    "MANUAL_FAILURE_OBSERVED": "YES",
+    "MANUAL_FAILURE": "NO_CATALOG_ASSET_PLACED",
+    "FAILURE_STAGE": "overlay_state_lifecycle (post-creation)",
+    "FAILURE_CODE": "OVERLAY_STATE_CLEARED_ON_DECORATOR_DISPOSE",
+    "ROOT_CAUSE": "disposeOverlay() wiped the application-owned instances[] on viewer effect cleanup (React StrictMode mount->cleanup->mount / remount), so a shown asset vanished before inspect.",
+    "CORRECTION": "disposeOverlay() now detaches only the Bentley decorator registration; instances[] and the decorator object are retained across re-registration. Dedupe by assetInstanceId only. Added typed [catalog-asset] click-path diagnostic.",
+    "domain_creation_path": "PROVEN_OK_IN_ISOLATION (buildGeDiscoveryMiCatalogTestAsset returns ok:true)",
+    "UNIQUE_OVERLAY_KEY": "assetInstanceId",
+    "GENERIC_AND_CATALOG_INSTANCES_COEXIST": "PASS"
+  },
+  "verification": {
+    "TYPECHECK": "PASS",
+    "OFFLINE_TEST_COUNT": 96,
+    "NEW_CATALOG_BINDING_TEST_COUNT": 21,
+    "OFFLINE_TEST_REGRESSIONS": 0,
+    "PRODUCTION_BUILD": "PASS",
+    "WORKER_ASSET_REAL": "YES",
+    "DRACO_WASM_ASSET_REAL": "YES",
+    "CORE_FRONTEND_VERSION": "5.12.5"
+  },
+  "preserved": {
+    "LIVE_IMODEL_MODIFIED": "NO",
+    "BENTLEY_CHANGESET_CREATED": "NO",
+    "AUTH_FLOW_CHANGED": "NO",
+    "VIEWER_LIFECYCLE_CHANGED": "NO",
+    "TRANSPARENCY_WORK_RESUMED": "NO",
+    "CAMERA_BEHAVIOR_CHANGED": "NO"
+  },
+  "manual_confirmation": {
+    "POST_CORRECTION_MANUAL_ACCEPTANCE": "PASS",
+    "LIVE_IMODEL_VISIBLE_IN_BROWSER": "YES",
+    "GENERIC_PET_CT_VISIBLE_IN_BROWSER": "YES",
+    "CATALOG_PET_CT_VISIBLE_IN_BROWSER": "YES",
+    "TWO_SCANNER_INSTANCES_VISIBLE_SIMULTANEOUSLY": "YES",
+    "GENERIC_AND_CATALOG_INSTANCES_COEXIST": "YES",
+    "CATALOG_PET_CT_INSPECTION_VISIBLE": "YES",
+    "CATALOG_VISUAL_METADATA_LINKAGE": "PASS",
+    "CATALOG_GEOMETRY_BINDING_MANUALLY_CONFIRMED": "YES",
+    "browser_derived_facts": {
+      "assetInstanceId": "PETCT-CATALOG-TEST-01",
+      "displayLabel": "GE HealthCare Discovery MI",
+      "assetDefinitionId": "CATALOG_PET_CT_GE_DISCOVERY_MI",
+      "geometryRepresentationId": "GENERIC_PET_CT_SCANNER_V1",
+      "createdFrom": "catalog:scanner_equipment_catalog.json#GE_DISCOVERY_MI",
+      "placed_dimensions": "2.2 x 3 x 2 METERS",
+      "placed_dimension_provenance": "GENERIC_ENGINEERING_PLACEHOLDER",
+      "position": "(11.05, 10.00, 3.50)",
+      "room": "NOT_ASSIGNED",
+      "state": "PLACED",
+      "source": "CATALOG"
+    },
+    "repository_source_derived_fact": {
+      "CATALOG_DIMENSION_STATE": "NOT_CALIBRATED",
+      "note": "from scanner_equipment_catalog.json dimensions_footprint_notes; NOT shown in browser inspection"
+    },
+    "url": "http://localhost:3000/viewer",
+    "controls": [
+      "SHOW GENERIC PET/CT",
+      "SHOW CATALOG PET/CT",
+      "INSPECT CATALOG PET/CT"
+    ]
+  },
+  "out_of_scope": [
+    "equipment library population",
+    "manufacturer-specific geometry",
+    "drag/drop",
+    "room snapping",
+    "collision/clearance analysis",
+    "MRT endpoint/guideway",
+    "simulation",
+    "economics",
+    "Bentley Components Center / manufacturer CAD ingestion",
+    "NVIDIA",
+    "Omniverse"
+  ]
+}
