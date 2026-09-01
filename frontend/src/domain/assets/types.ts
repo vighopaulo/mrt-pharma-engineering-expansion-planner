@@ -319,13 +319,24 @@ export interface AssetDefinition {
 // Spatial instance
 // ---------------------------------------------------------------------------
 
-/** Provenance of a spatial object (who owns it). */
+/**
+ * Provenance of a spatial object (who owns it / how it entered the model).
+ *
+ * NOTE: `spatialSource` describes how the INSTANCE came to be placed in space.
+ * The ENGINEERING/catalog origin is carried separately via `createdFrom`
+ * (e.g. `catalog:scanner_equipment_catalog.json#GE_DISCOVERY_MI`). A user who
+ * places a catalog-backed asset produces `spatialSource = USER_PLACED` while
+ * still recording the catalog origin in `createdFrom` — the two are not
+ * collapsed just because the geometry is generic.
+ */
 export type SpatialSource =
     | 'BENTLEY_IMODEL'
     | 'MRT_PHARMA'
     | 'IMPORTED_EXTERNAL'
     | 'CATALOG'
     | 'GENERATED_GENERIC'
+    /** A manually placed instance created by a user in the placement workflow. */
+    | 'USER_PLACED'
 
 /** Installation / lifecycle state — never inferred from geometry visibility. */
 export type AssetInstallationState =

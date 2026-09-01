@@ -25,6 +25,11 @@ import './BentleyViewer.css'
 
 // Isolated heavy viewer: only loaded in the browser, never in vitest.
 const LiveItwinViewer = lazy(() => import('../components/viewer/LiveItwinViewer'))
+// Product Asset Library / placement UI (also isolated so vitest never imports
+// the Bentley placement stack it pulls in through the overlay).
+const ViewerAssetLibrary = lazy(() =>
+    import('../components/spatial/ViewerAssetLibrary').then((m) => ({ default: m.ViewerAssetLibrary })),
+)
 
 interface Selection {
     identity: BentleySourceIdentity
@@ -145,6 +150,17 @@ export function BentleyViewer() {
         }
     }, [])
 
+    // DEV diagnostic: bounded snapshot of the active placement intent (creates
+    // no AssetInstance).
+    const handleInspectPlacementIntent = useCallback(async () => {
+        try {
+            const mod = await import('../components/spatial/spatialAssetOverlay')
+            setFitNote(`Placement intent: ${mod.inspectPlacementIntent()}`)
+        } catch (e) {
+            setFitNote(`Placement intent error: ${e instanceof Error ? e.message : String(e)}`)
+        }
+    }, [])
+
     const handleInspectFeatureAppearance = useCallback(async () => {
         try {
             const mod = await import('../components/viewer/LiveItwinViewer')
@@ -209,9 +225,10 @@ export function BentleyViewer() {
                                 onAuthError={handleAuthError}
                             />
                         )}
-                        {/* Diagnostic control OUTSIDE the Bentley toolbars. One
-                            controlled native fit per click; not the final UI. */}
+                        {/* DEV diagnostics OUTSIDE the Bentley toolbars. Grouped
+                            under a DEV label; separate from the PRODUCT UI. */}
                         <div className="viewer-fit-control">
+                            <span className="viewer-dev-label">DEV</span>
                             <button type="button" onClick={() => void handleFitLiveModel()}>FIT LIVE MODEL</button>
                             <button type="button" onClick={() => void handleInspectRenderState()}>INSPECT RENDER STATE</button>
                             <button type="button" onClick={() => void handleInspectFeatureAppearance()}>INSPECT FEATURE APPEARANCE</button>
@@ -221,7 +238,16 @@ export function BentleyViewer() {
                             <button type="button" onClick={() => void handleShowCatalogPetCt()}>SHOW CATALOG PET/CT</button>
                             <button type="button" onClick={() => void handleHideCatalogPetCt()}>HIDE CATALOG PET/CT</button>
                             <button type="button" onClick={() => void handleInspectCatalogPetCt()}>INSPECT CATALOG PET/CT</button>
+                            <button type="button" onClick={() => void handleInspectPlacementIntent()}>INSPECT PLACEMENT INTENT</button>
                             {fitNote && <span className="viewer-fit-note">{fitNote}</span>}
+                        </div>
+
+                        {/* PRODUCT: Asset Library + controlled placement + placed
+                            assets. Additive; does not replace the DEV fixtures. */}
+                        <div className="viewer-product-panel">
+                            <Suspense fallback={<div className="mrt-lib-empty">Loading Asset Library…</div>}>
+                                <ViewerAssetLibrary />
+                            </Suspense>
                         </div>
                     </Suspense>
                 )}

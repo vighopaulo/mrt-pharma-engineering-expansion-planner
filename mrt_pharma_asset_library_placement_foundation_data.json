@@ -1,0 +1,348 @@
+{
+  "report": "MRT Pharma Asset Library + Controlled 3D Placement Foundation",
+  "continues_from_checkpoint": "174228dd4cef040ee7ba5836f4f9577c5a9f2f7a",
+  "repository_baseline": {
+    "PRECHECK_HEAD": "174228dd4cef040ee7ba5836f4f9577c5a9f2f7a",
+    "PRECHECK_ORIGIN_MAIN": "174228dd4cef040ee7ba5836f4f9577c5a9f2f7a",
+    "PRECHECK_DIVERGENCE": "0 / 0",
+    "local_only_untouched": [
+      "frontend/.env",
+      "AS_IS_DIGITAL_TWIN_PHASE_1A_SEAM_REPORT.md"
+    ]
+  },
+  "catalog_authority_clarification": {
+    "REPOSITORY_CATALOG_IDENTITY_USED": "YES",
+    "catalog_files": [
+      "scanner_equipment_catalog.json",
+      "scanner_catalog.py"
+    ],
+    "CATALOG_RECORD_ID": "GE_DISCOVERY_MI",
+    "CATALOG_MANUFACTURER": "GE HealthCare",
+    "CATALOG_MODEL": "Discovery MI",
+    "EXTERNAL_GE_API_CONNECTED": "NO",
+    "GE_MANUFACTURER_API_QUERIED": "NO",
+    "GE_MANUFACTURER_CAD_INGESTED": "NO",
+    "GE_MANUFACTURER_GEOMETRY_USED": "NO",
+    "note": "GE HealthCare Discovery MI is a repository-catalog-derived identity, not a fabricated UI label and not external-API-validated. Geometry remains GENERIC_PET_CT_SCANNER_V1 (not GE CAD); catalog footprint NOT_CALIBRATED; displayed dims 2.2 x 3 x 2 METERS provenance GENERIC_ENGINEERING_PLACEHOLDER."
+  },
+  "asset_library": {
+    "ASSET_LIBRARY_IMPLEMENTED": "YES",
+    "ASSET_LIBRARY_SOURCE": "AUTHORITATIVE_SCANNER_CATALOG",
+    "ASSET_LIBRARY_PET_CT_ENTRY": "GE_DISCOVERY_MI",
+    "ASSET_LIBRARY_DISPLAY_LABEL": "GE HealthCare Discovery MI",
+    "GEOMETRY_AVAILABILITY": "GENERIC_PET_CT_SCANNER_V1",
+    "geometry_status_note": "Generic spatial representation available",
+    "CATALOG_DIMENSION_STATE": "NOT_CALIBRATED",
+    "PLACED_DIMENSION_PROVENANCE": "GENERIC_ENGINEERING_PLACEHOLDER",
+    "DIMENSION_AUTHORITY_SEPARATION": "PASS",
+    "GENERIC_GEOMETRY_PRESENTED_AS_MANUFACTURER_CAD": "NO",
+    "pet_ct_scoped": true,
+    "excluded_families_from_query": [
+      "CYCLOTRON",
+      "SPECT_CT_SCANNER",
+      "GAMMA_CAMERA"
+    ],
+    "view_model_module": "frontend/src/domain/assets/assetLibrary.ts"
+  },
+  "bentley_placement_input": {
+    "CORE_FRONTEND_VERSION": "5.12.5",
+    "BENTLEY_PLACEMENT_API": "PrimitiveTool + BeButtonEvent + ScreenViewport.pickNearestVisibleGeometry(...)",
+    "be_button_event_point": "BeButtonEvent.point provides the Bentley ToolAdmin-resolved world-space event point",
+    "refinement": "ScreenViewport.pickNearestVisibleGeometry(ev.point) when visible model geometry is available",
+    "PLACEMENT_WORLD_POINT_SOURCE": "PICK_NEAREST_VISIBLE_GEOMETRY",
+    "PLACEMENT_WORLD_POINT_SOURCE_FALLBACK": "BE_BUTTON_EVENT_WORLD_POINT",
+    "FLOOR_SNAPPING_IMPLEMENTED": "NO",
+    "AUTOMATIC_ROOM_ASSIGNMENT": "NO",
+    "tool_module": "frontend/src/components/spatial/MrtAssetPlacementTool.ts"
+  },
+  "placement_tool": {
+    "PLACEMENT_TOOL_TYPE": "PrimitiveTool",
+    "PLACEMENT_TOOL_WRITABLE_TARGET_REQUIRED": "NO",
+    "read_only_wrt_imodel": true,
+    "behavior": [
+      "placement intent supplied before tool activation",
+      "exactly one accepted data-button click",
+      "world point resolved",
+      "domain placement operation executed",
+      "one AssetInstance inserted",
+      "placement intent consumed",
+      "tool exits"
+    ],
+    "ONE_CLICK_ONE_INSTANCE": "PASS",
+    "PLACEMENT_TOOL_REMAINS_ACTIVE_AFTER_SUCCESS": "NO",
+    "PLACEMENT_INPUT_ACTIVE_WHEN_IDLE": "NO",
+    "STRICTMODE_DUPLICATE_PLACEMENT": "NO",
+    "PLACEMENT_INTENT_IMPLEMENTED": "YES",
+    "PLACEMENT_MODE_IMPLEMENTED": "YES"
+  },
+  "instance_identity": {
+    "INSTANCE_ID_STRATEGY": "application-scoped sequential id generator, per catalog record; pattern PETCT-<CATALOG_RECORD_SLUG>-<4-digit sequence>; survives React re-render / viewer remount / decorator re-registration (owned by the store singleton, not a component)",
+    "USER_PLACED_INSTANCE_ID_EXAMPLE": "PETCT-GE-DISCOVERY-MI-0001",
+    "next_example": "PETCT-GE-DISCOVERY-MI-0002",
+    "shared_assetDefinitionId": "CATALOG_PET_CT_GE_DISCOVERY_MI",
+    "shared_geometryRepresentationId": "GENERIC_PET_CT_SCANNER_V1",
+    "MULTIPLE_USER_INSTANCES_SAME_GEOMETRY": "PASS",
+    "SAME_ENGINEERING_IDENTITY": "YES",
+    "SAME_GEOMETRY_IDENTITY": "YES",
+    "DIFFERENT_SPATIAL_INSTANCE_IDS": "YES"
+  },
+  "spatial_authority": {
+    "POSITION_AUTHORITY": "ASSET_INSTANCE",
+    "click_changes": "AssetInstance.transform.position",
+    "does_not_modify": [
+      "GeometryRepresentation native coordinates",
+      "catalog coordinates",
+      "Bentley source-element coordinates"
+    ],
+    "DEFAULT_ROTATION": "yaw=0 pitch=0 roll=0",
+    "PLACED_ASSET_ROTATION_MODEL_PRESENT": "YES",
+    "INTERACTIVE_ROTATION_IMPLEMENTED": "NO"
+  },
+  "catalog_spatial_provenance": {
+    "catalogRecordId": "GE_DISCOVERY_MI",
+    "assetDefinitionId": "CATALOG_PET_CT_GE_DISCOVERY_MI",
+    "geometryRepresentationId": "GENERIC_PET_CT_SCANNER_V1",
+    "createdFrom": "catalog:scanner_equipment_catalog.json#GE_DISCOVERY_MI",
+    "SPATIAL_SOURCE": "USER_PLACED",
+    "catalog_and_spatial_provenance_separate": true,
+    "note": "engineering/catalog origin carried in createdFrom; spatial placement provenance carried in spatialSource; not collapsed"
+  },
+  "scenario_provenance": {
+    "projectId": "MRT_DEV_VIEWER_PROJECT",
+    "scenarioId": "MRT_DEV_SCENARIO",
+    "scenarioState": "DRAFT",
+    "SCENARIO_PROVENANCE": "projectId=MRT_DEV_VIEWER_PROJECT scenarioId=MRT_DEV_SCENARIO scenarioState=DRAFT",
+    "LOCKDOWN_WHAT_IF_EDITOR_IMPLEMENTED": "NO",
+    "SCENARIO_COMPATIBILITY_PRESERVED": "YES"
+  },
+  "event_journal": {
+    "ASSET_PLACED_EVENT": "PASS",
+    "event_detail_fields": [
+      "assetInstanceId",
+      "assetDefinitionId",
+      "geometryRepresentationId",
+      "position (x,y,z)",
+      "rotation (yaw,pitch,roll)",
+      "roomAssignment",
+      "scenarioId",
+      "scenarioState"
+    ],
+    "EVENT_JOURNAL_UI_IMPLEMENTED": "NO"
+  },
+  "application_owned_state": {
+    "SPATIAL_ASSET_STATE_SOURCE_OF_TRUTH": "ONE",
+    "OVERLAY_STATE_SOURCE_OF_TRUTH": "SpatialAssetStore (module singleton in spatialAssetOverlay.ts)",
+    "store_module": "frontend/src/domain/assets/spatialAssetStore.ts",
+    "ASSET_STATE_UI_SYNCHRONIZATION": "EVENT_DRIVEN_OR_EXPLICIT",
+    "no_polling": true,
+    "no_setInterval": true,
+    "no_render_loop_sync": true,
+    "shared_consumers": [
+      "placement service",
+      "Bentley overlay decorator",
+      "Placed Assets panel",
+      "inspection UI"
+    ]
+  },
+  "overlay_lifecycle": {
+    "OVERLAY_STATE_SURVIVES_DECORATOR_DISPOSE": "PASS",
+    "DECORATOR_REGISTRATION_LIFECYCLE_SEPARATE_FROM_ASSET_STATE": "PASS",
+    "note": "disposeOverlay detaches only the Bentley decorator; the store (and placed instances) is retained"
+  },
+  "placed_assets_panel": {
+    "PLACED_ASSETS_PANEL": "YES",
+    "derives_from_single_store": true,
+    "no_separate_copy": true,
+    "list_fields": [
+      "displayLabel",
+      "assetInstanceId",
+      "roomAssignment",
+      "installationState"
+    ],
+    "selected_detail_fields": [
+      "assetDefinitionId",
+      "catalog provenance (createdFrom)",
+      "geometryRepresentationId",
+      "position",
+      "rotation",
+      "roomAssignment",
+      "installationState",
+      "scenario provenance",
+      "spatialSource"
+    ]
+  },
+  "fixture_preservation": {
+    "ARCHITECTURE_FIXTURE_INSTANCE_PRESERVED": "YES",
+    "fixtures": [
+      "PETCT-TEST-01",
+      "PETCT-CATALOG-TEST-01"
+    ],
+    "PRODUCT_PLACEMENT_PATH_SEPARATE_FROM_DEV_FIXTURE_PATH": "PASS",
+    "note": "product placement uses buildPlacementIntent -> MrtAssetPlacementTool -> store.completePlacementAt; never showGenericPetCt()/showCatalogPetCt()",
+    "GEOMETRY_OBJECT_DUPLICATION_PER_INSTANCE": "NO"
+  },
+  "tests": {
+    "OFFLINE_TEST_COUNT": 121,
+    "previous_baseline": 96,
+    "NEW_TEST_COUNT": 25,
+    "OFFLINE_TEST_REGRESSIONS": 0,
+    "new_test_files": [
+      "frontend/src/tests/placementFoundation.test.ts (20)",
+      "frontend/src/tests/placementStatus.test.ts (5)"
+    ],
+    "new_test_file": "frontend/src/tests/placementFoundation.test.ts",
+    "coverage": [
+      "Asset Library catalog derivation",
+      "GE Discovery MI display label",
+      "GE_DISCOVERY_MI id preservation",
+      "PET_CT_SCANNER family mapping",
+      "GENERIC_PET_CT_SCANNER_V1 availability",
+      "NOT_CALIBRATED dimension status",
+      "generic geometry provenance separation",
+      "selecting an Asset Library item without creating an instance",
+      "PlacementIntent creation",
+      "placement cancellation creates no instance",
+      "successful intent consumption (exactly once)",
+      "one click -> one instance",
+      "unique instance ids",
+      "two instances sharing one engineering identity",
+      "two instances sharing one geometry representation",
+      "world-position application",
+      "default rotation preservation",
+      "ASSET_PLACED event generation",
+      "event-driven store updates",
+      "single source of truth",
+      "overlay lifecycle/state survival"
+    ]
+  },
+  "machine_verification": {
+    "TYPECHECK": "PASS",
+    "OFFLINE_TEST_COUNT": 121,
+    "NEW_TEST_COUNT": 25,
+    "OFFLINE_TEST_REGRESSIONS": 0,
+    "PRODUCTION_BUILD": "PASS",
+    "CORE_FRONTEND_VERSION": "5.12.5",
+    "WORKER_ASSET_REAL": "YES",
+    "DRACO_WASM_ASSET_REAL": "YES",
+    "dev_server": {
+      "viewer": "HTTP 200",
+      "worker": {
+        "path": "/scripts/parse-imdl-worker.js",
+        "content_type": "text/javascript",
+        "real_javascript": true
+      },
+      "wasm": {
+        "path": "/scripts/draco_decoder.wasm",
+        "content_type": "application/wasm",
+        "real_wasm_signature": "\\0asm"
+      }
+    }
+  },
+  "closed_systems": {
+    "AUTH_FLOW_CHANGED": "NO",
+    "VIEWER_LIFECYCLE_CHANGED": "NO",
+    "TRANSPARENCY_WORK_RESUMED": "NO",
+    "CAMERA_BEHAVIOR_CHANGED": "NO",
+    "IMODEL_MODIFIED": "NO",
+    "BENTLEY_CHANGESET_CREATED": "NO",
+    "BENTLEY_RESOURCE_MODIFIED": "NO",
+    "note": "placed equipment remains MRT Pharma application-owned overlay state"
+  },
+  "security": {
+    "SECRET_EXPOSED": "NO",
+    "SERVICE_CLIENT_SECRET_IN_FRONTEND": "NO",
+    "ACCESS_TOKEN_IN_REPOSITORY": "NO",
+    "SIGNED_TILE_URL_IN_REPOSITORY": "NO",
+    "SAS_QUERY_STRING_IN_REPOSITORY": "NO"
+  },
+  "manual_acceptance": {
+    "LIVE_IMODEL_VISIBLE_IN_BROWSER": "YES",
+    "ASSET_LIBRARY_VISIBLE_IN_BROWSER": "YES",
+    "USER_PLACED_PET_CT_VISIBLE_IN_BROWSER": "YES",
+    "USER_PLACED_PET_CT_INSPECTION_VISIBLE": "YES",
+    "PLACEMENT_CANCEL_MANUALLY_CONFIRMED": "YES",
+    "MULTIPLE_USER_PLACEMENT_MANUALLY_CONFIRMED": "YES",
+    "FIRST_USER_INSTANCE_ID": "PETCT-GE-DISCOVERY-MI-0001",
+    "SECOND_USER_INSTANCE_ID": "PETCT-GE-DISCOVERY-MI-0002",
+    "PLACED_ASSET_COUNT_AFTER_SECOND_PLACEMENT": 2,
+    "ONE_CLICK_ONE_INSTANCE": "PASS",
+    "PLACEMENT_MODE_EXITS_AFTER_SUCCESS": "PASS",
+    "PLACEMENT_MODE_EXITS_AFTER_CANCEL": "PASS",
+    "DIFFERENT_SPATIAL_INSTANCE_IDS": "YES",
+    "SAME_ENGINEERING_IDENTITY": "YES",
+    "SAME_GEOMETRY_IDENTITY": "YES",
+    "MULTIPLE_USER_INSTANCES_SAME_GEOMETRY": "PASS"
+  },
+  "stale_success_status_defect": {
+    "STALE_SUCCESS_STATUS_DEFECT_FOUND": "YES",
+    "DEFECT_SCOPE": "presentation/status only",
+    "ROOT_CAUSE": "status was a manually-set local string never cleared when the Bentley placement tool exited",
+    "CORRECTION": "status derived from SpatialAssetStore placement-mode transitions via placementStatus.ts seam",
+    "PLACEMENT_ARCHITECTURE_CHANGED": "NO",
+    "status_semantics": {
+      "PLACEMENT_ACTIVE": "Placing: GE HealthCare Discovery MI — click a location in the model (right-click / Esc to cancel)",
+      "PLACEMENT_SUCCEEDED": "Placed: PETCT-GE-DISCOVERY-MI-####",
+      "PLACEMENT_CANCELLED": "Placement cancelled",
+      "IDLE": "no active-placement claim"
+    },
+    "regression_test_file": "frontend/src/tests/placementStatus.test.ts",
+    "final_visual_reconfirmation": {
+      "STALE_PLACING_TEXT_GONE_AFTER_SUCCESS": "YES",
+      "SUCCESS_STATUS_SHOWN": "YES",
+      "SUCCESS_STATUS_EXAMPLE": "Placed: PETCT-GE-DISCOVERY-MI-0001",
+      "PLACEMENT_SUCCESS_STATUS_CLEANUP": "PASS",
+      "STALE_PLACING_STATUS_AFTER_SUCCESS": "NO"
+    }
+  },
+  "first_user_placement_manual_proof": {
+    "assetInstanceId": "PETCT-GE-DISCOVERY-MI-0001",
+    "displayLabel": "GE HealthCare Discovery MI",
+    "catalogRecordId": "GE_DISCOVERY_MI",
+    "assetDefinitionId": "CATALOG_PET_CT_GE_DISCOVERY_MI",
+    "geometryRepresentationId": "GENERIC_PET_CT_SCANNER_V1",
+    "createdFrom": "catalog:scanner_equipment_catalog.json#GE_DISCOVERY_MI",
+    "position": "(13.76, 7.00, 5.29)",
+    "rotation": "yaw=0 pitch=0 roll=0",
+    "roomAssignment": "NOT_ASSIGNED",
+    "installationState": "PLACED",
+    "spatialSource": "USER_PLACED",
+    "scenario": "MRT_DEV_SCENARIO / DRAFT",
+    "dimensionProvenance": "GENERIC_ENGINEERING_PLACEHOLDER",
+    "CATALOG_TO_USER_PLACEMENT_IDENTITY_CHAIN": "PASS"
+  },
+  "cancellation_and_multiple_instance_manual_proof": {
+    "PLACED_ASSET_COUNT_BEFORE_CANCEL": 1,
+    "PLACEMENT_CANCELLED_WITHOUT_INSTANCE_CREATION": "PASS",
+    "PLACED_ASSET_COUNT_AFTER_CANCEL": 1,
+    "EXISTING_PLACED_ASSET_PRESERVED": "YES",
+    "PLACEMENT_MODE_EXITS_AFTER_CANCEL": "PASS",
+    "FIRST_USER_INSTANCE_ID": "PETCT-GE-DISCOVERY-MI-0001",
+    "SECOND_USER_INSTANCE_ID": "PETCT-GE-DISCOVERY-MI-0002",
+    "PLACED_ASSET_COUNT_AFTER_SECOND_PLACEMENT": 2,
+    "DIFFERENT_SPATIAL_INSTANCE_IDS": "YES",
+    "SAME_ENGINEERING_IDENTITY": "YES",
+    "SAME_GEOMETRY_IDENTITY": "YES",
+    "MULTIPLE_USER_INSTANCES_SAME_GEOMETRY": "PASS",
+    "ONE_GEOMETRY_MANY_SPATIAL_INSTANCES": "PASS"
+  },
+  "checkpoint_status": "MANUAL_ACCEPTANCE_PASSED — checkpointing (stage explicit paths, one commit, push origin/main)",
+  "files_added": [
+    "frontend/src/domain/assets/assetLibrary.ts",
+    "frontend/src/domain/assets/placement.ts",
+    "frontend/src/domain/assets/spatialAssetStore.ts",
+    "frontend/src/components/spatial/MrtAssetPlacementTool.ts",
+    "frontend/src/components/spatial/ViewerAssetLibrary.tsx",
+    "frontend/src/components/spatial/placementStatus.ts",
+    "frontend/src/tests/placementFoundation.test.ts",
+    "frontend/src/tests/placementStatus.test.ts",
+    "MRT_PHARMA_ASSET_LIBRARY_PLACEMENT_FOUNDATION_REPORT.md",
+    "mrt_pharma_asset_library_placement_foundation_data.json"
+  ],
+  "files_modified": [
+    "frontend/src/domain/assets/types.ts",
+    "frontend/src/domain/assets/index.ts",
+    "frontend/src/components/spatial/spatialAssetOverlay.ts",
+    "frontend/src/routes/BentleyViewer.tsx",
+    "frontend/src/routes/BentleyViewer.css"
+  ]
+}

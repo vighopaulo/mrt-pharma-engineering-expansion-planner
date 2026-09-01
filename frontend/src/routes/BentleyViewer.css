@@ -158,3 +158,213 @@
     font-size: 0.8rem;
     max-width: 50vw;
 }
+
+/* DEV group label inside the diagnostic control bar. */
+.viewer-dev-label {
+    pointer-events: auto;
+    align-self: center;
+    font-size: 0.7rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    color: #fbbf24;
+    background: rgba(11, 14, 20, 0.85);
+    border: 1px solid #fbbf24;
+    border-radius: 4px;
+    padding: 0.15rem 0.4rem;
+}
+
+/* PRODUCT Asset Library panel — top-left overlay, away from the DEV bar
+   (top-center) and the Bentley ViewCube (top-right). */
+.viewer-product-panel {
+    position: absolute;
+    top: 12px;
+    left: 12px;
+    z-index: 1000;
+    width: 300px;
+    max-height: calc(100vh - 24px);
+    overflow-y: auto;
+    background: rgba(255, 255, 255, 0.97);
+    color: #111827;
+    border: 1px solid #d1d5db;
+    border-radius: 8px;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
+    padding: 0.75rem 0.9rem;
+}
+
+.mrt-asset-library h3 {
+    margin: 0.6rem 0 0.4rem;
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: #6b7280;
+}
+
+.mrt-asset-library h3:first-child {
+    margin-top: 0;
+}
+
+.mrt-lib-tree,
+.mrt-lib-tree ul {
+    list-style: none;
+    margin: 0;
+    padding-left: 0.75rem;
+    font-size: 0.85rem;
+}
+
+.mrt-lib-group {
+    color: #374151;
+    font-weight: 600;
+}
+
+.mrt-lib-entry {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.1rem;
+    width: 100%;
+    text-align: left;
+    padding: 0.35rem 0.5rem;
+    border: 1px solid transparent;
+    border-radius: 5px;
+    background: #f3f4f6;
+    cursor: pointer;
+}
+
+.mrt-lib-entry.selected {
+    border-color: #3a6ff7;
+    background: #e7efff;
+}
+
+.mrt-lib-label {
+    font-weight: 600;
+}
+
+.mrt-lib-geo {
+    font-size: 0.72rem;
+}
+
+.mrt-lib-geo.ok {
+    color: #047857;
+}
+
+.mrt-lib-geo.na {
+    color: #b91c1c;
+}
+
+.mrt-lib-detail {
+    margin-top: 0.6rem;
+    padding: 0.5rem 0.6rem;
+    background: #f9fafb;
+    border: 1px solid #e5e7eb;
+    border-radius: 6px;
+    font-size: 0.8rem;
+}
+
+.mrt-lib-detail-row {
+    display: flex;
+    justify-content: space-between;
+    gap: 0.5rem;
+    padding: 0.12rem 0;
+}
+
+.mrt-lib-detail-row span:first-child {
+    color: #6b7280;
+}
+
+.mrt-lib-place,
+.mrt-lib-cancel {
+    margin-top: 0.5rem;
+    width: 100%;
+    padding: 0.5rem;
+    font-weight: 700;
+    font-size: 0.82rem;
+    border-radius: 6px;
+    cursor: pointer;
+    border: 1px solid #3a6ff7;
+    background: #3a6ff7;
+    color: #fff;
+}
+
+.mrt-lib-place:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.mrt-lib-cancel {
+    border-color: #b91c1c;
+    background: #b91c1c;
+}
+
+.mrt-placement-status {
+    margin-top: 0.6rem;
+    padding: 0.5rem 0.6rem;
+    background: #fffbeb;
+    border: 1px solid #fbbf24;
+    border-radius: 6px;
+    font-size: 0.82rem;
+    color: #92400e;
+}
+
+.mrt-placement-hint {
+    color: #b45309;
+    font-size: 0.75rem;
+}
+
+.mrt-lib-status {
+    font-size: 0.78rem;
+    color: #374151;
+    margin: 0.4rem 0 0;
+}
+
+.mrt-lib-empty {
+    font-size: 0.8rem;
+    color: #6b7280;
+}
+
+.mrt-placed-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+}
+
+.mrt-placed-item {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    width: 100%;
+    text-align: left;
+    padding: 0.3rem 0.45rem;
+    border: 1px solid #e5e7eb;
+    border-radius: 5px;
+    background: #fff;
+    cursor: pointer;
+    font-size: 0.8rem;
+}
+
+.mrt-placed-item.selected {
+    border-color: #3a6ff7;
+    background: #e7efff;
+}
+
+.mrt-placed-label {
+    font-weight: 600;
+}
+
+.mrt-placed-meta {
+    font-size: 0.7rem;
+    color: #6b7280;
+}
+
+.mrt-placed-inspect {
+    margin-top: 0.5rem;
+    padding: 0.5rem;
+    background: #0b0e14;
+    color: #e6e9ef;
+    border-radius: 6px;
+    font-size: 0.68rem;
+    white-space: pre-wrap;
+    word-break: break-word;
+}
