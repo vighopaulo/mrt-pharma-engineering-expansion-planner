@@ -12,7 +12,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Viewer } from '@itwin/web-viewer-react'
 import { BrowserAuthorizationClient } from '@itwin/browser-authorization'
-import { IModelApp, TileTreeLoadStatus, ViewCreator3d, type IModelConnection, type ScreenViewport, type ViewState } from '@itwin/core-frontend'
+import { IModelApp, StandardViewId, TileTreeLoadStatus, ViewCreator3d, type IModelConnection, type ScreenViewport, type ViewState } from '@itwin/core-frontend'
 import { Range3d } from '@itwin/core-geometry'
 import { QueryBinder } from '@itwin/core-common'
 import type { ViewerConfig } from '../../lib/viewerConfig'
@@ -81,6 +81,12 @@ export default function LiveItwinViewer({ config, onSelect, onAuthSuccess, onAut
             }
         }
     }, [])
+
+    // NOTE: a previous attempt normalized ViewFlags via
+    // IModelApp.viewManager.onViewOpen — that blanked the viewport and was
+    // reverted. Opacity normalization is deferred to a later task; the model
+    // renders visibly (translucent) without it. Do not re-add a view-open
+    // ViewFlags mutation here without a proven-safe mechanism.
 
     // Sign-in effect. NO cross-mount "one-shot" ref guard — that deadlocked
     // under StrictMode (first effect set the flag then was cleaned up; the
@@ -184,7 +190,14 @@ async function buildSpatialViewState(iModel: IModelConnection): Promise<ViewStat
         console.info('[bentley-life] VIEW_STATE_CREATION_COUNT=%d', devCounters.viewStateCreate)
     }
     const creator = new ViewCreator3d(iModel)
-    const view = await creator.createDefaultView({ cameraOn: true, allSubCategoriesVisible: true })
+    // Deterministic isometric default orientation (StandardViewId.Iso) — the
+    // same iModel opens the same way each time. No camera loop; this is set
+    // once at view creation.
+    const view = await creator.createDefaultView({
+        cameraOn: true,
+        allSubCategoriesVisible: true,
+        standardViewId: StandardViewId.Iso,
+    })
     if (import.meta.env.DEV) {
         const modelCount = (view as unknown as { modelSelector?: { models?: { size?: number } } }).modelSelector?.models?.size
         const catCount = (view as unknown as { categorySelector?: { categories?: { size?: number } } }).categorySelector?.categories?.size
@@ -205,6 +218,11 @@ async function buildSpatialViewState(iModel: IModelConnection): Promise<ViewStat
  */
 const FORCE_INITIAL_FIT = false
 
+// NOTE: the opacity-normalization helpers (normalizeViewport /
+// logTransparencySources) were removed with the reverted onViewOpen attempt.
+// Opacity normalization is deferred to a later task using a proven-safe
+// mechanism. The model renders visibly (translucent) without it.
+
 /**
  * Diagnostics-first viewport configurer. Logs sanitized BEFORE/AFTER view state
  * and only performs a guarded fit when explicitly enabled and safe. This is the
@@ -217,6 +235,11 @@ function inspectAndMaybeFitViewport(viewport: ScreenViewport): void {
             devCounters.viewportConfigurerRun += 1
             console.info('[bentley-life] VIEWPORT_CONFIGURER_RUN_COUNT=%d', devCounters.viewportConfigurerRun)
         }
+        // NOTE: visual normalization is intentionally NOT applied here — the
+        // configurer runs during view setup and the Viewer overwrites the
+        // display style afterward. Normalization is applied on the final
+        // ScreenViewport via IModelApp.viewManager.onViewOpen (see the mount
+        // effect above). This configurer stays diagnostics-only.
         logViewState('BEFORE_FIT', viewport)
 
         const range: Range3d = viewport.view.computeFitRange()
@@ -333,6 +356,115 @@ export function fitLiveModel(): FitLiveModelResult {
 
 export interface RenderStateResult {
     summary: string
+}
+
+export interface FeatureAppearanceResult {
+    summary: string
+}
+
+/**
+ * READ-ONLY effective-appearance trace for ONE representative displayed element.
+ * Answers "why are surfaces still translucent after ViewFlags.transparency=false"
+ * by walking element -> category/subcategory appearance -> material alpha, plus
+ * the live viewport transparency flag and any feature-override providers.
+ * Makes NO rendering changes and does NOT mutate the iModel. One click = one run.
+ */
+export async function inspectFeatureAppearance(): Promise<FeatureAppearanceResult> {
+    const vp = IModelApp.viewManager?.selectedView
+    if (!vp) return { summary: 'NO_ACTIVE_VIEWPORT' }
+    const notes: string[] = []
+    try {
+        // (8) LIVE viewport transparency flag — proves whether normalization stuck.
+        const vf = vp.viewFlags
+        if (import.meta.env.DEV) {
+            console.info('[bentley-appearance] LIVE_VIEWFLAGS renderMode=%s transparency=%s materials=%s textures=%s visibleEdges=%s',
+                String(vf.renderMode), String(vf.transparency), String(vf.materials), String(vf.textures), String(vf.visibleEdges))
+        }
+
+        // (7) Feature-override / emphasis / hilite / selection state.
+        let providerCount = 0
+        try { for (const _p of vp.featureOverrideProviders) { void _p; providerCount += 1 } } catch { /* ignore */ }
+        const alwaysDrawn = (vp as unknown as { alwaysDrawn?: Set<string> }).alwaysDrawn?.size ?? 0
+        const neverDrawn = (vp as unknown as { neverDrawn?: Set<string> }).neverDrawn?.size ?? 0
+        const selSize = (vp.iModel as unknown as { selectionSet?: { size?: number } }).selectionSet?.size ?? 0
+        if (import.meta.env.DEV) {
+            console.info('[bentley-appearance] FEATURE_OVERRIDE_PROVIDER_COUNT=%d ALWAYS_DRAWN=%d NEVER_DRAWN=%d SELECTION_ACTIVE=%s',
+                providerCount, alwaysDrawn, neverDrawn, String(selSize > 0))
+        }
+
+        // (3) One representative displayed geometric element.
+        const view = vp.view as unknown as { modelSelector?: { models?: Set<string> } }
+        const modelIds = view.modelSelector?.models ? Array.from(view.modelSelector.models) : []
+        const displayedModelId = modelIds[0]
+        let elementId: string | undefined, elementClass = 'n/a', categoryId: string | undefined
+        if (displayedModelId) {
+            const r = vp.iModel.createQueryReader(
+                `SELECT ECInstanceId, ec_classname(ECClassId), Category.Id FROM bis.GeometricElement3d WHERE Model.Id=? LIMIT 1`,
+                QueryBinder.from([displayedModelId]),
+            )
+            for await (const row of r) { elementId = String(row[0]); elementClass = String(row[1]); categoryId = String(row[2]) }
+        }
+        if (import.meta.env.DEV) {
+            console.info('[bentley-appearance] REPRESENTATIVE_ELEMENT_ID=%s ELEMENT_CLASS=%s ELEMENT_MODEL_ID=%s ELEMENT_CATEGORY_ID=%s',
+                String(elementId), elementClass, String(displayedModelId), String(categoryId))
+        }
+
+        // (5) Subcategory appearance for the element's category (the default
+        // subcategory shares the category's stored appearance).
+        let subCatId: string | undefined, subCatName = 'n/a'
+        let subCatTransparency: number | undefined, subCatMaterialId: string | undefined, subCatColorInt: number | undefined
+        if (categoryId) {
+            const r = vp.iModel.createQueryReader(
+                `SELECT ECInstanceId, CodeValue FROM bis.SubCategory WHERE Parent.Id=? LIMIT 1`,
+                QueryBinder.from([categoryId]),
+            )
+            for await (const row of r) { subCatId = String(row[0]); subCatName = String(row[1] ?? 'n/a') }
+        }
+        if (subCatId) {
+            try {
+                // Ensure the subcategory appearance is loaded, then read it.
+                await vp.iModel.subcategories.load([categoryId as string])
+                const app = vp.getSubCategoryAppearance(subCatId) as unknown as {
+                    transparency?: number; materialId?: string; color?: { tbgr?: number }
+                }
+                subCatTransparency = app?.transparency
+                subCatMaterialId = app?.materialId
+                subCatColorInt = app?.color?.tbgr
+            } catch (e) { notes.push('SUBCAT_APP_ERR:' + (e instanceof Error ? e.message : String(e))) }
+        }
+        if (import.meta.env.DEV) {
+            console.info('[bentley-appearance] SUBCATEGORY_ID=%s SUBCATEGORY_NAME=%s SUBCATEGORY_TRANSPARENCY=%s SUBCATEGORY_MATERIAL_ID=%s SUBCATEGORY_COLOR_TBGR=%s',
+                String(subCatId), subCatName, String(subCatTransparency), String(subCatMaterialId), String(subCatColorInt))
+        }
+
+        // (6) Material transparency, if the subcategory references a material.
+        let materialPresent = false, materialTransparency: string = 'n/a'
+        const matId = subCatMaterialId && subCatMaterialId !== '0' ? subCatMaterialId : undefined
+        if (matId) {
+            materialPresent = true
+            try {
+                // RenderMaterial transparency is stored in the material's params;
+                // query the material element's JSON properties read-only.
+                const r = vp.iModel.createQueryReader(
+                    `SELECT ec_classname(ECClassId) FROM bis.RenderMaterial WHERE ECInstanceId=?`,
+                    QueryBinder.from([matId]),
+                )
+                for await (const row of r) { materialTransparency = 'material-present(' + String(row[0]) + '); alpha in material params (NOT_QUERYABLE_VIA_SIMPLE_ECSQL)' }
+            } catch (e) { notes.push('MATERIAL_ERR:' + (e instanceof Error ? e.message : String(e))) }
+        }
+        if (import.meta.env.DEV) {
+            console.info('[bentley-appearance] MATERIAL_PRESENT=%s MATERIAL_ID=%s MATERIAL_TRANSPARENCY=%s',
+                String(materialPresent), String(matId ?? 'none'), materialTransparency)
+        }
+
+        const summary = `viewFlags.transparency=${vf.transparency} materials=${vf.materials} | subCatTransparency=${String(subCatTransparency)} materialId=${String(matId ?? 'none')} | providers=${providerCount} selection=${selSize > 0}${notes.length ? ' | ' + notes.join(';') : ''}`
+        if (import.meta.env.DEV) console.info('[bentley-appearance] SUMMARY %s', summary)
+        return { summary }
+    } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e)
+        if (import.meta.env.DEV) console.error('[bentley-appearance] INSPECT_ERROR', msg)
+        return { summary: 'INSPECT_ERROR: ' + msg }
+    }
 }
 
 /**

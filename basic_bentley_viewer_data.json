@@ -152,5 +152,36 @@
     "GEOMETRY_TILE_DECODING": "PASS",
     "WEBGL_RENDERING": "PASS",
     "note": "Visual normalization (transparency/materials/display style), asset-library, drag/drop, and NVIDIA are explicitly OUT OF SCOPE for this checkpoint and remain future builds."
+  },
+  "visible_isometric_checkpoint": {
+    "LIVE_IMODEL_VISIBLE_IN_BROWSER": "YES",
+    "ISOMETRIC_VIEW_VISIBLE_IN_BROWSER": "YES",
+    "DEFAULT_VIEW_ORIENTATION": "ISOMETRIC",
+    "DEFAULT_VIEW_ORIENTATION_MANUALLY_CONFIRMED": true,
+    "orientation_mechanism": "ViewCreator3d.createDefaultView({ standardViewId: StandardViewId.Iso })",
+    "BLANK_VIEWPORT_REGRESSION": "NO",
+    "CURRENT_VISUAL_APPEARANCE": "TRANSLUCENT_BUT_RENDERABLE",
+    "TRANSPARENCY_NORMALIZATION": "DEFERRED",
+    "TRANSPARENCY_BLOCKS_NEXT_BUILD": "NO",
+    "transparency_investigation": {
+      "LIVE_VIEWFLAGS_TRANSPARENCY": true,
+      "SUBCATEGORY_TRANSPARENCY": 0,
+      "MATERIAL_ID": "none",
+      "FEATURE_OVERRIDE_PROVIDER_COUNT": 0,
+      "SELECTION_ACTIVE": false,
+      "renderer_fact": "installed iTwin.js 5.12.5 SurfaceGeometry.js forces opaque pass when ViewFlags.transparency=false",
+      "conclusion": "final ViewState/DisplayStyle ends with transparency=true; source geometry is opaque"
+    },
+    "rejected_experiment": {
+      "ONVIEWOPEN_OPACITY_APPROACH": "REJECTED_FOR_CURRENT_VIEWER_INTEGRATION",
+      "ONVIEWOPEN_OPACITY_FAILURE": "BLANK_VIEWPORT",
+      "ONVIEWOPEN_OPACITY_CODE_REMOVED": true,
+      "early_viewportConfigurer_write": "overwritten by Viewer during initialization (ineffective)"
+    },
+    "diagnostic_controls_present": [
+      "FIT LIVE MODEL",
+      "INSPECT RENDER STATE",
+      "INSPECT FEATURE APPEARANCE"
+    ]
   }
 }

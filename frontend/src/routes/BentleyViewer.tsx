@@ -87,6 +87,16 @@ export function BentleyViewer() {
 
     // Diagnostic: capture render/tile state (read-only). Runs once now and once
     // ~1.5s later to catch tile activity after a render tick. No mutation.
+    const handleInspectFeatureAppearance = useCallback(async () => {
+        try {
+            const mod = await import('../components/viewer/LiveItwinViewer')
+            const r = await mod.inspectFeatureAppearance()
+            setFitNote(`Feature appearance: ${r.summary}`)
+        } catch (e) {
+            setFitNote(`Appearance inspect error: ${e instanceof Error ? e.message : String(e)}`)
+        }
+    }, [])
+
     const handleInspectRenderState = useCallback(async () => {
         try {
             const mod = await import('../components/viewer/LiveItwinViewer')
@@ -146,6 +156,7 @@ export function BentleyViewer() {
                         <div className="viewer-fit-control">
                             <button type="button" onClick={() => void handleFitLiveModel()}>FIT LIVE MODEL</button>
                             <button type="button" onClick={() => void handleInspectRenderState()}>INSPECT RENDER STATE</button>
+                            <button type="button" onClick={() => void handleInspectFeatureAppearance()}>INSPECT FEATURE APPEARANCE</button>
                             {fitNote && <span className="viewer-fit-note">{fitNote}</span>}
                         </div>
                     </Suspense>

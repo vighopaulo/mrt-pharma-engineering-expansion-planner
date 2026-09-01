@@ -34,6 +34,32 @@ iMdl decoding completes, and the real geometry renders. `node_modules` is not
 modified; no assets are fetched from the internet; the copied `public/` assets
 are gitignored and regenerated from the installed package.
 
+## TABLE 0b — Visible Isometric Checkpoint (restored state)
+
+Post-checkpoint viewer work that survives and is manually confirmed:
+
+| Field | Value |
+|---|---|
+| LIVE_IMODEL_VISIBLE_IN_BROWSER | YES |
+| ISOMETRIC_VIEW_VISIBLE_IN_BROWSER | YES |
+| DEFAULT_VIEW_ORIENTATION | ISOMETRIC (`ViewCreator3d.createDefaultView({ standardViewId: StandardViewId.Iso })`) |
+| DEFAULT_VIEW_ORIENTATION_MANUALLY_CONFIRMED | YES |
+| BLANK_VIEWPORT_REGRESSION | NO |
+| CURRENT_VISUAL_APPEARANCE | TRANSLUCENT_BUT_RENDERABLE |
+| TRANSPARENCY_NORMALIZATION | DEFERRED (non-blocking) |
+| TRANSPARENCY_BLOCKS_NEXT_BUILD | NO |
+| Diagnostic controls | FIT LIVE MODEL, INSPECT RENDER STATE, INSPECT FEATURE APPEARANCE |
+
+Transparency investigation (deferred, not solved): the live viewport ends with
+`ViewFlags.transparency = true`, while the inspected feature is opaque at source
+(`SUBCATEGORY_TRANSPARENCY = 0`, `MATERIAL_ID = none`, `FEATURE_OVERRIDE_PROVIDER_COUNT = 0`,
+`SELECTION_ACTIVE = false`). Installed iTwin.js 5.12.5 `SurfaceGeometry.js` confirms
+`transparency=false` would force the opaque pass — but the flag write is overwritten
+during viewer init, and an `IModelApp.viewManager.onViewOpen` attempt blanked the
+viewport and was removed (`ONVIEWOPEN_OPACITY_APPROACH = REJECTED`,
+`ONVIEWOPEN_OPACITY_CODE_REMOVED = YES`). A proven-safe mechanism is left for a
+later task.
+
 ## TABLE 1 — Repository State
 
 | Field | Value |
