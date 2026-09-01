@@ -88,6 +88,21 @@ export default function LiveItwinViewer({ config, onSelect, onAuthSuccess, onAut
     // renders visibly (translucent) without it. Do not re-add a view-open
     // ViewFlags mutation here without a proven-safe mechanism.
 
+    // MRT Pharma 3D asset overlay: register the SpatialAssetDecorator once and
+    // dispose it on unmount. This is an ADDITIVE world decoration — it does NOT
+    // modify the iModel, ViewFlags, camera, or transparency. The overlay starts
+    // empty; the DEV control (Show Generic PET/CT) populates it on demand.
+    useEffect(() => {
+        let disposed = false
+        void import('../spatial/spatialAssetOverlay').then((mod) => {
+            if (!disposed) mod.ensureDecoratorRegistered()
+        })
+        return () => {
+            disposed = true
+            void import('../spatial/spatialAssetOverlay').then((mod) => mod.disposeOverlay())
+        }
+    }, [])
+
     // Sign-in effect. NO cross-mount "one-shot" ref guard — that deadlocked
     // under StrictMode (first effect set the flag then was cleaned up; the
     // second effect saw the flag and returned without ever authenticating,

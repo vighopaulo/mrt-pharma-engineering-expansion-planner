@@ -1,0 +1,99 @@
+{
+  "build": "MRT Pharma 3D Asset Architecture Foundation",
+  "continues_from_checkpoint": "d5b622dc545a146ca16ab5dfcb00eeb73ecc0e05",
+  "doctrine": "ENGINEERING ASSET DEFINITION -> SPATIAL ASSET INSTANCE -> GEOMETRY REPRESENTATION -> BENTLEY VIEWPORT OVERLAY -> SIMULATION/ENGINEERING/ECONOMIC CONSUMERS",
+  "identity_layers": {
+    "engineering": "AssetDefinition.assetDefinitionId",
+    "spatial_instance": "AssetInstance.assetInstanceId",
+    "geometry": "GeometryRepresentation.geometryRepresentationId",
+    "separation_required": true
+  },
+  "domain_location": "frontend/src/domain/assets/",
+  "spatial_location": "frontend/src/components/spatial/",
+  "core_types": [
+    "AssetClass", "AssetFamily", "AssetDefinition", "AssetInstance", "GeometryRepresentation",
+    "AssetDimensions", "SpatialTransform", "SpatialPosition", "SpatialRotation", "SpatialScale",
+    "AssetInstallationState", "SpatialSource", "RoomAssignment", "AssetConnectionPoint",
+    "ClearanceEnvelope", "AssetCapabilities", "EngineeringMetadataReference", "ScenarioProvenance"
+  ],
+  "canonical_unit": "METERS",
+  "coordinate_space": "BENTLEY_WORLD_COORDINATES",
+  "resolution": {
+    "states": ["RESOLVED", "GEOMETRY_NOT_AVAILABLE"],
+    "family_compatibility_enforced": true,
+    "silent_unrelated_fallback": false
+  },
+  "commands": {
+    "implemented_now": ["createAssetInstance", "placeAsset", "moveAsset", "rotateAsset", "assignAssetToRoom", "removeAsset"],
+    "immutable": true,
+    "journal_events": ["ASSET_INSTANCE_CREATED", "ASSET_PLACED", "ASSET_MOVED", "ASSET_ROTATED", "ASSET_ROOM_ASSIGNED", "ASSET_REMOVED"],
+    "duplicate_journal_created": false
+  },
+  "serialization": {
+    "schema": "mrt.asset-instance/v1",
+    "serializes_runtime_bentley_objects": false
+  },
+  "bentley_overlay_mechanism": "IModelApp.viewManager.addDecorator + DecorateContext.createGraphicBuilder(GraphicType.WorldDecoration) + addDecorationFromBuilder",
+  "core_frontend_version": "5.12.5",
+  "generic_test_asset": {
+    "geometryRepresentationId": "GENERIC_PET_CT_SCANNER_V1",
+    "representationType": "GENERIC",
+    "status": "PLACEHOLDER",
+    "manufacturerSpecific": false,
+    "assetDefinitionId": "GENERIC_PET_CT_ENGINEERING_TEST",
+    "second_definition_reusing_geometry": "GENERIC_PET_CT_ENGINEERING_TEST_B",
+    "assetInstanceId": "PETCT-TEST-01",
+    "displayLabel": "Generic PET/CT Scanner",
+    "manufacturer": "GENERIC",
+    "engineering_reference_resolved": false,
+    "dimensions_m": { "width": 2.2, "depth": 3.0, "height": 2.0 },
+    "dimension_provenance": "GENERIC_ENGINEERING_PLACEHOLDER",
+    "roomAssignment": "NOT_ASSIGNED",
+    "installationState": "PLACED",
+    "spatialSource": "GENERATED_GENERIC",
+    "parts": ["GANTRY(box)", "BORE(cylinder)", "PATIENT_TABLE(box)"],
+    "project_scoped_to": "MRT_DEV_VIEWER_PROJECT",
+    "placement": "model-range center + clamped offset [2,15] m"
+  },
+  "gates": {
+    "ASSET_ARCHITECTURE_IMPLEMENTED": "YES",
+    "ASSET_DEFINITION_MODEL": "PASS",
+    "ASSET_INSTANCE_MODEL": "PASS",
+    "GEOMETRY_REPRESENTATION_REGISTRY": "PASS",
+    "IDENTITY_SEPARATION": "PASS",
+    "ONE_GEOMETRY_MANY_ENGINEERING_IDENTITIES": "PASS",
+    "SPATIAL_TRANSFORM_MODEL": "PASS",
+    "ROOM_ASSOCIATION_MODEL": "PASS",
+    "INSTALLATION_STATE_MODEL": "PASS",
+    "SPATIAL_SOURCE_PROVENANCE": "PASS",
+    "CONNECTION_POINT_MODEL": "PASS",
+    "CLEARANCE_ENVELOPE_MODEL": "PASS",
+    "SCENARIO_COMPATIBILITY": "PASS",
+    "EVENT_JOURNAL_COMPATIBILITY": "PASS",
+    "LIVE_IMODEL_MODIFIED": "NO",
+    "AUTH_FLOW_CHANGED": "NO",
+    "VIEWER_LIFECYCLE_CHANGED": "NO",
+    "TRANSPARENCY_WORK_RESUMED": "NO",
+    "CAMERA_BEHAVIOR_CHANGED": "NO",
+    "BENTLEY_RESOURCE_MODIFIED": "NO"
+  },
+  "verification": {
+    "TYPECHECK": "PASS",
+    "OFFLINE_TEST_COUNT": 75,
+    "NEW_TEST_COUNT": 23,
+    "PRODUCTION_BUILD": "PASS",
+    "WORKER_ASSET_REAL": "YES",
+    "DRACO_WASM_ASSET_REAL": "YES"
+  },
+  "manual_confirmation": {
+    "LIVE_IMODEL_VISIBLE_IN_BROWSER": "MANUAL_CONFIRMATION_REQUIRED",
+    "GENERIC_PET_CT_VISIBLE_IN_BROWSER": "MANUAL_CONFIRMATION_REQUIRED",
+    "url": "http://localhost:3000/viewer",
+    "control": "click SHOW GENERIC PET/CT"
+  },
+  "out_of_scope": [
+    "equipment library", "MRT carrier/guideway/endpoint geometry", "drag-and-drop UI",
+    "room snapping", "collision/clearance checking", "routing", "simulation", "economics",
+    "Bentley Components Center / manufacturer CAD ingestion", "NVIDIA", "Omniverse"
+  ]
+}

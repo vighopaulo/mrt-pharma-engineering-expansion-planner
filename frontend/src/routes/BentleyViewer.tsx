@@ -87,6 +87,36 @@ export function BentleyViewer() {
 
     // Diagnostic: capture render/tile state (read-only). Runs once now and once
     // ~1.5s later to catch tile activity after a render tick. No mutation.
+    // MRT Pharma 3D asset architecture proof: show / hide / inspect the ONE
+    // generic PET/CT test asset as a Bentley world-decoration overlay. Dynamic
+    // import keeps the spatial/Bentley code out of the offline test bundle.
+    const handleShowGenericPetCt = useCallback(async () => {
+        try {
+            const mod = await import('../components/spatial/spatialAssetOverlay')
+            const r = mod.showGenericPetCt()
+            setFitNote(r.ok ? `Generic PET/CT shown: ${r.instanceId}` : `Show failed: ${r.reason}`)
+        } catch (e) {
+            setFitNote(`Asset show error: ${e instanceof Error ? e.message : String(e)}`)
+        }
+    }, [])
+    const handleHideGenericPetCt = useCallback(async () => {
+        try {
+            const mod = await import('../components/spatial/spatialAssetOverlay')
+            mod.hideGenericPetCt()
+            setFitNote('Generic PET/CT hidden')
+        } catch (e) {
+            setFitNote(`Asset hide error: ${e instanceof Error ? e.message : String(e)}`)
+        }
+    }, [])
+    const handleInspectGenericPetCt = useCallback(async () => {
+        try {
+            const mod = await import('../components/spatial/spatialAssetOverlay')
+            setFitNote(`Asset: ${mod.inspectGenericPetCt()}`)
+        } catch (e) {
+            setFitNote(`Asset inspect error: ${e instanceof Error ? e.message : String(e)}`)
+        }
+    }, [])
+
     const handleInspectFeatureAppearance = useCallback(async () => {
         try {
             const mod = await import('../components/viewer/LiveItwinViewer')
@@ -157,6 +187,9 @@ export function BentleyViewer() {
                             <button type="button" onClick={() => void handleFitLiveModel()}>FIT LIVE MODEL</button>
                             <button type="button" onClick={() => void handleInspectRenderState()}>INSPECT RENDER STATE</button>
                             <button type="button" onClick={() => void handleInspectFeatureAppearance()}>INSPECT FEATURE APPEARANCE</button>
+                            <button type="button" onClick={() => void handleShowGenericPetCt()}>SHOW GENERIC PET/CT</button>
+                            <button type="button" onClick={() => void handleHideGenericPetCt()}>HIDE GENERIC PET/CT</button>
+                            <button type="button" onClick={() => void handleInspectGenericPetCt()}>INSPECT GENERIC PET/CT</button>
                             {fitNote && <span className="viewer-fit-note">{fitNote}</span>}
                         </div>
                     </Suspense>
