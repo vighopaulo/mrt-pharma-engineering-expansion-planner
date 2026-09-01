@@ -22,3 +22,12 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Generated iTwin.js runtime public assets (copied from @itwin/core-frontend
+# by scripts/copy-itwin-assets.mjs on predev/prebuild — not source-controlled).
+public/scripts/
+public/locales/
+public/images/
+public/cursors/
+public/sprites/
+public/assets/

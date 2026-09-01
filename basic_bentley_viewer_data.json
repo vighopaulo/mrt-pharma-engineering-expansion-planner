@@ -1,0 +1,156 @@
+{
+  "repository": {
+    "starting_head": "7af76d5",
+    "origin_main": "7af76d5",
+    "divergence": "0/0",
+    "working_tree": "clean at start; frontend-only additive changes",
+    "tracked_modified": [
+      "frontend/.env",
+      "frontend/package.json",
+      "frontend/src/App.tsx",
+      "frontend/vite.config.ts"
+    ],
+    "backend_python_files_modified": 0
+  },
+  "existing_frontend": {
+    "framework": "React 19 + Vite 8 + TypeScript",
+    "router": "react-router-dom 7",
+    "test_runner": "vitest 4 + jsdom + @testing-library/react",
+    "config_pattern": "import.meta.env.VITE_*",
+    "api_client": "src/lib/api.ts (ApiError, fetch wrapper)",
+    "second_frontend_created": false
+  },
+  "viewer_stack": {
+    "viewer_package": "@itwin/web-viewer-react",
+    "browser_auth_package": "@itwin/browser-authorization",
+    "core": [
+      "@itwin/core-frontend",
+      "@itwin/core-common",
+      "@itwin/core-bentley"
+    ],
+    "viewer_component_api": "<Viewer authClient iTwinId iModelId />",
+    "auth_flow": "Authorization Code + PKCE (responseType 'code')",
+    "custom_three_js_replacement": false
+  },
+  "security_boundary": {
+    "SPA_USES_PKCE": true,
+    "SPA_CLIENT_SECRET_REQUIRED": false,
+    "SERVICE_CLIENT_USED_AS_BROWSER_CLIENT": false,
+    "SERVICE_SECRET_PRESENT_IN_FRONTEND": false,
+    "SERVICE_SECRET_PRESENT_IN_BROWSER_BUNDLE": false,
+    "ENV_BENTLEY_IMPORTED_BY_FRONTEND": false,
+    "HARDCODED_BENTLEY_TOKEN_PRESENT": false,
+    "forbidden_env_keys": [
+      "BENTLEY_CLIENT_SECRET",
+      "BENTLEY_SERVICE_SECRET",
+      "BENTLEY_ACCESS_TOKEN"
+    ]
+  },
+  "public_config_keys": [
+    "VITE_BENTLEY_SPA_CLIENT_ID",
+    "VITE_BENTLEY_AUTHORITY",
+    "VITE_BENTLEY_SCOPE",
+    "VITE_BENTLEY_REDIRECT_URI",
+    "VITE_BENTLEY_POST_SIGNOUT_REDIRECT_URI",
+    "VITE_BENTLEY_ITWIN_ID",
+    "VITE_BENTLEY_IMODEL_ID"
+  ],
+  "itwin": {
+    "name": "MRTway Development Twin",
+    "itwin_id": "bdf29ecd-b4a4-404d-861a-ac3061c7b12f"
+  },
+  "imodel": {
+    "name": "MRTway Hospital Campus Development",
+    "imodel_id_source": "VITE_BENTLEY_IMODEL_ID (supplied by user; not invented)"
+  },
+  "auth_state_machine": [
+    "NOT_AUTHENTICATED",
+    "AUTHENTICATING",
+    "AUTHENTICATED",
+    "AUTH_ERROR"
+  ],
+  "viewer_load_states": [
+    "AUTHENTICATING",
+    "CONNECTING_TO_ITWIN",
+    "OPENING_IMODEL",
+    "LOADING_VIEWPORT",
+    "READY",
+    "ERROR"
+  ],
+  "camera_capabilities": {
+    "orbit": true,
+    "pan": true,
+    "zoom": true,
+    "fitView": true,
+    "resetView": true
+  },
+  "clipping_capability": "PASS",
+  "selection": {
+    "stable_identity_precedence": [
+      "element_id",
+      "federation_guid",
+      "model_id"
+    ],
+    "label_used_as_identity": false,
+    "bentley_source_vs_mrt_derived_separated": true
+  },
+  "binding": {
+    "resolver": "frontend calls backend bentley_mrt_binding_authority via /api/bentley/binding/{key}",
+    "second_binding_engine_in_frontend": false,
+    "unbound_handled": true,
+    "fabricates_binding_on_selection": false
+  },
+  "tests": {
+    "new_viewer_tests": 33,
+    "existing_frontend_tests": 19,
+    "frontend_total": 52,
+    "offline_tests_require_bentley_secret": false,
+    "offline_tests_require_itwin_packages": false
+  },
+  "regression": {
+    "backend_representative": 378,
+    "current_viewer_build_regressions": 0,
+    "pre_existing_unrelated_failures": [
+      "test_conventional_economic_calibration_and_intraday_scheduling.py::test_generator_benchmark_uniform_across_initial_models (generator catalog 4 vs 3)",
+      "test_build3c1_spatial_route_authority.py::test_5_rght_lane_identity (locks pre-SB1 NOT_IMPLEMENTED truth)"
+    ]
+  },
+  "read_only": {
+    "LIVE_BENTLEY_MUTATION": false,
+    "BUILDING_DRAG_DROP_IMPLEMENTED_NOW": false
+  },
+  "runtime_assets": {
+    "root_cause_of_black_viewport": "AUXILIARY_RUNTIME_ASSET_FAILURE",
+    "detail": "Vite served the SPA index.html fallback for /scripts/parse-imdl-worker.js and /scripts/draco_decoder.wasm (HTTP 200 text/html, ~595 bytes), so the iMdl decoder Web Worker never started and geometry tiles stayed in TileLoadStatus.Loading with HAS_GRAPHICS=false.",
+    "fix": "scripts/copy-itwin-assets.mjs copies the genuine @itwin/core-frontend/lib/public assets (scripts/worker, draco WASM, locales, images, cursors, sprites, assets) into the app's native Vite public/ dir on predev + prebuild.",
+    "core_frontend_version": "5.12.5",
+    "runtime_asset_source": "@itwin/core-frontend/lib/public (installed package, unmodified)",
+    "runtime_asset_sync_method": "predev/prebuild node scripts/copy-itwin-assets.mjs -> public/ (gitignored, regenerated)",
+    "worker_asset_real": true,
+    "worker_asset_content_type": "text/javascript (~1.127 MB)",
+    "draco_wasm_asset_real": true,
+    "draco_wasm_content_type": "application/wasm (~283 KB, \\0asm signature)",
+    "node_modules_modified": false,
+    "assets_fetched_from_internet": false
+  },
+  "manual_confirmation": {
+    "required": true,
+    "reason": "Kiro cannot inspect a rendered browser WebGL frame; confirmation performed manually by the user",
+    "start_command": "cd frontend && npm install && npm run dev",
+    "url": "http://localhost:3000/viewer",
+    "prerequisites": [
+      "VITE_BENTLEY_SPA_CLIENT_ID set",
+      "VITE_BENTLEY_IMODEL_ID set",
+      "SPA redirect URI http://localhost:3000/signin-callback registered on MRTway Development Viewer"
+    ],
+    "result": "LIVE_IMODEL_VISIBLE_IN_BROWSER = YES (real live iModel geometry rendered in the central Bentley viewport)"
+  },
+  "final_gates": {
+    "LIVE_IMODEL_VISIBLE_IN_BROWSER": "YES",
+    "IMDL_DECODER_WORKER": "PASS",
+    "DRACO_RUNTIME_ASSETS": "PASS",
+    "GEOMETRY_TILE_DECODING": "PASS",
+    "WEBGL_RENDERING": "PASS",
+    "note": "Visual normalization (transparency/materials/display style), asset-library, drag/drop, and NVIDIA are explicitly OUT OF SCOPE for this checkpoint and remain future builds."
+  }
+}
