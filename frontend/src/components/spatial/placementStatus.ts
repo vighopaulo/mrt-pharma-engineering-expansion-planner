@@ -58,3 +58,52 @@ export function resolvePlacementStatus(input: PlacementStatusInput): PlacementSt
     }
     return { phase: 'IDLE', text: '' }
 }
+
+export type MoveUiPhase = 'IDLE' | 'MOVE_ACTIVE' | 'MOVE_SUCCEEDED' | 'MOVE_CANCELLED'
+
+export interface MoveStatusInput {
+    /** Whether move mode is currently active. */
+    active: boolean
+    /** Whether move mode was active on the previous observed snapshot. */
+    wasActive: boolean
+    /** Label of the instance currently/most-recently being moved. */
+    displayLabel?: string
+    /** Id of the instance bound to the move (for the success line). */
+    assetInstanceId?: string
+    /**
+     * Whether the just-ended move actually changed a transform. The store
+     * version increments on both success and cancel, so the caller passes
+     * whether the bound instance's position changed to disambiguate.
+     */
+    positionChanged?: boolean
+}
+
+export interface MoveStatus {
+    phase: MoveUiPhase
+    text: string
+}
+
+/**
+ * Resolve the move status from a move-mode transition. Mirrors the placement
+ * status lesson so the "Moving…" instruction never lingers after the tool exits.
+ *   active                                  -> MOVE_ACTIVE ("Moving: …")
+ *   was active -> inactive, position moved  -> MOVE_SUCCEEDED ("Moved: …")
+ *   was active -> inactive, no change       -> MOVE_CANCELLED ("Move cancelled")
+ *   otherwise                               -> IDLE
+ */
+export function resolveMoveStatus(input: MoveStatusInput): MoveStatus {
+    const { active, wasActive, displayLabel, assetInstanceId, positionChanged } = input
+    if (active) {
+        return {
+            phase: 'MOVE_ACTIVE',
+            text: `Moving: ${displayLabel ?? 'asset'} — click a new location in the model (right-click / Esc to cancel)`,
+        }
+    }
+    if (wasActive && !active) {
+        if (positionChanged) {
+            return { phase: 'MOVE_SUCCEEDED', text: assetInstanceId ? `Moved: ${assetInstanceId}` : `Moved: ${displayLabel ?? 'asset'}` }
+        }
+        return { phase: 'MOVE_CANCELLED', text: 'Move cancelled' }
+    }
+    return { phase: 'IDLE', text: '' }
+}

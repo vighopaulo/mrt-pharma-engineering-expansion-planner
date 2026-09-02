@@ -66,13 +66,15 @@ export function buildScannerParts(inst: AssetInstance): ScannerPartGeometry[] {
     }
 
     // Bore: horizontal cylinder through the gantry along Y, centered vertically
-    // a bit above mid-height (patient bore). Radius ~30% of height.
+    // a bit above mid-height (patient bore). Radius ~30% of height. The bore
+    // axis must yaw with the instance too, so its endpoints are rotated about
+    // the instance center by the same yaw as the boxes.
     const boreRadius = Math.max(H * 0.3, 0.2)
     const boreZ = p.z + H * 0.55
     const bore: WorldCylinder = {
         kind: 'CYLINDER',
-        centerA: [p.x, p.y + D / 2 - gantryDepth, boreZ],
-        centerB: [p.x, p.y + D / 2 + 0.01, boreZ],
+        centerA: applyYaw([p.x, p.y + D / 2 - gantryDepth, boreZ], center, yaw),
+        centerB: applyYaw([p.x, p.y + D / 2 + 0.01, boreZ], center, yaw),
         radius: boreRadius,
         part: 'BORE',
     }

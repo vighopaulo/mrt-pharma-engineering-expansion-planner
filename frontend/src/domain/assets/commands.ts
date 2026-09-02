@@ -123,6 +123,13 @@ function withTransform(inst: AssetInstance, transform: SpatialTransform): AssetI
     return { ...inst, transform }
 }
 
+function scenarioDetail(inst: AssetInstance): Record<string, string> {
+    return {
+        scenarioId: inst.scenario?.scenarioId ?? '',
+        scenarioState: inst.scenario?.scenarioState ?? '',
+    }
+}
+
 /** Immutable placement/move: returns a new instance at the given world position. */
 export function placeAsset(inst: AssetInstance, position: SpatialPosition): CommandResult {
     if (![position.x, position.y, position.z].every(Number.isFinite)) {
@@ -132,25 +139,106 @@ export function placeAsset(inst: AssetInstance, position: SpatialPosition): Comm
     return { ok: true, instance: updated, event: { type: 'ASSET_PLACED', assetInstanceId: inst.assetInstanceId, projectId: inst.projectId } }
 }
 
+/**
+ * Immutable absolute move: returns a NEW instance positioned at `position`.
+ * IDENTITY IMMUTABLE — only transform.position changes; rotation/scale and all
+ * identity/provenance fields are preserved. Emits ASSET_MOVED with previous +
+ * new position (and unchanged rotation) for the event journal.
+ */
+export function moveAssetTo(inst: AssetInstance, position: SpatialPosition): CommandResult {
+    if (![position.x, position.y, position.z].every(Number.isFinite)) {
+        return { ok: false, errors: [{ field: 'position', message: 'must be finite' }] }
+    }
+    const previous = inst.transform.position
+    const updated = withTransform(inst, { ...inst.transform, position })
+    return {
+        ok: true,
+        instance: updated,
+        event: {
+            type: 'ASSET_MOVED',
+            assetInstanceId: inst.assetInstanceId,
+            projectId: inst.projectId,
+            detail: {
+                assetDefinitionId: inst.assetDefinitionId,
+                geometryRepresentationId: inst.geometryRepresentationId,
+                prevX: previous.x, prevY: previous.y, prevZ: previous.z,
+                newX: position.x, newY: position.y, newZ: position.z,
+                yaw: inst.transform.rotation.yaw,
+                roomAssignment: inst.roomAssignment.state,
+                ...scenarioDetail(inst),
+            },
+        },
+    }
+}
+
+/** Immutable relative move by a delta (kept for future use / tests). */
 export function moveAsset(inst: AssetInstance, delta: SpatialPosition): CommandResult {
     if (![delta.x, delta.y, delta.z].every(Number.isFinite)) {
         return { ok: false, errors: [{ field: 'delta', message: 'must be finite' }] }
     }
-    const position = {
+    return moveAssetTo(inst, {
         x: inst.transform.position.x + delta.x,
         y: inst.transform.position.y + delta.y,
         z: inst.transform.position.z + delta.z,
-    }
-    const updated = withTransform(inst, { ...inst.transform, position })
-    return { ok: true, instance: updated, event: { type: 'ASSET_MOVED', assetInstanceId: inst.assetInstanceId, projectId: inst.projectId } }
+    })
 }
 
+/**
+ * Immutable rotation: returns a NEW instance with the given rotation. IDENTITY
+ * IMMUTABLE — only transform.rotation changes; position/scale and all identity/
+ * provenance fields are preserved. Emits ASSET_ROTATED with previous + new
+ * rotation.
+ */
 export function rotateAsset(inst: AssetInstance, rotation: SpatialRotation): CommandResult {
     if (![rotation.yaw, rotation.pitch, rotation.roll].every(Number.isFinite)) {
         return { ok: false, errors: [{ field: 'rotation', message: 'must be finite' }] }
     }
+    const previous = inst.transform.rotation
     const updated = withTransform(inst, { ...inst.transform, rotation })
-    return { ok: true, instance: updated, event: { type: 'ASSET_ROTATED', assetInstanceId: inst.assetInstanceId, projectId: inst.projectId } }
+    return {
+        ok: true,
+        instance: updated,
+        event: {
+            type: 'ASSET_ROTATED',
+            assetInstanceId: inst.assetInstanceId,
+            projectId: inst.projectId,
+            detail: {
+                assetDefinitionId: inst.assetDefinitionId,
+                geometryRepresentationId: inst.geometryRepresentationId,
+                prevYaw: previous.yaw, prevPitch: previous.pitch, prevRoll: previous.roll,
+                newYaw: rotation.yaw, newPitch: rotation.pitch, newRoll: rotation.roll,
+                x: inst.transform.position.x, y: inst.transform.position.y, z: inst.transform.position.z,
+                ...scenarioDetail(inst),
+            },
+        },
+    }
+}
+
+/** Rotation unit + step for the controlled ±90° yaw workflow. */
+export const ROTATION_UNIT = 'DEGREES' as const
+export const ROTATION_STEP_DEGREES = 90
+
+/** Normalize a yaw in degrees to the half-open range [0, 360). */
+export function normalizeYawDegrees(yaw: number): number {
+    if (!Number.isFinite(yaw)) return 0
+    const m = yaw % 360
+    return m < 0 ? m + 360 : m
+}
+
+/**
+ * Immutable controlled yaw rotation by ±90° (or a multiple). Only yaw changes;
+ * pitch/roll are preserved exactly. Result yaw is normalized to [0, 360).
+ */
+export function rotateAssetYawBy(inst: AssetInstance, deltaDegrees: number): CommandResult {
+    if (!Number.isFinite(deltaDegrees)) {
+        return { ok: false, errors: [{ field: 'rotation', message: 'delta must be finite' }] }
+    }
+    const rotation: SpatialRotation = {
+        yaw: normalizeYawDegrees(inst.transform.rotation.yaw + deltaDegrees),
+        pitch: inst.transform.rotation.pitch,
+        roll: inst.transform.rotation.roll,
+    }
+    return rotateAsset(inst, rotation)
 }
 
 export function assignAssetToRoom(inst: AssetInstance, room: RoomAssignment): CommandResult {

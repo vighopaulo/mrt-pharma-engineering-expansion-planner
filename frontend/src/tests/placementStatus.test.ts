@@ -5,7 +5,7 @@
  * logic — no Bentley, no React render needed.
  */
 import { describe, expect, it } from 'vitest'
-import { resolvePlacementStatus } from '../components/spatial/placementStatus'
+import { resolveMoveStatus, resolvePlacementStatus } from '../components/spatial/placementStatus'
 
 describe('resolvePlacementStatus', () => {
     it('active placement status contains "Placing"', () => {
@@ -53,5 +53,40 @@ describe('resolvePlacementStatus', () => {
         })
         expect(s.phase).toBe('PLACEMENT_SUCCEEDED')
         expect(s.text).toBe('Placed: GE HealthCare Discovery MI')
+    })
+})
+
+describe('resolveMoveStatus', () => {
+    it('active move status contains "Moving"', () => {
+        const s = resolveMoveStatus({ active: true, wasActive: false, displayLabel: 'GE HealthCare Discovery MI' })
+        expect(s.phase).toBe('MOVE_ACTIVE')
+        expect(s.text).toContain('Moving')
+    })
+
+    it('successful move does NOT contain "Moving" and names the moved instance', () => {
+        const s = resolveMoveStatus({
+            active: false, wasActive: true, displayLabel: 'GE HealthCare Discovery MI',
+            assetInstanceId: 'PETCT-GE-DISCOVERY-MI-0001', positionChanged: true,
+        })
+        expect(s.phase).toBe('MOVE_SUCCEEDED')
+        expect(s.text).not.toContain('Moving')
+        expect(s.text).toContain('Moved')
+        expect(s.text).toContain('PETCT-GE-DISCOVERY-MI-0001')
+    })
+
+    it('cancelled move (no position change) is "Move cancelled" with no "Moving"', () => {
+        const s = resolveMoveStatus({
+            active: false, wasActive: true, displayLabel: 'GE HealthCare Discovery MI',
+            assetInstanceId: 'PETCT-GE-DISCOVERY-MI-0001', positionChanged: false,
+        })
+        expect(s.phase).toBe('MOVE_CANCELLED')
+        expect(s.text).toBe('Move cancelled')
+        expect(s.text).not.toContain('Moving')
+    })
+
+    it('idle move (no transition) yields IDLE empty text', () => {
+        const s = resolveMoveStatus({ active: false, wasActive: false })
+        expect(s.phase).toBe('IDLE')
+        expect(s.text).toBe('')
     })
 })

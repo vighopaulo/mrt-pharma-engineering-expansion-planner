@@ -260,7 +260,10 @@ export async function beginPlacementForLibraryEntry(entry: AssetLibraryEntry): P
     if (!intentRes.ok) {
         return { ok: false, reason: `${intentRes.reason}: ${intentRes.message}` }
     }
-    spatialAssetStore.beginPlacement(intentRes.intent)
+    const began = spatialAssetStore.beginPlacement(intentRes.intent)
+    if (!began.ok) {
+        return { ok: false, reason: began.reason }
+    }
 
     if (import.meta.env.DEV) {
         console.info('[mrt-placement] PLACEMENT_MODE_ENTERED catalogRecordId=%s assetDefinitionId=%s geometryRepresentationId=%s displayLabel=%s assetFamily=%s',
@@ -318,4 +321,79 @@ export function inspectPlacedAsset(assetInstanceId: string): string {
     const inst = spatialAssetStore.getInstance(assetInstanceId)
     if (!inst) return `NOT_FOUND: ${assetInstanceId}`
     return summarize(inst)
+}
+
+// ---------------------------------------------------------------------------
+// PRODUCT: controlled MOVE + ROTATE of an existing asset
+// ---------------------------------------------------------------------------
+
+/** Select an existing placed asset (product selection). */
+export function selectAsset(assetInstanceId: string | undefined): void {
+    spatialAssetStore.selectAsset(assetInstanceId)
+}
+
+export interface BeginMoveResult {
+    ok: boolean
+    reason: string
+}
+
+/**
+ * Enter MOVE mode for an existing instance and start the bounded Bentley move
+ * tool. Bound to the given assetInstanceId for the whole move. Rejected if any
+ * spatial interaction is already active (mutual exclusivity).
+ */
+export async function beginMoveForAsset(assetInstanceId: string): Promise<BeginMoveResult> {
+    ensureDecoratorRegistered()
+    bindStoreToDecorations()
+
+    const began = spatialAssetStore.beginMove(assetInstanceId)
+    if (!began.ok) {
+        return { ok: false, reason: began.reason }
+    }
+    if (import.meta.env.DEV) {
+        console.info('[mrt-move] MOVE_MODE_ENTERED assetInstanceId=%s previousPosition=(%s,%s,%s)',
+            began.intent.assetInstanceId, began.intent.previousPosition.x.toFixed(2),
+            began.intent.previousPosition.y.toFixed(2), began.intent.previousPosition.z.toFixed(2))
+    }
+
+    const { runMrtAssetMoveTool } = await import('./MrtAssetMoveTool')
+    const started = await runMrtAssetMoveTool()
+    if (!started) {
+        spatialAssetStore.cancelMove()
+        return { ok: false, reason: 'NO_ACTIVE_VIEWPORT' }
+    }
+    return { ok: true, reason: 'MOVE_MODE_ACTIVE' }
+}
+
+/** Cancel the active move (from a UI Cancel button). */
+export async function cancelMove(): Promise<void> {
+    spatialAssetStore.cancelMove()
+    try {
+        const { exitMrtAssetMoveTool } = await import('./MrtAssetMoveTool')
+        await exitMrtAssetMoveTool()
+    } catch {
+        // tool module not loaded — nothing to exit.
+    }
+    if (import.meta.env.DEV) console.info('[mrt-move] MOVE_MODE_EXITED reason=CANCELLED')
+}
+
+export interface RotateResultSummary {
+    ok: boolean
+    reason: string
+    yaw?: number
+    assetInstanceId?: string
+}
+
+/** Rotate the given asset's yaw by a controlled step (±90°). Immediate. */
+export function rotateAssetYaw(assetInstanceId: string, deltaDegrees: number): RotateResultSummary {
+    const r = spatialAssetStore.rotateAssetYaw(assetInstanceId, deltaDegrees)
+    if (!r.ok) {
+        if (import.meta.env.DEV) console.error('[mrt-rotate] ROTATE_FAILED reason=%s message=%s', r.reason, r.message)
+        return { ok: false, reason: r.reason }
+    }
+    if (import.meta.env.DEV) {
+        console.info('[mrt-rotate] ASSET_ROTATED assetInstanceId=%s newYaw=%s',
+            r.instance.assetInstanceId, r.instance.transform.rotation.yaw)
+    }
+    return { ok: true, reason: 'ROTATED', yaw: r.instance.transform.rotation.yaw, assetInstanceId: r.instance.assetInstanceId }
 }

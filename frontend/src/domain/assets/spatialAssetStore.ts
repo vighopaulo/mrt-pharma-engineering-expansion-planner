@@ -25,7 +25,7 @@ import {
     type PlacementIntent,
     type PlacementResult,
 } from './placement'
-import type { AssetJournalEvent } from './commands'
+import { moveAssetTo, rotateAssetYawBy, type AssetJournalEvent } from './commands'
 import type { AssetInstance, ScenarioProvenance, SpatialPosition, SpatialRotation } from './types'
 
 export interface SpatialAssetStoreOptions {
@@ -35,13 +35,54 @@ export interface SpatialAssetStoreOptions {
 
 export type StoreListener = () => void
 
+/**
+ * Narrow, mutually-exclusive spatial interaction state. Only one interaction
+ * can be active at a time so two Bentley tools never compete for clicks.
+ */
+export type SpatialInteractionState = 'IDLE' | 'PLACING' | 'MOVING'
+
+/**
+ * A resolved intent to MOVE an existing instance. Bound to one assetInstanceId
+ * for the whole move so a UI selection change cannot retarget the active move.
+ */
+export interface MoveIntent {
+    assetInstanceId: string
+    displayLabel: string
+    previousPosition: SpatialPosition
+}
+
+export type MoveResult =
+    | { ok: true; instance: AssetInstance; event: AssetJournalEvent }
+    | { ok: false; reason: MoveFailure; message: string }
+
+export type MoveFailure =
+    | 'ASSET_NOT_FOUND'
+    | 'WORLD_POINT_NOT_RESOLVED'
+    | 'MOVE_INTENT_INVALID'
+    | 'SPATIAL_INTERACTION_ALREADY_ACTIVE'
+    | 'STORE_UPDATE_FAILED'
+
+export type RotateResult =
+    | { ok: true; instance: AssetInstance; event: AssetJournalEvent }
+    | { ok: false; reason: RotateFailure; message: string }
+
+export type RotateFailure =
+    | 'ASSET_NOT_FOUND'
+    | 'ROTATION_INVALID'
+    | 'SPATIAL_INTERACTION_ALREADY_ACTIVE'
+    | 'STORE_UPDATE_FAILED'
+
 /** Public read-only snapshot for UI consumers (stable per version). */
 export interface SpatialAssetSnapshot {
     version: number
     projectId: string
     instances: readonly AssetInstance[]
+    interaction: SpatialInteractionState
     placementIntent: PlacementIntent | undefined
     placementModeActive: boolean
+    moveIntent: MoveIntent | undefined
+    moveModeActive: boolean
+    selectedAssetInstanceId: string | undefined
 }
 
 export class SpatialAssetStore {
@@ -49,6 +90,8 @@ export class SpatialAssetStore {
     private readonly idGen = new InstanceIdGenerator()
     private instances: AssetInstance[] = []
     private intent: PlacementIntent | undefined
+    private moveIntent: MoveIntent | undefined
+    private selectedId: string | undefined
     private readonly listeners = new Set<StoreListener>()
     private version = 0
     private snapshot: SpatialAssetSnapshot
@@ -83,13 +126,24 @@ export class SpatialAssetStore {
         return this.instances.filter((i) => i.projectId === this.projectId)
     }
 
+    /** The single mutually-exclusive interaction state. */
+    getInteractionState(): SpatialInteractionState {
+        if (this.intent !== undefined) return 'PLACING'
+        if (this.moveIntent !== undefined) return 'MOVING'
+        return 'IDLE'
+    }
+
     private computeSnapshot(): SpatialAssetSnapshot {
         return {
             version: this.version,
             projectId: this.projectId,
             instances: this.instances.slice(),
+            interaction: this.getInteractionState(),
             placementIntent: this.intent,
             placementModeActive: this.intent !== undefined,
+            moveIntent: this.moveIntent,
+            moveModeActive: this.moveIntent !== undefined,
+            selectedAssetInstanceId: this.selectedId,
         }
     }
 
@@ -100,10 +154,18 @@ export class SpatialAssetStore {
     }
 
     // --- placement intent lifecycle ---
-    /** Enter placement mode with a resolved intent (no instance created yet). */
-    beginPlacement(intent: PlacementIntent): void {
+    /**
+     * Enter placement mode with a resolved intent (no instance created yet).
+     * Rejected if any interaction (placement or move) is already active so two
+     * Bentley tools never compete for clicks.
+     */
+    beginPlacement(intent: PlacementIntent): { ok: true } | { ok: false; reason: 'SPATIAL_INTERACTION_ALREADY_ACTIVE' } {
+        if (this.getInteractionState() !== 'IDLE') {
+            return { ok: false, reason: 'SPATIAL_INTERACTION_ALREADY_ACTIVE' }
+        }
         this.intent = intent
         this.emit()
+        return { ok: true }
     }
 
     isPlacementModeActive(): boolean {
@@ -156,6 +218,106 @@ export class SpatialAssetStore {
         this.instances.push(result.instance)
         this.emit()
         return result
+    }
+
+    // --- selection ---
+    /** Select an existing placed asset (product selection; store-resolved). */
+    selectAsset(assetInstanceId: string | undefined): void {
+        if (this.selectedId === assetInstanceId) return
+        this.selectedId = assetInstanceId
+        this.emit()
+    }
+
+    getSelectedInstance(): AssetInstance | undefined {
+        return this.selectedId ? this.getInstance(this.selectedId) : undefined
+    }
+
+    // --- move lifecycle ---
+    /**
+     * Enter MOVE mode for a specific instance. The move is bound to this
+     * assetInstanceId for its whole lifetime — a later UI selection change does
+     * NOT retarget the active move. Rejected if any interaction is already
+     * active (mutual exclusivity).
+     */
+    beginMove(assetInstanceId: string): { ok: true; intent: MoveIntent } | { ok: false; reason: MoveFailure } {
+        if (this.getInteractionState() !== 'IDLE') {
+            return { ok: false, reason: 'SPATIAL_INTERACTION_ALREADY_ACTIVE' }
+        }
+        const inst = this.getInstance(assetInstanceId)
+        if (!inst) return { ok: false, reason: 'ASSET_NOT_FOUND' }
+        this.moveIntent = {
+            assetInstanceId: inst.assetInstanceId,
+            displayLabel: inst.displayLabel,
+            previousPosition: { ...inst.transform.position },
+        }
+        this.emit()
+        return { ok: true, intent: this.moveIntent }
+    }
+
+    isMoveModeActive(): boolean {
+        return this.moveIntent !== undefined
+    }
+
+    getActiveMoveIntent(): MoveIntent | undefined {
+        return this.moveIntent
+    }
+
+    /** Exit MOVE mode WITHOUT changing any transform (cancel). */
+    cancelMove(): void {
+        if (this.moveIntent === undefined) return
+        this.moveIntent = undefined
+        this.emit()
+    }
+
+    /**
+     * Complete a move at an accepted world point. Consumes the active move
+     * intent exactly once, updates ONLY the bound instance's position (identity
+     * + rotation preserved), and exits MOVE mode. One accepted click => one move.
+     */
+    completeMoveAt(position: SpatialPosition): MoveResult {
+        const intent = this.moveIntent
+        if (!intent) return { ok: false, reason: 'MOVE_INTENT_INVALID', message: 'no active move intent' }
+        // Consume up front so a duplicate click cannot double-move.
+        this.moveIntent = undefined
+
+        if (![position.x, position.y, position.z].every(Number.isFinite)) {
+            this.emit()
+            return { ok: false, reason: 'WORLD_POINT_NOT_RESOLVED', message: 'world point not finite' }
+        }
+        const inst = this.getInstance(intent.assetInstanceId)
+        if (!inst) {
+            this.emit()
+            return { ok: false, reason: 'ASSET_NOT_FOUND', message: `asset gone: ${intent.assetInstanceId}` }
+        }
+        const cmd = moveAssetTo(inst, position)
+        if (!cmd.ok) {
+            this.emit()
+            return { ok: false, reason: 'STORE_UPDATE_FAILED', message: cmd.errors.map((e) => `${e.field} ${e.message}`).join('; ') }
+        }
+        // Replace the same-id instance (identity immutable) and emit once.
+        this.instances = this.instances.map((i) => (i.assetInstanceId === cmd.instance.assetInstanceId ? cmd.instance : i))
+        this.emit()
+        return { ok: true, instance: cmd.instance, event: cmd.event }
+    }
+
+    // --- rotation (immediate; no interaction mode) ---
+    /**
+     * Rotate an instance's yaw by a controlled step (±90°). Rejected while MOVE
+     * or PLACEMENT is active (deterministic interaction). Only yaw changes.
+     */
+    rotateAssetYaw(assetInstanceId: string, deltaDegrees: number): RotateResult {
+        if (this.getInteractionState() !== 'IDLE') {
+            return { ok: false, reason: 'SPATIAL_INTERACTION_ALREADY_ACTIVE', message: `interaction active: ${this.getInteractionState()}` }
+        }
+        const inst = this.getInstance(assetInstanceId)
+        if (!inst) return { ok: false, reason: 'ASSET_NOT_FOUND', message: `asset not found: ${assetInstanceId}` }
+        const cmd = rotateAssetYawBy(inst, deltaDegrees)
+        if (!cmd.ok) {
+            return { ok: false, reason: 'ROTATION_INVALID', message: cmd.errors.map((e) => `${e.field} ${e.message}`).join('; ') }
+        }
+        this.instances = this.instances.map((i) => (i.assetInstanceId === cmd.instance.assetInstanceId ? cmd.instance : i))
+        this.emit()
+        return { ok: true, instance: cmd.instance, event: cmd.event }
     }
 
     // --- direct instance insertion (used by DEV fixtures + placement) ---

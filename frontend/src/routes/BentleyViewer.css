@@ -368,3 +368,45 @@
     white-space: pre-wrap;
     word-break: break-word;
 }
+
+/* Controlled manipulation controls for a selected placed asset. */
+.mrt-placed-detail {
+    margin-top: 0.5rem;
+}
+
+.mrt-manip-controls {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem;
+    margin-bottom: 0.4rem;
+}
+
+.mrt-manip-move,
+.mrt-manip-cancel,
+.mrt-manip-rot {
+    flex: 1 1 auto;
+    padding: 0.4rem 0.5rem;
+    font-size: 0.75rem;
+    font-weight: 700;
+    border-radius: 6px;
+    cursor: pointer;
+    border: 1px solid #3a6ff7;
+    background: #3a6ff7;
+    color: #fff;
+}
+
+.mrt-manip-rot {
+    border-color: #4b5563;
+    background: #4b5563;
+}
+
+.mrt-manip-cancel {
+    border-color: #b91c1c;
+    background: #b91c1c;
+}
+
+.mrt-manip-move:disabled,
+.mrt-manip-rot:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}

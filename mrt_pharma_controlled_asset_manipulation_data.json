@@ -1,0 +1,260 @@
+{
+  "report": "MRT Pharma Controlled Asset Manipulation (SELECT -> MOVE -> ROTATE)",
+  "continues_from_checkpoint": "f6dd65dbda2df16cd0f52c84a6ccc5cd78fd488c",
+  "repository_baseline": {
+    "PRECHECK_HEAD": "f6dd65dbda2df16cd0f52c84a6ccc5cd78fd488c",
+    "PRECHECK_ORIGIN_MAIN": "f6dd65dbda2df16cd0f52c84a6ccc5cd78fd488c",
+    "PRECHECK_DIVERGENCE": "0 / 0",
+    "local_only_untouched": [
+      "frontend/.env",
+      "AS_IS_DIGITAL_TWIN_PHASE_1A_SEAM_REPORT.md"
+    ]
+  },
+  "catalog_authority_unchanged": {
+    "EXTERNAL_GE_API_CONNECTED": "NO",
+    "GE_MANUFACTURER_API_QUERIED": "NO",
+    "GE_MANUFACTURER_CAD_INGESTED": "NO",
+    "GE_MANUFACTURER_GEOMETRY_USED": "NO",
+    "REPOSITORY_CATALOG_IDENTITY_USED": "YES",
+    "CATALOG_RECORD_ID": "GE_DISCOVERY_MI",
+    "geometry": "GENERIC_PET_CT_SCANNER_V1"
+  },
+  "selection_and_modes": {
+    "CONTROLLED_ASSET_SELECTION_IMPLEMENTED": "YES",
+    "MOVE_MODE_IMPLEMENTED": "YES",
+    "ROTATE_IMPLEMENTED": "YES",
+    "interaction_state": "SpatialInteractionState = IDLE | PLACING | MOVING (mutually exclusive, store-owned)",
+    "selection_owner": "SpatialAssetStore (id only; AssetInstance resolved from store)"
+  },
+  "move": {
+    "MOVE_INPUT_API": "PrimitiveTool + BeButtonEvent + ScreenViewport.pickNearestVisibleGeometry (MrtAssetMoveTool)",
+    "MOVE_WORLD_POINT_SOURCE": "PICK_NEAREST_VISIBLE_GEOMETRY",
+    "MOVE_WORLD_POINT_SOURCE_FALLBACK": "BE_BUTTON_EVENT_WORLD_POINT / VIEW_PLANE_PROJECTION",
+    "MOVE_ONE_CLICK_ONE_TRANSITION": "PASS",
+    "MOVE_CANCEL_SUPPORTED": "YES",
+    "move_intent": "MoveIntent { assetInstanceId, displayLabel, previousPosition } bound to one id for the whole move",
+    "domain_command": "moveAssetTo (immutable; emits ASSET_MOVED with prev/new position)"
+  },
+  "rotate": {
+    "ROTATION_AXIS": "Z / YAW",
+    "ROTATION_UNIT": "DEGREES",
+    "ROTATION_STEP": 90,
+    "ROTATION_NORMALIZATION": "PASS",
+    "normalization_examples": {
+      "0+90": 90,
+      "90+90": 180,
+      "180+90": 270,
+      "270+90": 0,
+      "0-90": 270,
+      "450": 90,
+      "-810": 270
+    },
+    "immediate": true,
+    "domain_command": "rotateAssetYawBy (immutable; normalizes yaw to [0,360); pitch/roll untouched; emits ASSET_ROTATED with prev/new rotation)"
+  },
+  "transform_and_rendering": {
+    "ASSET_TRANSFORM_ORDER": "local geometry -> scale -> yaw rotation (about instance center) -> translation -> Bentley world",
+    "rotation_rendered": "buildScannerParts applies yaw to gantry box, table box, and (newly) bore cylinder endpoints; decorator rotates box corners via applyYaw",
+    "bore_cylinder_yaw_fix": "bore centerA/centerB now pre-rotated by yaw (previously not rotated)",
+    "geometry_definition_mutated": "NO (GENERIC_PET_CT_SCANNER_V1 never mutated; transform belongs to AssetInstance)"
+  },
+  "identity_immutability": {
+    "IDENTITY_IMMUTABLE_DURING_MOVE": "PASS",
+    "IDENTITY_IMMUTABLE_DURING_ROTATE": "PASS",
+    "MOVE_PRESERVES_ROTATION": "PASS",
+    "ROTATE_PRESERVES_POSITION": "PASS",
+    "preserved_fields": [
+      "assetInstanceId",
+      "assetDefinitionId",
+      "geometryRepresentationId",
+      "displayLabel",
+      "projectId",
+      "scenarioId",
+      "catalog provenance (createdFrom)",
+      "dimension provenance",
+      "roomAssignment",
+      "installationState",
+      "spatialSource"
+    ],
+    "AUTOMATIC_ROOM_ASSIGNMENT": "NO",
+    "FLOOR_SNAPPING_IMPLEMENTED": "NO"
+  },
+  "events": {
+    "ASSET_MOVED_EVENT": "PASS",
+    "asset_moved_detail": [
+      "assetInstanceId",
+      "assetDefinitionId",
+      "geometryRepresentationId",
+      "prevX/Y/Z",
+      "newX/Y/Z",
+      "yaw",
+      "roomAssignment",
+      "scenarioId",
+      "scenarioState"
+    ],
+    "ASSET_ROTATED_EVENT": "PASS",
+    "asset_rotated_detail": [
+      "assetInstanceId",
+      "assetDefinitionId",
+      "geometryRepresentationId",
+      "prevYaw/Pitch/Roll",
+      "newYaw/Pitch/Roll",
+      "position x/y/z",
+      "scenarioId",
+      "scenarioState"
+    ],
+    "EVENT_JOURNAL_UI_IMPLEMENTED": "NO"
+  },
+  "state_observability": {
+    "SPATIAL_ASSET_STATE_SOURCE_OF_TRUTH": "ONE",
+    "ASSET_TRANSFORM_UI_UPDATE": "EVENT_DRIVEN_OR_EXPLICIT",
+    "OVERLAY_STATE_SURVIVES_DECORATOR_DISPOSE": "PASS",
+    "STRICTMODE_DUPLICATE_MOVE": "NO"
+  },
+  "status_cleanup": {
+    "move_status_derived_from_transitions": true,
+    "resolver": "resolveMoveStatus (active -> Moving:, success -> Moved: <id>, cancel -> Move cancelled)",
+    "STALE_MOVING_STATUS_AFTER_SUCCESS": "NO",
+    "STALE_MOVING_STATUS_AFTER_CANCEL": "NO",
+    "rotate_status": "bounded local string 'Rotated: <id> -> N deg' shown only on success"
+  },
+  "typed_failures": {
+    "move": [
+      "ASSET_NOT_FOUND",
+      "WORLD_POINT_NOT_RESOLVED",
+      "MOVE_INTENT_INVALID",
+      "SPATIAL_INTERACTION_ALREADY_ACTIVE",
+      "STORE_UPDATE_FAILED"
+    ],
+    "rotate": [
+      "ASSET_NOT_FOUND",
+      "ROTATION_INVALID",
+      "SPATIAL_INTERACTION_ALREADY_ACTIVE",
+      "STORE_UPDATE_FAILED"
+    ]
+  },
+  "tests": {
+    "OFFLINE_TEST_COUNT": 146,
+    "previous_baseline": 121,
+    "NEW_TEST_COUNT": 25,
+    "OFFLINE_TEST_REGRESSIONS": 0,
+    "new_test_files": [
+      "frontend/src/tests/assetManipulation.test.ts (21)",
+      "frontend/src/tests/placementStatus.test.ts (+4 move-status)"
+    ],
+    "coverage": [
+      "move changes only position; identity preserved",
+      "move preserves rotation",
+      "ASSET_MOVED prev/new position",
+      "move does not change instance count",
+      "rotate changes only yaw; identity + position preserved",
+      "ASSET_ROTATED prev/new rotation",
+      "move-after-rotate preserves yaw",
+      "rotate-after-move preserves position",
+      "move intent binds to one id",
+      "one accepted move click = one transition (second click no-op)",
+      "cancel move leaves transform unchanged",
+      "selection change during move does not retarget",
+      "move blocked while placing; placement blocked while moving",
+      "rotate rejected while moving",
+      "move mode exits after success and cancel",
+      "repeated subscription does not duplicate move",
+      "yaw normalization (0/90/180/270; -90->270; 450->90; -810->270)",
+      "rotation renders: yaw 0 vs 90 differs; same geometry id",
+      "move/rotate status resolvers (Moving/Moved/Move cancelled)"
+    ]
+  },
+  "machine_verification": {
+    "TYPECHECK": "PASS",
+    "OFFLINE_TEST_COUNT": 146,
+    "NEW_TEST_COUNT": 25,
+    "OFFLINE_TEST_REGRESSIONS": 0,
+    "PRODUCTION_BUILD": "PASS",
+    "CORE_FRONTEND_VERSION": "5.12.5",
+    "WORKER_ASSET_REAL": "YES",
+    "DRACO_WASM_ASSET_REAL": "YES",
+    "dev_server": {
+      "viewer": "HTTP 200",
+      "worker_content_type": "text/javascript",
+      "wasm_content_type": "application/wasm"
+    }
+  },
+  "closed_systems": {
+    "AUTH_FLOW_CHANGED": "NO",
+    "VIEWER_LIFECYCLE_CHANGED": "NO",
+    "TRANSPARENCY_WORK_RESUMED": "NO",
+    "CAMERA_BEHAVIOR_CHANGED": "NO",
+    "IMODEL_MODIFIED": "NO",
+    "BENTLEY_CHANGESET_CREATED": "NO",
+    "BENTLEY_RESOURCE_MODIFIED": "NO"
+  },
+  "manual_acceptance": {
+    "LIVE_IMODEL_VISIBLE_IN_BROWSER": "YES",
+    "PLACED_ASSET_SELECTION_VISIBLE": "YES",
+    "MOVE_CONTROL_VISIBLE": "YES",
+    "ROTATE_LEFT_CONTROL_VISIBLE": "YES",
+    "ROTATE_RIGHT_CONTROL_VISIBLE": "YES",
+    "MOVE_VISIBLE_IN_BROWSER": "YES",
+    "MOVE_FUNCTIONALLY_CONFIRMED": "YES",
+    "ROTATION_VISIBLE_IN_BROWSER": "YES",
+    "ROTATION_INSPECTION_VISIBLE": "YES",
+    "observed_instance": {
+      "assetInstanceId": "PETCT-GE-DISCOVERY-MI-0001",
+      "displayLabel": "GE HealthCare Discovery MI",
+      "position": "(13.64, 7.00, 5.78)",
+      "rotation": "yaw=180 pitch=0 roll=0",
+      "roomAssignment": "NOT_ASSIGNED",
+      "installationState": "PLACED",
+      "spatialSource": "USER_PLACED",
+      "scenario": "MRT_DEV_SCENARIO / DRAFT",
+      "browser_status_shown": "Rotated: PETCT-GE-DISCOVERY-MI-0001 -> 180 deg"
+    },
+    "ROTATION_YAW_OBSERVED": 180,
+    "ROTATION_PITCH_OBSERVED": 0,
+    "ROTATION_ROLL_OBSERVED": 0,
+    "evidence_provenance": {
+      "MOVE_CANCEL_OFFLINE_VERIFIED": "YES",
+      "MOVE_CANCEL_MANUAL_CONFIRMATION": "NOT_SEPARATELY_CAPTURED",
+      "MOVE_PRESERVES_ROTATION_OFFLINE": "PASS",
+      "MOVE_AFTER_ROTATE_BROWSER_WORKFLOW_EXERCISED": "YES",
+      "MOVE_AFTER_ROTATE_FINAL_YAW_MANUAL_INSPECTION": "NOT_SEPARATELY_CAPTURED",
+      "ROTATE_PRESERVES_POSITION": "PASS (offline)"
+    }
+  },
+  "ux_determination": {
+    "CURRENT_MANIPULATION_UX": "CONTROLLED_COMMAND_FOUNDATION",
+    "CURRENT_MOVE_INTERACTION": "CONTROLLED_COMMAND_BASED",
+    "CURRENT_MOVE_INTERACTION_ACCEPTED_AS_FOUNDATION": "YES",
+    "FINAL_DIRECT_MANIPULATION_UX_IMPLEMENTED": "NO",
+    "DIRECT_OBJECT_SELECTION_IMPLEMENTED": "NO",
+    "FLUID_DRAG_IMPLEMENTED": "NO",
+    "OBJECT_ATTACHED_MANIPULATION_HANDLES_IMPLEMENTED": "NO",
+    "DIRECT_OBJECT_MANIPULATION_REQUIRED_FUTURE_BUILD": "YES",
+    "FLUID_DRAG_REQUIRED_FUTURE_BUILD": "YES",
+    "note": "UX preference is not a failure of the current transform architecture."
+  },
+  "next_build_documented_only": {
+    "capability": "Direct object selection + fluid drag manipulation foundation",
+    "flow": "click overlay asset -> resolve assetInstanceId -> select directly -> begin manipulation -> pointer movement updates TRANSIENT_PREVIEW_TRANSFORM -> release -> one authoritative AssetInstance transform commit -> one ASSET_MOVED event",
+    "critical_doctrine": "do NOT emit one permanent domain event per pointer-move frame; one authoritative commit + one ASSET_MOVED on release",
+    "implemented_now": "NO"
+  },
+  "checkpoint_status": "MANUAL_ACCEPTANCE_PASSED — checkpointing (stage explicit paths, one commit, push origin/main)",
+  "files_added": [
+    "frontend/src/components/spatial/MrtAssetMoveTool.ts",
+    "frontend/src/components/spatial/placementStatus.ts (resolveMoveStatus added)",
+    "frontend/src/tests/assetManipulation.test.ts",
+    "MRT_PHARMA_CONTROLLED_ASSET_MANIPULATION_REPORT.md",
+    "mrt_pharma_controlled_asset_manipulation_data.json"
+  ],
+  "files_modified": [
+    "frontend/src/domain/assets/commands.ts",
+    "frontend/src/domain/assets/spatialAssetStore.ts",
+    "frontend/src/components/spatial/spatialAssetOverlay.ts",
+    "frontend/src/components/spatial/scannerGeometry.ts",
+    "frontend/src/components/spatial/ViewerAssetLibrary.tsx",
+    "frontend/src/components/spatial/placementStatus.ts",
+    "frontend/src/tests/placementStatus.test.ts",
+    "frontend/src/routes/BentleyViewer.css"
+  ]
+}
