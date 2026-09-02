@@ -72,6 +72,24 @@ export type RotateFailure =
     | 'SPATIAL_INTERACTION_ALREADY_ACTIVE'
     | 'STORE_UPDATE_FAILED'
 
+/**
+ * Transient preview transform used ONLY while a direct fluid drag is active.
+ * It is never persisted, never serialized as project state, and never written
+ * to the event journal. The authoritative committed transform stays on the
+ * AssetInstance in the store until drag release.
+ */
+export interface DragPreview {
+    assetInstanceId: string
+    startPosition: SpatialPosition
+    /** assetPosition - dragStartWorldPoint, so the grab point is preserved. */
+    grabOffset: SpatialPosition
+    previewPosition: SpatialPosition
+}
+
+export type DragCommitResult =
+    | { ok: true; instance: AssetInstance; event: AssetJournalEvent }
+    | { ok: false; reason: MoveFailure; message: string }
+
 /** Public read-only snapshot for UI consumers (stable per version). */
 export interface SpatialAssetSnapshot {
     version: number
@@ -83,6 +101,9 @@ export interface SpatialAssetSnapshot {
     moveIntent: MoveIntent | undefined
     moveModeActive: boolean
     selectedAssetInstanceId: string | undefined
+    /** Active fluid-drag preview (transient), if any. */
+    dragPreview: DragPreview | undefined
+    dragActive: boolean
 }
 
 export class SpatialAssetStore {
@@ -91,6 +112,7 @@ export class SpatialAssetStore {
     private instances: AssetInstance[] = []
     private intent: PlacementIntent | undefined
     private moveIntent: MoveIntent | undefined
+    private dragPreview: DragPreview | undefined
     private selectedId: string | undefined
     private readonly listeners = new Set<StoreListener>()
     private version = 0
@@ -126,10 +148,11 @@ export class SpatialAssetStore {
         return this.instances.filter((i) => i.projectId === this.projectId)
     }
 
-    /** The single mutually-exclusive interaction state. */
+    /** The single mutually-exclusive interaction state. A fluid drag counts as
+     * MOVING (so command-move/placement cannot start mid-drag). */
     getInteractionState(): SpatialInteractionState {
         if (this.intent !== undefined) return 'PLACING'
-        if (this.moveIntent !== undefined) return 'MOVING'
+        if (this.moveIntent !== undefined || this.dragPreview !== undefined) return 'MOVING'
         return 'IDLE'
     }
 
@@ -144,6 +167,8 @@ export class SpatialAssetStore {
             moveIntent: this.moveIntent,
             moveModeActive: this.moveIntent !== undefined,
             selectedAssetInstanceId: this.selectedId,
+            dragPreview: this.dragPreview,
+            dragActive: this.dragPreview !== undefined,
         }
     }
 
@@ -318,6 +343,107 @@ export class SpatialAssetStore {
         this.instances = this.instances.map((i) => (i.assetInstanceId === cmd.instance.assetInstanceId ? cmd.instance : i))
         this.emit()
         return { ok: true, instance: cmd.instance, event: cmd.event }
+    }
+
+    // --- direct fluid drag (transient preview; ONE commit on release) ---
+    /**
+     * Begin a fluid drag of an instance. Records the grab offset so the grab
+     * point under the cursor is preserved. Rejected if any interaction is
+     * already active. The authoritative AssetInstance transform is NOT changed
+     * here — only a transient preview is created.
+     */
+    beginDrag(assetInstanceId: string, grabWorldPoint: SpatialPosition): { ok: true; preview: DragPreview } | { ok: false; reason: MoveFailure } {
+        if (this.getInteractionState() !== 'IDLE') {
+            return { ok: false, reason: 'SPATIAL_INTERACTION_ALREADY_ACTIVE' }
+        }
+        const inst = this.getInstance(assetInstanceId)
+        if (!inst) return { ok: false, reason: 'ASSET_NOT_FOUND' }
+        const start = { ...inst.transform.position }
+        const grabOffset = {
+            x: start.x - grabWorldPoint.x,
+            y: start.y - grabWorldPoint.y,
+            z: 0, // Z is preserved during fluid drag (X/Y movement only).
+        }
+        this.dragPreview = { assetInstanceId, startPosition: start, grabOffset, previewPosition: start }
+        // Selection follows the drag target.
+        this.selectedId = assetInstanceId
+        this.emit()
+        return { ok: true, preview: this.dragPreview }
+    }
+
+    isDragActive(): boolean {
+        return this.dragPreview !== undefined
+    }
+
+    getDragPreview(): DragPreview | undefined {
+        return this.dragPreview
+    }
+
+    /**
+     * Update the transient preview position from a drag world point. Preserves
+     * the start Z (fluid X/Y drag) and applies the grab offset. Does NOT emit a
+     * domain event and does NOT change the committed AssetInstance.
+     */
+    updateDragPreview(dragWorldPoint: SpatialPosition): void {
+        const dp = this.dragPreview
+        if (!dp) return
+        const previewPosition: SpatialPosition = {
+            x: dragWorldPoint.x + dp.grabOffset.x,
+            y: dragWorldPoint.y + dp.grabOffset.y,
+            z: dp.startPosition.z, // preserve start Z
+        }
+        this.dragPreview = { ...dp, previewPosition }
+        this.emit()
+    }
+
+    /**
+     * Commit the active drag: exactly ONE authoritative move transition + ONE
+     * ASSET_MOVED event. Identity and rotation preserved. Clears the preview.
+     * If the preview position equals the start (no real movement) it is treated
+     * as a no-op commit failure so callers can decide (still clears preview).
+     */
+    commitDrag(): DragCommitResult {
+        const dp = this.dragPreview
+        if (!dp) return { ok: false, reason: 'MOVE_INTENT_INVALID', message: 'no active drag' }
+        // Consume the preview up front so a duplicate release cannot double-commit.
+        this.dragPreview = undefined
+
+        const inst = this.getInstance(dp.assetInstanceId)
+        if (!inst) {
+            this.emit()
+            return { ok: false, reason: 'ASSET_NOT_FOUND', message: `asset gone: ${dp.assetInstanceId}` }
+        }
+        const cmd = moveAssetTo(inst, dp.previewPosition)
+        if (!cmd.ok) {
+            this.emit()
+            return { ok: false, reason: 'STORE_UPDATE_FAILED', message: cmd.errors.map((e) => `${e.field} ${e.message}`).join('; ') }
+        }
+        this.instances = this.instances.map((i) => (i.assetInstanceId === cmd.instance.assetInstanceId ? cmd.instance : i))
+        this.emit()
+        return { ok: true, instance: cmd.instance, event: cmd.event }
+    }
+
+    /** Cancel the active drag: discard the preview, no commit, no event. */
+    cancelDrag(): void {
+        if (this.dragPreview === undefined) return
+        this.dragPreview = undefined
+        this.emit()
+    }
+
+    /**
+     * Instances with the active drag preview applied to the dragged instance
+     * (what the overlay renders during a drag). Non-dragged instances use their
+     * committed transforms.
+     */
+    getEffectiveProjectInstances(): readonly AssetInstance[] {
+        const dp = this.dragPreview
+        const base = this.getProjectInstances()
+        if (!dp) return base
+        return base.map((i) =>
+            i.assetInstanceId === dp.assetInstanceId
+                ? { ...i, transform: { ...i.transform, position: dp.previewPosition } }
+                : i,
+        )
     }
 
     // --- direct instance insertion (used by DEV fixtures + placement) ---

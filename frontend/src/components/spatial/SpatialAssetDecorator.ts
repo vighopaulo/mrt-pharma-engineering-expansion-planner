@@ -29,16 +29,59 @@ const PART_COLOR: Record<ScannerPart, [number, number, number]> = {
     PATIENT_TABLE: [210, 210, 215], // pale table
 }
 
-export class SpatialAssetDecorator implements Decorator {
-    /** Cache decorations while idle — recreated only when the viewport asks. */
-    public readonly useCachedDecorations = true as const
+/** Highlight color for the directly-selected asset (application-owned render
+ * state only — NOT a geometry-identity change and NOT transparency). */
+const SELECTION_COLOR: [number, number, number] = [255, 196, 0] // amber outline
 
+export class SpatialAssetDecorator implements Decorator {
     private readonly getInstances: () => readonly AssetInstance[]
+    private readonly getSelectedId: () => string | undefined
+    private readonly getDragActive: () => boolean
+
+    /**
+     * Cache decorations while IDLE (efficient; recreated only when the viewport
+     * asks) but NOT during an active fluid drag. Bentley reads this getter each
+     * frame: while dragging we return false so the moving scanner is rebuilt
+     * from the transient preview transform every frame; when idle we return true
+     * so nothing churns. This is the narrow fix for the "marker moves but the
+     * scanner geometry stays" defect — cached graphics were being reused at the
+     * stale committed position during the drag.
+     */
+    public get useCachedDecorations(): true | undefined {
+        // `true` => cache (idle); `undefined` => no caching so decorate() runs
+        // every frame while dragging and the scanner follows the preview.
+        return this.getDragActive() ? undefined : true
+    }
+
+    /**
+     * pickable transient Id64 <-> assetInstanceId map, rebuilt each decorate().
+     * Bentley calls testDecorationHit(id) with a picked pickable id; we map it
+     * back to the application-owned assetInstanceId.
+     */
+    private readonly pickIdToInstance = new Map<string, string>()
+    private readonly instanceToPickId = new Map<string, string>()
 
     /** Instances are pulled via a getter so React state can update the source
-     * without recreating the decorator instance. */
-    constructor(getInstances: () => readonly AssetInstance[]) {
+     * without recreating the decorator instance. Selection + drag-active are
+     * also getters so the decorator reads live application state each frame. */
+    constructor(
+        getInstances: () => readonly AssetInstance[],
+        getSelectedId?: () => string | undefined,
+        getDragActive?: () => boolean,
+    ) {
         this.getInstances = getInstances
+        this.getSelectedId = getSelectedId ?? (() => undefined)
+        this.getDragActive = getDragActive ?? (() => false)
+    }
+
+    /** Resolve a picked pickable id back to an application-owned asset id. */
+    assetIdForPickId(pickId: string): string | undefined {
+        return this.pickIdToInstance.get(pickId)
+    }
+
+    /** Bentley picking hook: does this pickable id belong to this decorator? */
+    testDecorationHit(id: string): boolean {
+        return this.pickIdToInstance.has(id)
     }
 
     /** Pure planning (Bentley-free) used by tests to prove the mapping. */
@@ -50,25 +93,55 @@ export class SpatialAssetDecorator implements Decorator {
         }))
     }
 
+    /** Allocate/reuse a pickable transient id for an instance for this frame. */
+    private pickIdFor(inst: AssetInstance, iModel: { transientIds: { getNext(): string } } | undefined): string | undefined {
+        if (!iModel) return undefined
+        const existing = this.instanceToPickId.get(inst.assetInstanceId)
+        if (existing) return existing
+        const id = iModel.transientIds.getNext()
+        this.instanceToPickId.set(inst.assetInstanceId, id)
+        this.pickIdToInstance.set(id, inst.assetInstanceId)
+        return id
+    }
+
     decorate(context: DecorateContext): void {
         const instances = this.getInstances()
+        // Rebuild the pick map for the current instance set (drop stale entries).
+        const liveIds = new Set(instances.map((i) => i.assetInstanceId))
+        for (const [instId, pickId] of Array.from(this.instanceToPickId)) {
+            if (!liveIds.has(instId)) {
+                this.instanceToPickId.delete(instId)
+                this.pickIdToInstance.delete(pickId)
+            }
+        }
         if (!instances.length) return
+        const iModel = context.viewport.iModel as unknown as { transientIds: { getNext(): string } }
+        const selectedId = this.getSelectedId()
         for (const inst of instances) {
             try {
-                this.decorateInstance(context, inst)
+                const pickId = this.pickIdFor(inst, iModel)
+                this.decorateInstance(context, inst, pickId, inst.assetInstanceId === selectedId)
             } catch {
                 // A single bad instance must never break the whole overlay.
             }
         }
     }
 
-    private decorateInstance(context: DecorateContext, inst: AssetInstance): void {
+    private decorateInstance(context: DecorateContext, inst: AssetInstance, pickId: string | undefined, selected: boolean): void {
         const parts = buildScannerParts(inst)
         for (const part of parts) {
-            const builder = context.createGraphicBuilder(GraphicType.WorldDecoration)
+            // Pickable graphics carry the transient id so a click resolves back
+            // to this instance via testDecorationHit + HitDetail.sourceId.
+            const builder = pickId
+                ? context.createGraphicBuilder(GraphicType.WorldDecoration, undefined, pickId)
+                : context.createGraphicBuilder(GraphicType.WorldDecoration)
             const [r, g, b] = PART_COLOR[part.part]
-            const color = ColorDef.from(r, g, b)
-            builder.setSymbology(color, color, 1)
+            const fill = ColorDef.from(r, g, b)
+            // Selected assets get an amber outline (line color) + heavier weight.
+            // This is render state only; geometry identity is unchanged and no
+            // transparency is introduced.
+            const line = selected ? ColorDef.from(...SELECTION_COLOR) : fill
+            builder.setSymbology(line, fill, selected ? 4 : 1)
 
             if (part.kind === 'BOX') {
                 const box = this.buildBox(part)

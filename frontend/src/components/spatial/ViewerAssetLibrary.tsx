@@ -25,6 +25,7 @@ import {
 import {
     beginMoveForAsset,
     cancelMove,
+    ensureDirectManipulationReady,
     rotateAssetYaw,
     selectAsset,
 } from './spatialAssetOverlay'
@@ -51,6 +52,7 @@ export function ViewerAssetLibrary() {
     const moveActive = snapshot.moveModeActive
     const moveIntent = snapshot.moveIntent
     const interaction = snapshot.interaction
+    const dragActive = snapshot.dragActive
 
     // Product-placed instances = anything the user placed (USER_PLACED) plus any
     // fixtures currently present; the panel derives entirely from the store.
@@ -123,6 +125,16 @@ export function ViewerAssetLibrary() {
     }, [placementActive, placed, activeIntent, moveActive, moveIntent])
 
     const status = enterError || rotateStatus || derivedStatus
+
+    // Arm the bounded direct-manipulation tool (click scanner to select, drag to
+    // move) whenever there are placed assets and no other interaction owns the
+    // viewport. Idempotent; re-arms when the interaction returns to IDLE (e.g.
+    // after a command MOVE/placement completes).
+    useEffect(() => {
+        if (placed.length > 0 && interaction === 'IDLE') {
+            void ensureDirectManipulationReady()
+        }
+    }, [placed.length, interaction])
 
     const handleSelectEntry = useCallback((entry: AssetLibraryEntry) => {
         // Selecting an entry creates NO instance and does NOT enter placement mode.
@@ -268,8 +280,14 @@ export function ViewerAssetLibrary() {
 
             {selectedInstance && (
                 <div className="mrt-placed-detail">
+                    <p className="mrt-manip-hint">
+                        {dragActive
+                            ? 'Dragging — release to place, right-click / Esc to cancel'
+                            : 'Selected. Drag the scanner in the model to move it, or use the controls below.'}
+                    </p>
                     {/* Controlled manipulation for the selected asset. Identity is
-                        immutable; only the transform changes. */}
+                        immutable; only the transform changes. Command MOVE/ROTATE
+                        remain as the deterministic fallback alongside fluid drag. */}
                     <div className="mrt-manip-controls">
                         {!moveActive ? (
                             <button

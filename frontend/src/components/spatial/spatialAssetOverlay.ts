@@ -62,9 +62,27 @@ export function subscribeSpatialAssets(listener: StoreListener): () => void {
 export function ensureDecoratorRegistered(): void {
     if (decorator && removeDecorator) return
     if (!decorator) {
-        decorator = new SpatialAssetDecorator(() => spatialAssetStore.getProjectInstances())
+        decorator = new SpatialAssetDecorator(
+            // Render the drag preview transform for the active dragged instance;
+            // committed transforms for all others.
+            () => spatialAssetStore.getEffectiveProjectInstances(),
+            () => spatialAssetStore.getSnapshot().selectedAssetInstanceId,
+            // Disable decoration caching while a drag is active so the moving
+            // scanner is rebuilt from the preview transform every frame.
+            () => spatialAssetStore.isDragActive(),
+        )
     }
     removeDecorator = IModelApp.viewManager.addDecorator(decorator)
+}
+
+/** Resolve a Bentley pick id (HitDetail.sourceId) to an application asset id. */
+export function assetIdForPickId(pickId: string): string | undefined {
+    return decorator?.assetIdForPickId(pickId)
+}
+
+/** The registered decorator (for the direct-manipulation tool's redraw hook). */
+export function getSpatialDecorator(): SpatialAssetDecorator | undefined {
+    return decorator
 }
 
 /**
@@ -83,8 +101,16 @@ export function disposeOverlay(): void {
 
 function invalidateDecorations(): void {
     const vp = IModelApp.viewManager?.selectedView
-    // Cached decorations must be invalidated when the instance set changes.
-    if (decorator) vp?.invalidateCachedDecorations(decorator)
+    if (!vp || !decorator) return
+    if (spatialAssetStore.isDragActive()) {
+        // During a drag the decorator is NOT caching; force a plain decoration
+        // redraw so the scanner follows the preview transform this frame.
+        vp.invalidateDecorations()
+    } else {
+        // Idle: the decorator caches; invalidate the cache so the next frame
+        // rebuilds (e.g. after a placement/move/rotate or drag commit/cancel).
+        vp.invalidateCachedDecorations(decorator)
+    }
 }
 
 /**
@@ -382,6 +408,119 @@ export interface RotateResultSummary {
     reason: string
     yaw?: number
     assetInstanceId?: string
+}
+
+// ---------------------------------------------------------------------------
+// PRODUCT: direct object selection + fluid drag (used by the Bentley tool)
+// ---------------------------------------------------------------------------
+
+/** Resolve a Bentley pick id to an asset and select it (direct object select). */
+export function selectByPickId(pickId: string): string | undefined {
+    const assetId = assetIdForPickId(pickId)
+    if (assetId) {
+        spatialAssetStore.selectAsset(assetId)
+        if (import.meta.env.DEV) console.info('[mrt-direct] DIRECT_SELECT assetInstanceId=%s', assetId)
+    }
+    return assetId
+}
+
+/** Begin a fluid drag of an asset at a grab world point. */
+export function beginDrag(assetInstanceId: string, grabWorldPoint: { x: number; y: number; z: number }): boolean {
+    dragDiagCount = 0
+    const r = spatialAssetStore.beginDrag(assetInstanceId, grabWorldPoint)
+    if (r.ok && import.meta.env.DEV) {
+        console.info('[mrt-direct] DRAG_START assetInstanceId=%s grab=(%s,%s,%s)', assetInstanceId,
+            grabWorldPoint.x.toFixed(2), grabWorldPoint.y.toFixed(2), grabWorldPoint.z.toFixed(2))
+    }
+    return r.ok
+}
+
+let dragDiagCount = 0
+
+/** Update the transient drag preview (no event, no committed change). */
+export function updateDragPreview(dragWorldPoint: { x: number; y: number; z: number }): void {
+    spatialAssetStore.updateDragPreview(dragWorldPoint)
+    // Bounded DEV diagnostic: sample only the first few preview updates per drag
+    // (never every frame indefinitely) so the preview pipeline can be verified.
+    if (import.meta.env.DEV && dragDiagCount < 5) {
+        const dp = spatialAssetStore.getDragPreview()
+        const eff = spatialAssetStore.getEffectiveProjectInstances().find((i) => i.assetInstanceId === dp?.assetInstanceId)
+        const committed = dp ? spatialAssetStore.getInstance(dp.assetInstanceId) : undefined
+        if (dp && eff && committed) {
+            dragDiagCount += 1
+            const c = committed.transform.position, p = dp.previewPosition, e = eff.transform.position
+            console.info('[drag-preview] assetInstanceId=%s committed=(%s,%s,%s) preview=(%s,%s,%s) effective=(%s,%s,%s) previewActive=true',
+                dp.assetInstanceId, c.x.toFixed(2), c.y.toFixed(2), c.z.toFixed(2),
+                p.x.toFixed(2), p.y.toFixed(2), p.z.toFixed(2), e.x.toFixed(2), e.y.toFixed(2), e.z.toFixed(2))
+        }
+    }
+}
+
+/** Commit the active drag: ONE authoritative move + ONE ASSET_MOVED. */
+export function commitDrag(): { ok: boolean; reason: string; assetInstanceId?: string } {
+    const r = spatialAssetStore.commitDrag()
+    if (!r.ok) {
+        if (import.meta.env.DEV) console.info('[mrt-direct] DRAG_COMMIT_SKIPPED reason=%s', r.reason)
+        return { ok: false, reason: r.reason }
+    }
+    if (import.meta.env.DEV) {
+        const p = r.instance.transform.position
+        console.info('[mrt-direct] DRAG_COMMIT assetInstanceId=%s pos=(%s,%s,%s) ASSET_MOVED=1',
+            r.instance.assetInstanceId, p.x.toFixed(2), p.y.toFixed(2), p.z.toFixed(2))
+    }
+    return { ok: true, reason: 'COMMITTED', assetInstanceId: r.instance.assetInstanceId }
+}
+
+/** Cancel the active drag: discard preview, restore committed position. */
+export function cancelDrag(): void {
+    spatialAssetStore.cancelDrag()
+    if (import.meta.env.DEV) console.info('[mrt-direct] DRAG_CANCELLED')
+}
+
+/**
+ * Read-only DEV inspector for the direct-drag interaction state. Reports the
+ * active Bentley tool id, selection, interaction, and committed/preview/
+ * effective positions of the drag target. Mutates nothing.
+ */
+export function inspectDirectDragState(): string {
+    const snap = spatialAssetStore.getSnapshot()
+    const dp = snap.dragPreview
+    const committed = dp ? spatialAssetStore.getInstance(dp.assetInstanceId) : undefined
+    const eff = dp ? spatialAssetStore.getEffectiveProjectInstances().find((i) => i.assetInstanceId === dp.assetInstanceId) : undefined
+    const activeToolId = IModelApp.toolAdmin?.activeTool?.toolId ?? '—'
+    const c = committed?.transform.position
+    const e = eff?.transform.position
+    const summary = [
+        `activeTool=${activeToolId}`,
+        `selected=${snap.selectedAssetInstanceId ?? '—'}`,
+        `interaction=${snap.interaction}`,
+        `dragActive=${snap.dragActive}`,
+        `dragTarget=${dp?.assetInstanceId ?? '—'}`,
+        `committed=${c ? `(${c.x.toFixed(2)},${c.y.toFixed(2)},${c.z.toFixed(2)})` : '—'}`,
+        `preview=${dp ? `(${dp.previewPosition.x.toFixed(2)},${dp.previewPosition.y.toFixed(2)},${dp.previewPosition.z.toFixed(2)})` : '—'}`,
+        `effective=${e ? `(${e.x.toFixed(2)},${e.y.toFixed(2)},${e.z.toFixed(2)})` : '—'}`,
+    ].join(' | ')
+    if (import.meta.env.DEV) console.info('[direct-inspect] %s', summary)
+    return summary
+}
+
+/**
+ * Ensure the decorator is registered, store-decoration sync bound, and the
+ * bounded direct-manipulation tool is running so clicking a scanner selects it
+ * and dragging moves it. Idempotent — safe to call repeatedly (StrictMode-safe).
+ * Returns whether the tool is active.
+ */
+export async function ensureDirectManipulationReady(): Promise<boolean> {
+    ensureDecoratorRegistered()
+    bindStoreToDecorations()
+    // Do not steal the viewport from an active placement/move tool.
+    if (spatialAssetStore.getInteractionState() !== 'IDLE') return false
+    try {
+        const { runMrtDirectManipulationTool } = await import('./MrtDirectManipulationTool')
+        return await runMrtDirectManipulationTool()
+    } catch {
+        return false
+    }
 }
 
 /** Rotate the given asset's yaw by a controlled step (±90°). Immediate. */

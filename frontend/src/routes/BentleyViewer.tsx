@@ -161,6 +161,17 @@ export function BentleyViewer() {
         }
     }, [])
 
+    // DEV diagnostic: read-only snapshot of the direct-drag interaction state
+    // (active tool id, selection, interaction, committed/preview/effective).
+    const handleInspectDirectDragState = useCallback(async () => {
+        try {
+            const mod = await import('../components/spatial/spatialAssetOverlay')
+            setFitNote(`Direct drag state: ${mod.inspectDirectDragState()}`)
+        } catch (e) {
+            setFitNote(`Direct drag state error: ${e instanceof Error ? e.message : String(e)}`)
+        }
+    }, [])
+
     const handleInspectFeatureAppearance = useCallback(async () => {
         try {
             const mod = await import('../components/viewer/LiveItwinViewer')
@@ -239,6 +250,7 @@ export function BentleyViewer() {
                             <button type="button" onClick={() => void handleHideCatalogPetCt()}>HIDE CATALOG PET/CT</button>
                             <button type="button" onClick={() => void handleInspectCatalogPetCt()}>INSPECT CATALOG PET/CT</button>
                             <button type="button" onClick={() => void handleInspectPlacementIntent()}>INSPECT PLACEMENT INTENT</button>
+                            <button type="button" onClick={() => void handleInspectDirectDragState()}>INSPECT DIRECT DRAG STATE</button>
                             {fitNote && <span className="viewer-fit-note">{fitNote}</span>}
                         </div>
 
