@@ -31,16 +31,28 @@ import {
 } from '@itwin/core-frontend'
 import {
     beginDrag,
+    beginGroupDrag,
     beginRotate,
     cancelDrag,
+    cancelGroupDrag,
     cancelRotate,
+    clearSelection,
+    closeAssetContextMenu,
     commitDrag,
+    commitGroupDrag,
     commitRotate,
+    computeAssetScreenBounds,
     getSpatialDecorator,
+    openAssetContextMenu,
+    replaceSelection,
+    setMarqueeRect,
+    setRotationHandleHover,
     updateDragPreview,
+    updateGroupDragPreview,
     updateRotatePreview,
     spatialAssetStore,
 } from './spatialAssetOverlay'
+import { marqueeSelect, normalizeScreenRect, screenDragDistance } from './assetPicking'
 import {
     computePreviewYaw,
     decideHitAcceptance,
@@ -57,6 +69,8 @@ export class MrtDirectManipulationTool extends PrimitiveTool {
 
     /** Z of the drag plane, fixed when a drag begins (preserve start Z). */
     private dragPlaneZ = 0
+    /** Z of the group-drag plane (the anchor's start Z; delta is X/Y only). */
+    private groupPlaneZ = 0
     /** Active rotation gesture state (object-attached fluid yaw). */
     private rotateStartYaw = 0
     private rotateCenter: { x: number; y: number } = { x: 0, y: 0 }
@@ -64,6 +78,15 @@ export class MrtDirectManipulationTool extends PrimitiveTool {
     private rotatePlaneZ = 0
     /** Bounded per-gesture rotation-preview update log counter (first 5 only). */
     private rotatePreviewLogCount = 0
+    /** Bounded group-preview update log counter (first 3 frames). */
+    private groupPreviewLogCount = 0
+    /** Active marquee (bounding-box) selection gesture state (view px). */
+    private marqueeActive = false
+    private marqueeStart: { x: number; y: number } = { x: 0, y: 0 }
+    private marqueePriorSelection: string[] = []
+    /** Minimum drag distance (px) before an empty-space drag becomes a marquee
+     * rather than an empty click. */
+    private static readonly MARQUEE_MIN_DRAG_PX = 5
 
     public override requireWriteableTarget(): boolean {
         return false
@@ -225,14 +248,39 @@ export class MrtDirectManipulationTool extends PrimitiveTool {
         return near ? { type: 'ROTATION_HANDLE', assetInstanceId: selectedId } : undefined
     }
 
-    /** Data-button click: select the asset under the cursor (no movement). */
+    /**
+     * Data-button click: selection.
+     *   plain click on an asset  -> REPLACE selection with it
+     *   Shift + click on an asset -> TOGGLE it in the multi-selection
+     *   click on empty/non-asset  -> CLEAR selection (+ close context menu)
+     * Never moves anything. Any open context menu is dismissed.
+     */
     public override async onDataButtonDown(ev: BeButtonEvent): Promise<EventHandled> {
         // If a manipulation is somehow active, a click commits it (safety).
         if (spatialAssetStore.isDragActive()) { commitDrag(); return EventHandled.Yes }
         if (spatialAssetStore.isRotationActive()) { commitRotate(); return EventHandled.Yes }
+        if (spatialAssetStore.isGroupDragActive()) { commitGroupDrag(); return EventHandled.Yes }
+        closeAssetContextMenu()
         const target = await this.locatePickTarget(ev)
-        // A click on either the body or the handle selects the asset (no move).
-        if (target) spatialAssetStore.selectAsset(target.assetInstanceId)
+        if (target) {
+            if (ev.isShiftKey) {
+                spatialAssetStore.toggleAsset(target.assetInstanceId)
+            } else if (spatialAssetStore.isSelected(target.assetInstanceId)) {
+                // Pressing an ALREADY-selected member must NOT collapse a
+                // multi-selection here — otherwise a subsequent body drag would
+                // start as SINGLE instead of GROUP (onDataButtonDown fires on
+                // press, before onMouseStartDrag). Preserve the current selection;
+                // a genuine click without drag keeps it selected (harmless), and a
+                // drag proceeds as a group drag.
+                MrtDirectManipulationTool.dbg(`[group-drag] stage=POINTER_DOWN target=${target.assetInstanceId} targetSelected=true validSelectedCount=${spatialAssetStore.getSelectedInstances().length} preserve-selection`)
+            } else {
+                // Pressing an UNSELECTED asset replaces the selection with it.
+                spatialAssetStore.selectAsset(target.assetInstanceId)
+            }
+        } else {
+            // Empty / non-application-owned target -> clear MRT selection.
+            clearSelection()
+        }
         return EventHandled.Yes
     }
 
@@ -243,7 +291,19 @@ export class MrtDirectManipulationTool extends PrimitiveTool {
      */
     public override async onMouseStartDrag(ev: BeButtonEvent): Promise<EventHandled> {
         const target = await this.locatePickTarget(ev)
-        if (!target) return EventHandled.No
+        if (!target) {
+            // Empty 3D space => begin MARQUEE (bounding-box) selection. Claiming
+            // the drag (EventHandled.Yes) suppresses camera orbit for this gesture.
+            const vp = ev.viewport
+            const view = ev.viewPoint ?? (vp ? vp.worldToView(ev.point) : undefined)
+            if (!view) return EventHandled.No
+            this.marqueeActive = true
+            this.marqueeStart = { x: view.x, y: view.y }
+            this.marqueePriorSelection = [...spatialAssetStore.getSelectedIds()]
+            setMarqueeRect({ startX: view.x, startY: view.y, currentX: view.x, currentY: view.y })
+            MrtDirectManipulationTool.dbg(`[interaction-pick] target=EMPTY gesture=MARQUEE`)
+            return EventHandled.Yes
+        }
         const inst = spatialAssetStore.getInstance(target.assetInstanceId)
         if (!inst) return EventHandled.No
 
@@ -271,11 +331,40 @@ export class MrtDirectManipulationTool extends PrimitiveTool {
             return EventHandled.Yes
         }
 
-        // ASSET_BODY => fluid translate. Drag plane at the asset's current Z.
+        // ASSET_BODY => translate. Drag plane at the asset's current Z.
         this.dragPlaneZ = inst.transform.position.z
         const ray = this.pickRay(ev)
         const grab = ray ? rayIntersectZPlane(ray, this.dragPlaneZ) : undefined
         const grabPoint = grab ? { x: grab[0], y: grab[1], z: grab[2] } : { ...inst.transform.position }
+
+        // GROUP translate when the grabbed body is a selected member and more
+        // than one asset is selected; otherwise SINGLE translate. Group members
+        // come from the authoritative multi-selection (not visual overlap).
+        // Count VALID selected members (existing app assets) — a stale/deleted id
+        // must never block a legitimate drag.
+        const validSelectedCount = spatialAssetStore.getSelectedInstances().length
+        const isSelectedMember = spatialAssetStore.isSelected(target.assetInstanceId)
+        const groupEligible = isSelectedMember && validSelectedCount > 1
+        MrtDirectManipulationTool.dbg(`[group-drag] stage=POINTER_DOWN target=${target.assetInstanceId} targetSelected=${isSelectedMember} validSelectedCount=${validSelectedCount} gesture=${groupEligible ? 'GROUP_DRAG' : 'SINGLE_DRAG'}`)
+        if (groupEligible) {
+            this.groupPlaneZ = inst.transform.position.z
+            const ok = beginGroupDrag(target.assetInstanceId, grabPoint)
+            MrtDirectManipulationTool.dbg(`[group-drag] stage=BEGIN_ATTEMPT anchor=${target.assetInstanceId} result=${ok ? 'PASS' : 'FAIL'} interactionAfter=${spatialAssetStore.getInteractionState()} memberCount=${spatialAssetStore.getGroupDragPreview()?.assetInstanceIds.length ?? 0}`)
+            if (ok) {
+                this.groupPreviewLogCount = 0
+                this.installSecondaryButtonGuard(ev.viewport)
+                MrtDirectManipulationTool.diag('BEGIN', target.assetInstanceId)
+                return EventHandled.Yes
+            }
+            // Group begin failed (e.g. selection resolved to <2 valid members):
+            // FALL BACK to single translation of the grabbed asset so the drag
+            // is never silently swallowed.
+            MrtDirectManipulationTool.dbg('[group-drag] stage=FALLBACK group begin failed -> single drag')
+        }
+
+        // Single translation. Ensure the grabbed asset is the sole selection so
+        // the single-drag path and UI are consistent (a plain body drag on an
+        // asset selects it).
         const ok = beginDrag(target.assetInstanceId, grabPoint)
         if (!ok) return EventHandled.No
         // Scoped secondary-button guard (see comment in previous build): the
@@ -288,6 +377,12 @@ export class MrtDirectManipulationTool extends PrimitiveTool {
     /** Motion during a translate or rotate gesture: update the transient preview
      * (no domain event). Invalid points are ignored (keep last valid preview). */
     public override async onMouseMotion(ev: BeButtonEvent): Promise<void> {
+        if (this.marqueeActive) {
+            const vp = ev.viewport
+            const view = ev.viewPoint ?? (vp ? vp.worldToView(ev.point) : undefined)
+            if (view) setMarqueeRect({ startX: this.marqueeStart.x, startY: this.marqueeStart.y, currentX: view.x, currentY: view.y })
+            return
+        }
         if (spatialAssetStore.isRotationActive()) {
             const ray = this.pickRay(ev)
             const hit = ray ? rayIntersectZPlane(ray, this.rotatePlaneZ) : undefined
@@ -312,7 +407,26 @@ export class MrtDirectManipulationTool extends PrimitiveTool {
             }
             return
         }
-        if (!spatialAssetStore.isDragActive()) return
+        if (spatialAssetStore.isGroupDragActive()) {
+            const ray = this.pickRay(ev)
+            const hit = ray ? rayIntersectZPlane(ray, this.groupPlaneZ) : undefined
+            if (hit && hit.every((n) => Number.isFinite(n))) {
+                updateGroupDragPreview({ x: hit[0], y: hit[1], z: hit[2] })
+                if (import.meta.env.DEV && this.groupPreviewLogCount < 3) {
+                    this.groupPreviewLogCount += 1
+                    const gp = spatialAssetStore.getGroupDragPreview()
+                    console.info('[group-drag] stage=PREVIEW memberCount=%s delta=(%s,%s)',
+                        String(gp?.assetInstanceIds.length ?? 0), gp ? gp.translationDelta.x.toFixed(2) : '—', gp ? gp.translationDelta.y.toFixed(2) : '—')
+                }
+            }
+            return
+        }
+        if (!spatialAssetStore.isDragActive()) {
+            // Idle: update rotation-handle hover prominence for the sole
+            // selected asset (raises the faint idle handle to a subtle HOVER).
+            this.updateRotationHandleHover(ev)
+            return
+        }
         const ray = this.pickRay(ev)
         const hit = ray ? rayIntersectZPlane(ray, this.dragPlaneZ) : undefined
         if (hit && hit.every((n) => Number.isFinite(n))) {
@@ -320,8 +434,41 @@ export class MrtDirectManipulationTool extends PrimitiveTool {
         }
     }
 
-    /** Release after a translate or rotate gesture: commit exactly one op. */
+    /** Idle hover: set the rotation-handle hover flag when the pointer is near
+     * the sole selected asset's projected ring (discoverability without a bright
+     * permanent ring). Cheap; only runs while IDLE. */
+    private updateRotationHandleHover(ev: BeButtonEvent): void {
+        const vp = ev.viewport
+        const selectedId = spatialAssetStore.getSelectionCount() === 1
+            ? spatialAssetStore.getSnapshot().selectedAssetInstanceId
+            : undefined
+        if (!vp || !selectedId) { setRotationHandleHover(false); return }
+        const near = this.tryScreenSpaceHandle(ev, vp, selectedId)
+        setRotationHandleHover(near !== undefined)
+    }
+
+    /** Release after a translate, rotate, group, or marquee gesture. */
     public override async onMouseEndDrag(ev: BeButtonEvent): Promise<EventHandled> {
+        if (this.marqueeActive) {
+            const vp = ev.viewport
+            const view = ev.viewPoint ?? (vp ? vp.worldToView(ev.point) : undefined)
+            const end = view ? { x: view.x, y: view.y } : this.marqueeStart
+            const dist = screenDragDistance(this.marqueeStart, end)
+            this.marqueeActive = false
+            setMarqueeRect(undefined)
+            if (dist < MrtDirectManipulationTool.MARQUEE_MIN_DRAG_PX) {
+                // Below threshold: treat as an empty click -> clear selection.
+                clearSelection()
+                MrtDirectManipulationTool.dbg('[interaction-pick] gesture=MARQUEE below-threshold -> EMPTY_CLICK clear')
+                return EventHandled.Yes
+            }
+            const rect = normalizeScreenRect(this.marqueeStart, end)
+            const candidates = computeAssetScreenBounds()
+            const selected = marqueeSelect(rect, candidates)
+            replaceSelection(selected) // REPLACE policy; empty result clears
+            MrtDirectManipulationTool.dbg(`[interaction-pick] gesture=MARQUEE selected=${selected.length}`)
+            return EventHandled.Yes
+        }
         if (spatialAssetStore.isRotationActive()) {
             const ray = this.pickRay(ev)
             const hit = ray ? rayIntersectZPlane(ray, this.rotatePlaneZ) : undefined
@@ -336,6 +483,17 @@ export class MrtDirectManipulationTool extends PrimitiveTool {
             commitRotate()
             this.removeSecondaryButtonGuard()
             MrtDirectManipulationTool.diag('COMMIT_ROTATE', targetId)
+            return EventHandled.Yes
+        }
+        if (spatialAssetStore.isGroupDragActive()) {
+            const ray = this.pickRay(ev)
+            const hit = ray ? rayIntersectZPlane(ray, this.groupPlaneZ) : undefined
+            if (hit && hit.every((n) => Number.isFinite(n))) {
+                updateGroupDragPreview({ x: hit[0], y: hit[1], z: hit[2] })
+            }
+            commitGroupDrag() // ONE ASSET_MOVED per moved member; selection retained
+            this.removeSecondaryButtonGuard()
+            MrtDirectManipulationTool.diag('COMMIT', spatialAssetStore.getSnapshot().selectedAssetInstanceId)
             return EventHandled.Yes
         }
         if (!spatialAssetStore.isDragActive()) return EventHandled.No
@@ -361,16 +519,18 @@ export class MrtDirectManipulationTool extends PrimitiveTool {
     private cancelActiveDirectDrag(reason: 'RESET' | 'RIGHT_CLICK' | 'ESC' | 'CLEANUP'): boolean {
         const dragActive = spatialAssetStore.isDragActive()
         const rotateActive = spatialAssetStore.isRotationActive()
+        const groupActive = spatialAssetStore.isGroupDragActive()
         const targetId = spatialAssetStore.getDragPreview()?.assetInstanceId ?? spatialAssetStore.getRotationPreview()?.assetInstanceId
-        MrtDirectManipulationTool.dbg(`[direct-cancel] stage=ENTER input=${reason} assetInstanceId=${targetId ?? '—'} dragActiveBefore=${dragActive} rotateActiveBefore=${rotateActive} interactionBefore=${spatialAssetStore.getInteractionState()} selectedAssetInstanceId=${spatialAssetStore.getSnapshot().selectedAssetInstanceId ?? '—'}`)
+        MrtDirectManipulationTool.dbg(`[direct-cancel] stage=ENTER input=${reason} assetInstanceId=${targetId ?? '—'} dragActiveBefore=${dragActive} rotateActiveBefore=${rotateActive} groupActiveBefore=${groupActive} interactionBefore=${spatialAssetStore.getInteractionState()} selectedAssetInstanceId=${spatialAssetStore.getSnapshot().selectedAssetInstanceId ?? '—'}`)
         // Always drop the secondary-button guard when cancelling.
         this.removeSecondaryButtonGuard()
-        if (!dragActive && !rotateActive) {
+        if (!dragActive && !rotateActive && !groupActive) {
             MrtDirectManipulationTool.dbg(`[direct-cancel] stage=EXIT input=${reason} result=NO_ACTIVE_MANIPULATION`)
             return false
         }
         if (dragActive) cancelDrag() // clears preview -> IDLE; committed pos + selection retained
         if (rotateActive) cancelRotate() // clears preview -> IDLE; committed yaw + selection retained
+        if (groupActive) cancelGroupDrag() // clears group preview -> IDLE; committed pos + selection retained
         MrtDirectManipulationTool.dbg(`[direct-cancel] stage=EXIT input=${reason} interactionAfter=${spatialAssetStore.getInteractionState()} selectedAssetInstanceId=${spatialAssetStore.getSnapshot().selectedAssetInstanceId ?? '—'} events=0`)
         MrtDirectManipulationTool.diag('CANCEL', targetId)
         return true
@@ -385,15 +545,18 @@ export class MrtDirectManipulationTool extends PrimitiveTool {
     private secondaryGuardTarget: HTMLElement | undefined
     private readonly onSecondaryPointerDown = (e: PointerEvent | MouseEvent): void => {
         if (e.button !== 2) return // secondary button only
-        if (!spatialAssetStore.isDragActive()) return
-        e.preventDefault()
-        e.stopPropagation()
-        MrtDirectManipulationTool.dbg(`[direct-secondary] callback=domPointerDown button=2 dragActive=true interaction=${spatialAssetStore.getInteractionState()} activeTool=${IModelApp.toolAdmin?.activeTool?.toolId ?? '—'}`)
-        this.cancelActiveDirectDrag('RIGHT_CLICK')
+        // During an active gesture, secondary press is ignored/deferred (Esc is
+        // the authoritative cancel). We only suppress the browser menu so it does
+        // not pop over an in-progress drag.
+        if (spatialAssetStore.isDragActive() || spatialAssetStore.isGroupDragActive() || spatialAssetStore.isRotationActive()) {
+            e.preventDefault()
+            e.stopPropagation()
+            MrtDirectManipulationTool.dbg(`[direct-secondary] callback=domPointerDown button=2 gestureActive=true interaction=${spatialAssetStore.getInteractionState()} (ignored; Esc cancels)`)
+        }
     }
     private readonly onSecondaryContextMenu = (e: MouseEvent): void => {
-        // Suppress the browser context menu ONLY while an MRT drag is active.
-        if (spatialAssetStore.isDragActive()) {
+        // Suppress the browser context menu ONLY while an MRT gesture is active.
+        if (spatialAssetStore.isDragActive() || spatialAssetStore.isGroupDragActive() || spatialAssetStore.isRotationActive()) {
             e.preventDefault()
             e.stopPropagation()
         }
@@ -417,32 +580,66 @@ export class MrtDirectManipulationTool extends PrimitiveTool {
         this.secondaryGuardTarget = undefined
     }
 
-    /** Reset / right-click cancels an active drag. Handle DOWN so cancellation
-     * happens as early as possible during the gesture (UP is a safe no-op). */
-    public override async onResetButtonDown(_ev: BeButtonEvent): Promise<EventHandled> {
-        MrtDirectManipulationTool.dbg(`[direct-input] callback=onResetButtonDown dragActive=${spatialAssetStore.isDragActive()} interaction=${spatialAssetStore.getInteractionState()} activeTool=${IModelApp.toolAdmin?.activeTool?.toolId ?? '—'}`)
-        return this.cancelActiveDirectDrag('RESET') ? EventHandled.Yes : EventHandled.No
-    }
-
-    public override async onResetButtonUp(_ev: BeButtonEvent): Promise<EventHandled> {
-        MrtDirectManipulationTool.dbg(`[direct-input] callback=onResetButtonUp dragActive=${spatialAssetStore.isDragActive()} interaction=${spatialAssetStore.getInteractionState()} activeTool=${IModelApp.toolAdmin?.activeTool?.toolId ?? '—'}`)
-        return this.cancelActiveDirectDrag('RESET') ? EventHandled.Yes : EventHandled.No
-    }
-
-    /** Esc cancels an active direct drag (ToolAdmin routes keys here). */
-    public override async onKeyTransition(wentDown: boolean, keyEvent: KeyboardEvent): Promise<EventHandled> {
-        MrtDirectManipulationTool.dbg(`[direct-input] callback=onKeyTransition key=${keyEvent.key} wentDown=${wentDown} dragActive=${spatialAssetStore.isDragActive()} interaction=${spatialAssetStore.getInteractionState()} activeTool=${IModelApp.toolAdmin?.activeTool?.toolId ?? '—'}`)
-        if (wentDown && keyEvent.key === 'Escape' && (spatialAssetStore.isDragActive() || spatialAssetStore.isRotationActive())) {
-            this.cancelActiveDirectDrag('ESC')
+    /**
+     * Reset / right-click. Right-click is now the OBJECT CONTEXT MENU surface
+     * (not the drag-cancel mechanism — Esc is authoritative cancel). During an
+     * active gesture, right-click is ignored (the DOM guard suppresses the
+     * browser menu). When idle, a right-click on an application-owned asset
+     * opens the context menu targeting that assetInstanceId; on empty/BIM it
+     * closes any open menu.
+     */
+    public override async onResetButtonUp(ev: BeButtonEvent): Promise<EventHandled> {
+        MrtDirectManipulationTool.dbg(`[direct-input] callback=onResetButtonUp interaction=${spatialAssetStore.getInteractionState()} activeTool=${IModelApp.toolAdmin?.activeTool?.toolId ?? '—'}`)
+        // Ignore during an active gesture (Esc cancels).
+        if (spatialAssetStore.isDragActive() || spatialAssetStore.isGroupDragActive() || spatialAssetStore.isRotationActive()) {
             return EventHandled.Yes
+        }
+        const target = await this.locatePickTarget(ev)
+        if (target) {
+            const vp = ev.viewport
+            const view = ev.viewPoint ?? (vp ? vp.worldToView(ev.point) : undefined)
+            openAssetContextMenu({
+                assetInstanceId: target.assetInstanceId,
+                screenX: view ? Math.round(view.x) : 0,
+                screenY: view ? Math.round(view.y) : 0,
+            })
+            MrtDirectManipulationTool.dbg(`[context-menu] open assetInstanceId=${target.assetInstanceId}`)
+        } else {
+            closeAssetContextMenu()
+        }
+        return EventHandled.Yes
+    }
+
+    /** Esc cancels an active gesture (ToolAdmin routes keys here). Also closes
+     * any open context menu. */
+    public override async onKeyTransition(wentDown: boolean, keyEvent: KeyboardEvent): Promise<EventHandled> {
+        MrtDirectManipulationTool.dbg(`[direct-input] callback=onKeyTransition key=${keyEvent.key} wentDown=${wentDown} interaction=${spatialAssetStore.getInteractionState()} activeTool=${IModelApp.toolAdmin?.activeTool?.toolId ?? '—'}`)
+        if (wentDown && keyEvent.key === 'Escape') {
+            closeAssetContextMenu()
+            if (this.marqueeActive) {
+                // Discard the marquee; restore the selection that existed before it began.
+                this.marqueeActive = false
+                setMarqueeRect(undefined)
+                replaceSelection(this.marqueePriorSelection)
+                MrtDirectManipulationTool.dbg('[interaction-pick] gesture=MARQUEE esc-cancel restore-prior')
+                return EventHandled.Yes
+            }
+            if (spatialAssetStore.isDragActive() || spatialAssetStore.isRotationActive() || spatialAssetStore.isGroupDragActive()) {
+                this.cancelActiveDirectDrag('ESC')
+                return EventHandled.Yes
+            }
         }
         return EventHandled.No
     }
 
     /** Interruption safety: never leave a stale active manipulation; restore locate opts. */
     public override async onCleanup(): Promise<void> {
-        MrtDirectManipulationTool.dbg(`[direct-input] callback=onCleanup dragActive=${spatialAssetStore.isDragActive()} rotateActive=${spatialAssetStore.isRotationActive()} interaction=${spatialAssetStore.getInteractionState()}`)
-        if (spatialAssetStore.isDragActive() || spatialAssetStore.isRotationActive()) {
+        MrtDirectManipulationTool.dbg(`[direct-input] callback=onCleanup dragActive=${spatialAssetStore.isDragActive()} rotateActive=${spatialAssetStore.isRotationActive()} groupActive=${spatialAssetStore.isGroupDragActive()} interaction=${spatialAssetStore.getInteractionState()}`)
+        if (this.marqueeActive) {
+            this.marqueeActive = false
+            setMarqueeRect(undefined)
+        }
+        if (spatialAssetStore.isDragActive() || spatialAssetStore.isRotationActive() || spatialAssetStore.isGroupDragActive()) {
             this.cancelActiveDirectDrag('CLEANUP')
         }
         // Always drop the secondary-button guard on cleanup (StrictMode-safe).

@@ -39,7 +39,7 @@ export type StoreListener = () => void
  * Narrow, mutually-exclusive spatial interaction state. Only one interaction
  * can be active at a time so two Bentley tools never compete for clicks.
  */
-export type SpatialInteractionState = 'IDLE' | 'PLACING' | 'MOVING' | 'ROTATING'
+export type SpatialInteractionState = 'IDLE' | 'PLACING' | 'MOVING' | 'ROTATING' | 'GROUP_TRANSLATING'
 
 /**
  * A resolved intent to MOVE an existing instance. Bound to one assetInstanceId
@@ -91,6 +91,31 @@ export type DragCommitResult =
     | { ok: false; reason: MoveFailure; message: string }
 
 /**
+ * Transient GROUP translation preview: a single translation delta applied to
+ * every selected member from its own committed start position. Never persisted,
+ * never journaled. Each member keeps its own start Z (horizontal group move).
+ */
+export interface GroupDragPreview {
+    /** All selected members participating in the group move. */
+    assetInstanceIds: readonly string[]
+    /** The grabbed member that anchors the drag. */
+    anchorAssetInstanceId: string
+    /** Committed start position per member (keyed by assetInstanceId). */
+    startPositions: Readonly<Record<string, SpatialPosition>>
+    /** assetPosition - dragStartWorldPoint for the ANCHOR (grab offset). */
+    grabOffset: SpatialPosition
+    /** Current X/Y translation delta applied to every member (Z delta = 0). */
+    translationDelta: { x: number; y: number }
+    /** Effective preview position per member (start + delta, own Z). */
+    previewPositions: Readonly<Record<string, SpatialPosition>>
+}
+
+/** Result of committing a group translation: one event per moved member. */
+export type GroupDragCommitResult =
+    | { ok: true; instances: AssetInstance[]; events: AssetJournalEvent[]; movedCount: number }
+    | { ok: false; reason: MoveFailure; message: string }
+
+/**
  * Transient yaw preview used ONLY while an object-attached fluid rotation is
  * active. Never persisted, never serialized, never journaled. The authoritative
  * committed yaw stays on the AssetInstance until rotation release.
@@ -126,13 +151,20 @@ export interface SpatialAssetSnapshot {
     placementModeActive: boolean
     moveIntent: MoveIntent | undefined
     moveModeActive: boolean
+    /** Sole selected id when EXACTLY one asset is selected, else undefined
+     * (single-selection compatibility for existing consumers). */
     selectedAssetInstanceId: string | undefined
+    /** Authoritative selection set (0..N application-owned AssetInstances). */
+    selectedAssetInstanceIds: readonly string[]
     /** Active fluid-drag preview (transient), if any. */
     dragPreview: DragPreview | undefined
     dragActive: boolean
     /** Active object-attached rotation preview (transient), if any. */
     rotationPreview: RotationPreview | undefined
     rotationActive: boolean
+    /** Active group-translation preview (transient), if any. */
+    groupDragPreview: GroupDragPreview | undefined
+    groupDragActive: boolean
 }
 
 export class SpatialAssetStore {
@@ -143,6 +175,10 @@ export class SpatialAssetStore {
     private moveIntent: MoveIntent | undefined
     private dragPreview: DragPreview | undefined
     private rotationPreview: RotationPreview | undefined
+    private groupDragPreview: GroupDragPreview | undefined
+    /** Authoritative selection set. `selectedId` mirrors the sole member when
+     * size === 1 (single-selection compatibility), else undefined. */
+    private readonly selectedIds = new Set<string>()
     private selectedId: string | undefined
     private readonly listeners = new Set<StoreListener>()
     private version = 0
@@ -183,6 +219,7 @@ export class SpatialAssetStore {
     getInteractionState(): SpatialInteractionState {
         if (this.intent !== undefined) return 'PLACING'
         if (this.rotationPreview !== undefined) return 'ROTATING'
+        if (this.groupDragPreview !== undefined) return 'GROUP_TRANSLATING'
         if (this.moveIntent !== undefined || this.dragPreview !== undefined) return 'MOVING'
         return 'IDLE'
     }
@@ -198,10 +235,13 @@ export class SpatialAssetStore {
             moveIntent: this.moveIntent,
             moveModeActive: this.moveIntent !== undefined,
             selectedAssetInstanceId: this.selectedId,
+            selectedAssetInstanceIds: Array.from(this.selectedIds),
             dragPreview: this.dragPreview,
             dragActive: this.dragPreview !== undefined,
             rotationPreview: this.rotationPreview,
             rotationActive: this.rotationPreview !== undefined,
+            groupDragPreview: this.groupDragPreview,
+            groupDragActive: this.groupDragPreview !== undefined,
         }
     }
 
@@ -278,16 +318,92 @@ export class SpatialAssetStore {
         return result
     }
 
-    // --- selection ---
-    /** Select an existing placed asset (product selection; store-resolved). */
+    // --- selection (single + multi; ONE authoritative selection set) ---
+    /** Keep `selectedId` in sync: sole member when size===1, else undefined. */
+    private syncPrimarySelection(): void {
+        this.selectedId = this.selectedIds.size === 1 ? Array.from(this.selectedIds)[0] : undefined
+    }
+
+    /**
+     * Replace the selection with a single asset (or clear when undefined).
+     * This is the plain-click / product single-select path.
+     */
     selectAsset(assetInstanceId: string | undefined): void {
-        if (this.selectedId === assetInstanceId) return
-        this.selectedId = assetInstanceId
+        const next = assetInstanceId ? new Set([assetInstanceId]) : new Set<string>()
+        if (this.selectedIds.size === next.size && Array.from(this.selectedIds).every((id) => next.has(id))) return
+        this.selectedIds.clear()
+        for (const id of next) this.selectedIds.add(id)
+        this.syncPrimarySelection()
         this.emit()
     }
 
+    /** Toggle one asset in the multi-selection (Shift-click add/remove). */
+    toggleAsset(assetInstanceId: string): void {
+        if (this.selectedIds.has(assetInstanceId)) this.selectedIds.delete(assetInstanceId)
+        else this.selectedIds.add(assetInstanceId)
+        this.syncPrimarySelection()
+        this.emit()
+    }
+
+    /** Remove one asset from the selection (context-menu DESELECT). No-op if absent. */
+    deselectAsset(assetInstanceId: string): void {
+        if (!this.selectedIds.delete(assetInstanceId)) return
+        this.syncPrimarySelection()
+        this.emit()
+    }
+
+    /** Replace the selection with the given ids (marquee release). Only ids of
+     * existing project instances are kept (stale ids ignored). */
+    replaceSelection(assetInstanceIds: readonly string[]): void {
+        const next = new Set(assetInstanceIds.filter((id) => this.getInstance(id) !== undefined))
+        const same = this.selectedIds.size === next.size && Array.from(this.selectedIds).every((id) => next.has(id))
+        if (same) return
+        this.selectedIds.clear()
+        for (const id of next) this.selectedIds.add(id)
+        this.syncPrimarySelection()
+        this.emit()
+    }
+
+    /** Prune any selected ids whose instances no longer exist. Returns pruned count. */
+    pruneStaleSelection(): number {
+        let pruned = 0
+        for (const id of Array.from(this.selectedIds)) {
+            if (!this.getInstance(id)) { this.selectedIds.delete(id); pruned += 1 }
+        }
+        if (pruned > 0) { this.syncPrimarySelection(); this.emit() }
+        return pruned
+    }
+
+    /** Clear the entire selection (empty-space click). */
+    clearSelection(): void {
+        if (this.selectedIds.size === 0) return
+        this.selectedIds.clear()
+        this.syncPrimarySelection()
+        this.emit()
+    }
+
+    isSelected(assetInstanceId: string): boolean {
+        return this.selectedIds.has(assetInstanceId)
+    }
+
+    getSelectedIds(): readonly string[] {
+        return Array.from(this.selectedIds)
+    }
+
+    getSelectionCount(): number {
+        return this.selectedIds.size
+    }
+
+    /** The sole selected instance when exactly one is selected, else undefined. */
     getSelectedInstance(): AssetInstance | undefined {
         return this.selectedId ? this.getInstance(this.selectedId) : undefined
+    }
+
+    /** All currently-selected instances (project-scoped, existing only). */
+    getSelectedInstances(): AssetInstance[] {
+        return Array.from(this.selectedIds)
+            .map((id) => this.getInstance(id))
+            .filter((i): i is AssetInstance => i !== undefined)
     }
 
     // --- move lifecycle ---
@@ -398,8 +514,10 @@ export class SpatialAssetStore {
             z: 0, // Z is preserved during fluid drag (X/Y movement only).
         }
         this.dragPreview = { assetInstanceId, startPosition: start, grabOffset, previewPosition: start }
-        // Selection follows the drag target.
-        this.selectedId = assetInstanceId
+        // Selection follows the drag target (single-selection).
+        this.selectedIds.clear()
+        this.selectedIds.add(assetInstanceId)
+        this.syncPrimarySelection()
         this.emit()
         return { ok: true, preview: this.dragPreview }
     }
@@ -463,6 +581,122 @@ export class SpatialAssetStore {
         this.emit()
     }
 
+    // --- group translation (transient preview; ONE commit PER moved member) ---
+    /**
+     * Begin a fluid GROUP translation. Members = the current multi-selection
+     * (which must include the grabbed anchor and have >= 2 members). Records each
+     * member's committed start position; the anchor's grab offset preserves the
+     * grab point. Authoritative transforms are NOT changed here. Rejected unless
+     * IDLE and the anchor is part of the selection.
+     */
+    beginGroupDrag(anchorAssetInstanceId: string, grabWorldPoint: SpatialPosition): { ok: true; preview: GroupDragPreview } | { ok: false; reason: MoveFailure } {
+        if (this.getInteractionState() !== 'IDLE') return { ok: false, reason: 'SPATIAL_INTERACTION_ALREADY_ACTIVE' }
+        if (!this.selectedIds.has(anchorAssetInstanceId)) return { ok: false, reason: 'ASSET_NOT_FOUND' }
+        const ids = Array.from(this.selectedIds).filter((id) => this.getInstance(id) !== undefined)
+        if (ids.length < 2) return { ok: false, reason: 'MOVE_INTENT_INVALID' }
+        const anchor = this.getInstance(anchorAssetInstanceId)
+        if (!anchor) return { ok: false, reason: 'ASSET_NOT_FOUND' }
+
+        const startPositions: Record<string, SpatialPosition> = {}
+        for (const id of ids) startPositions[id] = { ...(this.getInstance(id) as AssetInstance).transform.position }
+        const grabOffset: SpatialPosition = {
+            x: anchor.transform.position.x - grabWorldPoint.x,
+            y: anchor.transform.position.y - grabWorldPoint.y,
+            z: 0,
+        }
+        const previewPositions: Record<string, SpatialPosition> = {}
+        for (const id of ids) previewPositions[id] = { ...startPositions[id] }
+
+        this.groupDragPreview = {
+            assetInstanceIds: ids,
+            anchorAssetInstanceId,
+            startPositions,
+            grabOffset,
+            translationDelta: { x: 0, y: 0 },
+            previewPositions,
+        }
+        this.emit()
+        return { ok: true, preview: this.groupDragPreview }
+    }
+
+    isGroupDragActive(): boolean {
+        return this.groupDragPreview !== undefined
+    }
+
+    getGroupDragPreview(): GroupDragPreview | undefined {
+        return this.groupDragPreview
+    }
+
+    /**
+     * Update the transient group preview from a drag world point. Computes the
+     * X/Y delta from the anchor's grab offset and applies it to every member;
+     * each member preserves its OWN start Z. No event, no committed change.
+     */
+    updateGroupDragPreview(dragWorldPoint: SpatialPosition): void {
+        const gp = this.groupDragPreview
+        if (!gp) return
+        const anchorStart = gp.startPositions[gp.anchorAssetInstanceId]
+        if (!anchorStart) return
+        const anchorTargetX = dragWorldPoint.x + gp.grabOffset.x
+        const anchorTargetY = dragWorldPoint.y + gp.grabOffset.y
+        const dx = anchorTargetX - anchorStart.x
+        const dy = anchorTargetY - anchorStart.y
+        if (!Number.isFinite(dx) || !Number.isFinite(dy)) return // ignore invalid; keep last
+        const previewPositions: Record<string, SpatialPosition> = {}
+        for (const id of gp.assetInstanceIds) {
+            const s = gp.startPositions[id]
+            previewPositions[id] = { x: s.x + dx, y: s.y + dy, z: s.z } // own start Z preserved
+        }
+        this.groupDragPreview = { ...gp, translationDelta: { x: dx, y: dy }, previewPositions }
+        this.emit()
+    }
+
+    /**
+     * Commit the active group translation: build all resulting instances first
+     * (atomic), then apply ONE state update. Emits exactly ONE ASSET_MOVED per
+     * member whose position actually changed (zero-delta members emit nothing).
+     * Identity + rotation + Z preserved. Clears the preview; selection retained.
+     */
+    commitGroupDrag(): GroupDragCommitResult {
+        const gp = this.groupDragPreview
+        if (!gp) return { ok: false, reason: 'MOVE_INTENT_INVALID', message: 'no active group drag' }
+        this.groupDragPreview = undefined // consume once
+
+        const moved: AssetInstance[] = []
+        const events: AssetJournalEvent[] = []
+        const replacements = new Map<string, AssetInstance>()
+        for (const id of gp.assetInstanceIds) {
+            const inst = this.getInstance(id)
+            if (!inst) continue // gone since drag began; skip (do not abort the group)
+            const target = gp.previewPositions[id]
+            const start = gp.startPositions[id]
+            const changed = target.x !== start.x || target.y !== start.y || target.z !== start.z
+            if (!changed) continue
+            const cmd = moveAssetTo(inst, target)
+            if (!cmd.ok) {
+                // Validation failed: abort the WHOLE group (no partial commit).
+                this.emit()
+                return { ok: false, reason: 'STORE_UPDATE_FAILED', message: cmd.errors.map((e) => `${e.field} ${e.message}`).join('; ') }
+            }
+            replacements.set(id, cmd.instance)
+            moved.push(cmd.instance)
+            events.push(cmd.event)
+        }
+        // Apply all replacements in ONE state update.
+        if (replacements.size > 0) {
+            this.instances = this.instances.map((i) => replacements.get(i.assetInstanceId) ?? i)
+        }
+        this.emit()
+        return { ok: true, instances: moved, events, movedCount: moved.length }
+    }
+
+    /** Cancel the active group translation: discard preview, no commit, no event. */
+    cancelGroupDrag(): void {
+        if (this.groupDragPreview === undefined) return
+        this.groupDragPreview = undefined
+        this.emit()
+    }
+
     // --- object-attached fluid yaw rotation (transient preview; ONE commit) ---
     /**
      * Begin an object-attached fluid rotation of an instance. Records the start
@@ -482,7 +716,9 @@ export class SpatialAssetStore {
             previewYaw: startYaw,
             center: { ...inst.transform.position },
         }
-        this.selectedId = assetInstanceId
+        this.selectedIds.clear()
+        this.selectedIds.add(assetInstanceId)
+        this.syncPrimarySelection()
         this.emit()
         return { ok: true, preview: this.rotationPreview }
     }
@@ -580,7 +816,7 @@ export class SpatialAssetStore {
             },
         }
         this.instances = this.instances.filter((i) => i.assetInstanceId !== assetInstanceId)
-        if (this.selectedId === assetInstanceId) this.selectedId = undefined
+        if (this.selectedIds.delete(assetInstanceId)) this.syncPrimarySelection()
         this.emit()
         return { ok: true, removedInstanceId: removed.ok ? removed.removedInstanceId : assetInstanceId, event }
     }
@@ -594,14 +830,19 @@ export class SpatialAssetStore {
     getEffectiveProjectInstances(): readonly AssetInstance[] {
         const dp = this.dragPreview
         const rp = this.rotationPreview
+        const gp = this.groupDragPreview
         const base = this.getProjectInstances()
-        if (!dp && !rp) return base
+        if (!dp && !rp && !gp) return base
         return base.map((i) => {
             if (dp && i.assetInstanceId === dp.assetInstanceId) {
                 return { ...i, transform: { ...i.transform, position: dp.previewPosition } }
             }
             if (rp && i.assetInstanceId === rp.assetInstanceId) {
                 return { ...i, transform: { ...i.transform, rotation: { ...i.transform.rotation, yaw: rp.previewYaw } } }
+            }
+            if (gp) {
+                const pos = gp.previewPositions[i.assetInstanceId]
+                if (pos) return { ...i, transform: { ...i.transform, position: pos } }
             }
             return i
         })

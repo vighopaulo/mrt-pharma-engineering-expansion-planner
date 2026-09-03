@@ -22,6 +22,7 @@
  */
 import { IModelApp } from '@itwin/core-frontend'
 import { SpatialAssetDecorator } from './SpatialAssetDecorator'
+import { resolveDecorationRedrawPolicy } from './assetPicking'
 import {
     buildGeDiscoveryMiCatalogTestAsset,
     buildGenericPetCtTestAsset,
@@ -50,6 +51,123 @@ const DEV_SCENARIO: ScenarioProvenance = { scenarioId: 'MRT_DEV_SCENARIO', scena
  */
 export const spatialAssetStore = new SpatialAssetStore({ projectId: TEST_PROJECT_ID, scenario: DEV_SCENARIO })
 
+/**
+ * UI-only rotation-handle hover flag. The manipulation tool sets this when the
+ * pointer is near the selected asset's rotation ring so the decorator can raise
+ * the faint idle handle to a subtle HOVER prominence. Not authoritative state.
+ */
+let rotationHandleHover = false
+export function setRotationHandleHover(hover: boolean): void {
+    if (rotationHandleHover === hover) return
+    rotationHandleHover = hover
+    // Trigger a redraw so the hover prominence updates.
+    const vp = IModelApp.viewManager?.selectedView
+    vp?.invalidateDecorations()
+}
+
+/**
+ * UI-only right-click asset context-menu state. The manipulation tool opens it
+ * with a concrete assetInstanceId + screen position; the React panel subscribes
+ * and renders it. Not authoritative domain state; never stored in the domain.
+ */
+export interface AssetContextMenuState {
+    assetInstanceId: string
+    screenX: number
+    screenY: number
+}
+let contextMenu: AssetContextMenuState | undefined
+const contextMenuListeners = new Set<() => void>()
+export function subscribeContextMenu(listener: () => void): () => void {
+    contextMenuListeners.add(listener)
+    return () => { contextMenuListeners.delete(listener) }
+}
+export function getContextMenu(): AssetContextMenuState | undefined {
+    return contextMenu
+}
+export function openAssetContextMenu(state: AssetContextMenuState): void {
+    contextMenu = state
+    for (const l of contextMenuListeners) l()
+}
+export function closeAssetContextMenu(): void {
+    if (!contextMenu) return
+    contextMenu = undefined
+    for (const l of contextMenuListeners) l()
+}
+
+/**
+ * UI-only marquee (bounding-box) selection rectangle state, in VIEW pixels. The
+ * manipulation tool sets it during an empty-space primary drag; the React panel
+ * renders a restrained rectangle. Not authoritative selection state — selection
+ * updates on release through the store, keyed by assetInstanceId.
+ */
+export interface MarqueeRectState {
+    startX: number
+    startY: number
+    currentX: number
+    currentY: number
+}
+let marqueeRect: MarqueeRectState | undefined
+const marqueeListeners = new Set<() => void>()
+export function subscribeMarquee(listener: () => void): () => void {
+    marqueeListeners.add(listener)
+    return () => { marqueeListeners.delete(listener) }
+}
+export function getMarqueeRect(): MarqueeRectState | undefined {
+    return marqueeRect
+}
+export function setMarqueeRect(rect: MarqueeRectState | undefined): void {
+    marqueeRect = rect
+    for (const l of marqueeListeners) l()
+}
+
+/**
+ * Compute screen-space (view px) bounds for every application-owned project
+ * AssetInstance by projecting the 8 corners of its yaw-transformed world bbox.
+ * Used by the marquee to resolve intersecting assets. Returns app assets only
+ * (DEV/catalog fixtures are USER-visible but their transforms come from the same
+ * store; callers pass the project instances which are the app-owned set).
+ */
+export function computeAssetScreenBounds(): { assetInstanceId: string; bounds: import('./assetPicking').ScreenRect }[] {
+    const vp = IModelApp.viewManager?.selectedView
+    if (!vp) return []
+    const DEG2RAD = Math.PI / 180
+    const out: { assetInstanceId: string; bounds: import('./assetPicking').ScreenRect }[] = []
+    for (const inst of spatialAssetStore.getProjectInstances()) {
+        const p = inst.transform.position
+        const s = inst.transform.scale
+        const w = inst.dimensions.width * s.x
+        const d = inst.dimensions.depth * s.y
+        const h = inst.dimensions.height * s.z
+        const yaw = inst.transform.rotation.yaw * DEG2RAD
+        const cos = Math.cos(yaw), sin = Math.sin(yaw)
+        const hx = w / 2, hy = d / 2
+        // 8 corners of the local bbox (z from p.z .. p.z+h), yaw-rotated about center.
+        const corners: [number, number, number][] = []
+        for (const sx of [-hx, hx]) for (const sy of [-hy, hy]) for (const sz of [0, h]) {
+            const rx = sx * cos - sy * sin
+            const ry = sx * sin + sy * cos
+            corners.push([p.x + rx, p.y + ry, p.z + sz])
+        }
+        let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity
+        for (const [x, y, z] of corners) {
+            const v = vp.worldToView({ x, y, z })
+            if (v.x < minX) minX = v.x
+            if (v.y < minY) minY = v.y
+            if (v.x > maxX) maxX = v.x
+            if (v.y > maxY) maxY = v.y
+        }
+        if ([minX, minY, maxX, maxY].every(Number.isFinite)) {
+            out.push({ assetInstanceId: inst.assetInstanceId, bounds: { minX, minY, maxX, maxY } })
+        }
+    }
+    return out
+}
+
+/** Replace the selection with the given ids (marquee release). */
+export function replaceSelection(assetInstanceIds: readonly string[]): void {
+    spatialAssetStore.replaceSelection(assetInstanceIds)
+}
+
 let decorator: SpatialAssetDecorator | undefined
 let removeDecorator: (() => void) | undefined
 
@@ -63,8 +181,8 @@ export function ensureDecoratorRegistered(): void {
     if (decorator && removeDecorator) return
     if (!decorator) {
         decorator = new SpatialAssetDecorator(
-            // Render the transient preview transform (position or yaw) for the
-            // active instance; committed transforms for all others.
+            // Render the transient preview transform (position or yaw or group)
+            // for the active instance(s); committed transforms for all others.
             () => spatialAssetStore.getEffectiveProjectInstances(),
             () => spatialAssetStore.getSnapshot().selectedAssetInstanceId,
             // Disable decoration caching while a drag is active so the moving
@@ -72,6 +190,13 @@ export function ensureDecoratorRegistered(): void {
             () => spatialAssetStore.isDragActive(),
             // Same for an active rotation preview.
             () => spatialAssetStore.isRotationActive(),
+            // Authoritative multi-selection (rotation handle only for a sole
+            // selected asset; hidden for 0 or >1).
+            () => spatialAssetStore.getSelectedIds(),
+            // Disable caching during a group drag so all members follow.
+            () => spatialAssetStore.isGroupDragActive(),
+            // Rotation-handle hover (set by the manipulation tool on motion).
+            () => rotationHandleHover,
         )
     }
     removeDecorator = IModelApp.viewManager.addDecorator(decorator)
@@ -109,15 +234,38 @@ export function disposeOverlay(): void {
 function invalidateDecorations(): void {
     const vp = IModelApp.viewManager?.selectedView
     if (!vp || !decorator) return
-    if (spatialAssetStore.isDragActive() || spatialAssetStore.isRotationActive()) {
-        // During a drag/rotation the decorator is NOT caching; force a plain
-        // decoration redraw so the scanner follows the preview this frame.
+    // Choose the redraw path via the SAME predicate the decorator uses to
+    // disable caching. During ANY active preview (single drag, GROUP drag, or
+    // rotation) the decorator's useCachedDecorations is undefined => there is NO
+    // cache entry, so invalidateCachedDecorations(decorator) would assert in
+    // DecorationsCache.delete. Use a plain invalidateDecorations() instead.
+    const policy = resolveDecorationRedrawPolicy({
+        dragActive: spatialAssetStore.isDragActive(),
+        groupDragActive: spatialAssetStore.isGroupDragActive(),
+        rotationActive: spatialAssetStore.isRotationActive(),
+    })
+    if (import.meta.env.DEV) {
+        // Bounded: only log while a preview is active (not per idle emit).
+        if (policy === 'DYNAMIC_REDRAW') {
+            invalidateDiag()
+        }
+    }
+    if (policy === 'DYNAMIC_REDRAW') {
         vp.invalidateDecorations()
     } else {
         // Idle: the decorator caches; invalidate the cache so the next frame
-        // rebuilds (e.g. after a placement/move/rotate or drag commit/cancel).
+        // rebuilds (e.g. after a placement/move/rotate or drag/group commit/cancel).
         vp.invalidateCachedDecorations(decorator)
     }
+}
+
+/** Bounded [decor-cache] diagnostic (first few dynamic-redraw invalidations). */
+let invalidateDiagCount = 0
+function invalidateDiag(): void {
+    if (invalidateDiagCount >= 6) return
+    invalidateDiagCount += 1
+    console.info('[decor-cache] stage=REDRAW policy=DYNAMIC_REDRAW groupActive=%s dragActive=%s rotationActive=%s',
+        String(spatialAssetStore.isGroupDragActive()), String(spatialAssetStore.isDragActive()), String(spatialAssetStore.isRotationActive()))
 }
 
 /**
@@ -363,6 +511,47 @@ export function inspectPlacedAsset(assetInstanceId: string): string {
 /** Select an existing placed asset (product selection). */
 export function selectAsset(assetInstanceId: string | undefined): void {
     spatialAssetStore.selectAsset(assetInstanceId)
+}
+
+/** Toggle an asset in the multi-selection (Shift-click add/remove). */
+export function toggleAsset(assetInstanceId: string): void {
+    spatialAssetStore.toggleAsset(assetInstanceId)
+}
+
+/** Remove one asset from the selection (context-menu DESELECT). */
+export function deselectAsset(assetInstanceId: string): void {
+    spatialAssetStore.deselectAsset(assetInstanceId)
+}
+
+/** Clear the entire selection (empty-space click). */
+export function clearSelection(): void {
+    spatialAssetStore.clearSelection()
+}
+
+// --- group translation (multi-select) ---
+/** Begin a fluid GROUP drag anchored on a selected member. Returns success. */
+export function beginGroupDrag(anchorAssetInstanceId: string, grabWorldPoint: { x: number; y: number; z: number }): boolean {
+    const r = spatialAssetStore.beginGroupDrag(anchorAssetInstanceId, grabWorldPoint)
+    if (import.meta.env.DEV) console.info('[mrt-group] BEGIN anchor=%s ok=%s', anchorAssetInstanceId, String(r.ok))
+    return r.ok
+}
+
+/** Update the transient group preview from a drag world point (no event). */
+export function updateGroupDragPreview(dragWorldPoint: { x: number; y: number; z: number }): void {
+    spatialAssetStore.updateGroupDragPreview(dragWorldPoint)
+}
+
+/** Commit the active group drag: ONE ASSET_MOVED per moved member. */
+export function commitGroupDrag(): { ok: boolean; movedCount: number } {
+    const r = spatialAssetStore.commitGroupDrag()
+    if (import.meta.env.DEV) console.info('[mrt-group] COMMIT ok=%s movedCount=%s', String(r.ok), String(r.ok ? r.movedCount : 0))
+    return { ok: r.ok, movedCount: r.ok ? r.movedCount : 0 }
+}
+
+/** Cancel the active group drag: discard preview, no event. */
+export function cancelGroupDrag(): void {
+    spatialAssetStore.cancelGroupDrag()
+    if (import.meta.env.DEV) console.info('[mrt-group] CANCEL')
 }
 
 export interface BeginMoveResult {

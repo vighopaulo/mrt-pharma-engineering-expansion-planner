@@ -30,6 +30,15 @@ const LiveItwinViewer = lazy(() => import('../components/viewer/LiveItwinViewer'
 const ViewerAssetLibrary = lazy(() =>
     import('../components/spatial/ViewerAssetLibrary').then((m) => ({ default: m.ViewerAssetLibrary })),
 )
+// Right-click asset context menu (viewport overlay). Isolated/lazy so vitest
+// never pulls the Bentley overlay stack.
+const ViewerAssetContextMenu = lazy(() =>
+    import('../components/spatial/ViewerAssetContextMenu').then((m) => ({ default: m.ViewerAssetContextMenu })),
+)
+// Marquee (bounding-box) selection overlay. Lazy + outside the viewer Suspense.
+const ViewerMarqueeOverlay = lazy(() =>
+    import('../components/spatial/ViewerMarqueeOverlay').then((m) => ({ default: m.ViewerMarqueeOverlay })),
+)
 
 interface Selection {
     identity: BentleySourceIdentity
@@ -310,6 +319,17 @@ export function BentleyViewer() {
                                 <ViewerAssetLibrary />
                             </Suspense>
                         </div>
+
+                    </Suspense>
+                )}
+                {/* Right-click MRT asset context menu (viewport overlay). Rendered
+                    OUTSIDE the viewer's Suspense boundary so its lazy chunk can
+                    never suspend/unmount LiveItwinViewer and interrupt the Bentley
+                    sign-in effect (regression: PLACE stalled at "Signing in…"). */}
+                {config && auth.state === 'AUTHENTICATED' && (
+                    <Suspense fallback={null}>
+                        <ViewerAssetContextMenu />
+                        <ViewerMarqueeOverlay />
                     </Suspense>
                 )}
             </section>

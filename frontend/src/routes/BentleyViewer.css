@@ -500,3 +500,59 @@
     white-space: pre-wrap;
     word-break: break-word;
 }
+
+/* Right-click MRT asset context menu — compact, pointer-positioned overlay. */
+.mrt-context-menu {
+    position: fixed;
+    z-index: 50;
+    min-width: 120px;
+    display: flex;
+    flex-direction: column;
+    background: #1b1f27;
+    border: 1px solid #363b42;
+    border-radius: 6px;
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
+    overflow: hidden;
+}
+
+.mrt-context-menu button {
+    text-align: left;
+    padding: 0.4rem 0.8rem;
+    font-size: 0.82rem;
+    background: transparent;
+    color: #e6edf3;
+    border: none;
+    cursor: pointer;
+}
+
+.mrt-context-menu button:hover {
+    background: #2d333b;
+}
+
+.mrt-context-menu .mrt-context-delete {
+    color: #ff8a80;
+    border-top: 1px solid #2b313a;
+}
+
+/* Multi-selection indication in Placed Assets (restrained). */
+.mrt-placed-item.multi-selected {
+    outline: 1px solid #5aa0ff;
+    outline-offset: -1px;
+}
+
+.mrt-selection-status {
+    font-size: 0.78rem;
+    color: #5aa0ff;
+    margin: 0.2rem 0 0.4rem;
+}
+
+/* Marquee (bounding-box) selection rectangle — restrained overlay, positioned
+   in viewport view-pixels within the relative .viewer-stage. Overrides the
+   .viewer-stage > * full-size rule via explicit absolute box. */
+.mrt-marquee-rect {
+    position: absolute;
+    border: 1px solid rgba(120, 170, 255, 0.9);
+    background: rgba(90, 160, 255, 0.12);
+    pointer-events: none;
+    z-index: 40;
+}

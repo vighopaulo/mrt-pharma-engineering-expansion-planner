@@ -15,6 +15,7 @@ import { Arc3d, Box, Cone, Point3d, Range3d, TorusPipe } from '@itwin/core-geome
 import { ColorDef } from '@itwin/core-common'
 import type { AssetInstance } from '../../domain/assets'
 import { applyYaw, buildScannerParts, type ScannerPart, type WorldBox } from './scannerGeometry'
+import { resolveRotationHandleVisualState, type RotationHandleVisualState } from './assetPicking'
 
 /** Sanitized, serializable snapshot of what the decorator would draw (for tests). */
 export interface DecorationPlan {
@@ -32,24 +33,27 @@ const PART_COLOR: Record<ScannerPart, [number, number, number]> = {
 /** Highlight color for the directly-selected asset (application-owned render
  * state only — NOT a geometry-identity change and NOT transparency). */
 const SELECTION_COLOR: [number, number, number] = [255, 196, 0] // amber outline
-/** Object-attached rotation handle color. */
-const HANDLE_COLOR: [number, number, number] = [255, 140, 0] // orange ring
+/** Object-attached rotation handle color (grey — NOT orange/yellow). Prominence
+ * is controlled by the visual state (faint idle hint vs clear active). */
+const HANDLE_COLOR: [number, number, number] = [150, 155, 160] // neutral grey ring
 
 export class SpatialAssetDecorator implements Decorator {
     private readonly getInstances: () => readonly AssetInstance[]
     private readonly getSelectedId: () => string | undefined
     private readonly getDragActive: () => boolean
     private readonly getRotationActive: () => boolean
+    private readonly getSelectedIds: () => readonly string[]
+    private readonly getGroupDragActive: () => boolean
+    private readonly getHandleHover: () => boolean
 
     /**
      * Cache decorations while IDLE (efficient) but NOT during an active fluid
-     * drag OR rotation. Bentley reads this getter each frame: while manipulating
-     * we return undefined so the active scanner (and its rotation handle) rebuild
-     * from the transient preview every frame; when idle we return true so nothing
-     * churns.
+     * drag, rotation, or GROUP drag. Bentley reads this getter each frame: while
+     * manipulating we return undefined so active members rebuild from the
+     * transient preview every frame; when idle we return true so nothing churns.
      */
     public get useCachedDecorations(): true | undefined {
-        return (this.getDragActive() || this.getRotationActive()) ? undefined : true
+        return (this.getDragActive() || this.getRotationActive() || this.getGroupDragActive()) ? undefined : true
     }
 
     /**
@@ -71,11 +75,20 @@ export class SpatialAssetDecorator implements Decorator {
         getSelectedId?: () => string | undefined,
         getDragActive?: () => boolean,
         getRotationActive?: () => boolean,
+        getSelectedIds?: () => readonly string[],
+        getGroupDragActive?: () => boolean,
+        getHandleHover?: () => boolean,
     ) {
         this.getInstances = getInstances
         this.getSelectedId = getSelectedId ?? (() => undefined)
         this.getDragActive = getDragActive ?? (() => false)
         this.getRotationActive = getRotationActive ?? (() => false)
+        this.getSelectedIds = getSelectedIds ?? (() => {
+            const id = this.getSelectedId()
+            return id ? [id] : []
+        })
+        this.getGroupDragActive = getGroupDragActive ?? (() => false)
+        this.getHandleHover = getHandleHover ?? (() => false)
     }
 
     /** Resolve a picked BODY pick id to an application-owned asset id. */
@@ -172,24 +185,37 @@ export class SpatialAssetDecorator implements Decorator {
     decorate(context: DecorateContext): void {
         this.decorateGeneration += 1
         const instances = this.getInstances()
-        const selectedId = this.getSelectedId()
+        const selectedIds = new Set(this.getSelectedIds())
+        // The rotation handle owner: the SOLE selected app asset (multi-select
+        // hides the single-object handle; there is no group rotation).
+        const handleOwnerId = selectedIds.size === 1 ? Array.from(selectedIds)[0] : undefined
         // Rebuild the pick maps for the current instance set (drop stale entries).
         const liveIds = new Set(instances.map((i) => i.assetInstanceId))
         this.dropStale(this.instanceToPickId, this.pickIdToInstance, liveIds)
-        // Handle map: keep only the currently-selected + live instance.
-        const liveHandleIds = new Set(selectedId && liveIds.has(selectedId) ? [selectedId] : [])
+        // Handle map: keep only the single handle-owner + live instance.
+        const liveHandleIds = new Set(handleOwnerId && liveIds.has(handleOwnerId) ? [handleOwnerId] : [])
         this.dropStale(this.instanceToHandlePickId, this.handlePickIdToInstance, liveHandleIds)
         if (!instances.length) return
         const iModel = context.viewport.iModel as unknown as { transientIds: { getNext(): string } }
+        // Rotation-handle visual state for the sole selected asset.
+        const handleState: RotationHandleVisualState = resolveRotationHandleVisualState({
+            isOwnedAppAsset: true, // decorator draws only application-owned instances
+            isThisSelected: handleOwnerId !== undefined,
+            selectedCount: selectedIds.size,
+            hover: this.getHandleHover(),
+            rotating: this.getRotationActive(),
+        })
         for (const inst of instances) {
             try {
-                const selected = inst.assetInstanceId === selectedId
+                const selected = selectedIds.has(inst.assetInstanceId)
                 const pickId = this.pickIdFor(inst, iModel)
                 this.decorateInstance(context, inst, pickId, selected)
-                if (selected) {
-                    // Object-attached rotation handle for the selected asset only.
+                if (inst.assetInstanceId === handleOwnerId && handleState !== 'HIDDEN') {
+                    // Grey object-attached rotation handle for the SOLE selected
+                    // asset only, prominence per visual state. Pick id stays
+                    // allocated so the scoped screen-space fallback works.
                     const handlePickId = this.handlePickIdFor(inst, iModel)
-                    this.decorateRotationHandle(context, inst, handlePickId)
+                    this.decorateRotationHandle(context, inst, handlePickId, handleState)
                 }
             } catch {
                 // A single bad instance must never break the whole overlay.
@@ -210,7 +236,12 @@ export class SpatialAssetDecorator implements Decorator {
      * grabbable pick surface while remaining a thin ring (body drag stays
      * available inside/outside it).
      */
-    private decorateRotationHandle(context: DecorateContext, inst: AssetInstance, handlePickId: string | undefined): void {
+    private decorateRotationHandle(
+        context: DecorateContext,
+        inst: AssetInstance,
+        handlePickId: string | undefined,
+        visualState: RotationHandleVisualState,
+    ): void {
         const p = inst.transform.position
         const s = inst.transform.scale
         const w = inst.dimensions.width * s.x
@@ -224,10 +255,16 @@ export class SpatialAssetDecorator implements Decorator {
         const center = Point3d.create(p.x, p.y, ringZ)
         const arc = Arc3d.createXY(center, majorRadius)
         const torus = TorusPipe.createAlongArc(arc, minorRadius, true /* capped */)
+        // Prominence via transparency (0=opaque, 255=fully transparent). The
+        // handle geometry (and thus pick surface) is always drawn so it stays
+        // discoverable; only its visibility changes. IDLE_HINT is very faint.
+        const transparency = visualState === 'ACTIVE_ROTATION' ? 0
+            : visualState === 'HOVER' ? 70
+                : 205 // IDLE_HINT: extremely faint grey
+        const color = ColorDef.from(...HANDLE_COLOR).withTransparency(transparency)
         const builder = handlePickId
             ? context.createGraphicBuilder(GraphicType.WorldDecoration, undefined, handlePickId)
             : context.createGraphicBuilder(GraphicType.WorldDecoration)
-        const color = ColorDef.from(...HANDLE_COLOR)
         builder.setSymbology(color, color, 2)
         if (torus) {
             builder.addSolidPrimitive(torus)

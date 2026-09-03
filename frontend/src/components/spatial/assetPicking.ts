@@ -131,12 +131,139 @@ export function rayIntersectZPlane(ray: Ray3, planeZ: number): [number, number, 
     return [ray.origin[0] + ray.direction[0] * t, ray.origin[1] + ray.direction[1] * t, planeZ]
 }
 
+/**
+ * Rotation-handle visual state (product UX). The bright permanent ring is
+ * replaced by a grey affordance that is HIDDEN while idle and only becomes
+ * visible on hover/active rotation. Only the SINGLE selected application-owned
+ * AssetInstance may own it — never unselected, multi-selected, catalog/DEV, or
+ * BIM geometry.
+ */
+export type RotationHandleVisualState = 'HIDDEN' | 'IDLE_HINT' | 'HOVER' | 'ACTIVE_ROTATION'
+
+/**
+ * Pure decision for a given asset's rotation-handle visual state.
+ * @param p.isOwnedAppAsset  the asset is an application-owned manipulable instance
+ * @param p.isThisSelected   this specific asset is selected
+ * @param p.selectedCount    total number of selected app assets
+ * @param p.hover            pointer is near/over the rotation affordance
+ * @param p.rotating         an object-attached rotation is currently active for this asset
+ */
+export function resolveRotationHandleVisualState(p: {
+    isOwnedAppAsset: boolean
+    isThisSelected: boolean
+    selectedCount: number
+    hover: boolean
+    rotating: boolean
+}): RotationHandleVisualState {
+    // Never for non-owned geometry (catalog/DEV/BIM), unselected, or multi-select.
+    if (!p.isOwnedAppAsset || !p.isThisSelected) return 'HIDDEN'
+    if (p.selectedCount !== 1) return 'HIDDEN'
+    if (p.rotating) return 'ACTIVE_ROTATION'
+    if (p.hover) return 'HOVER'
+    // Selected + idle: extremely faint hint (drawn very low prominence).
+    return 'IDLE_HINT'
+}
+
 /** What kind of MRT pickable a located hit resolves to. */
 export type MrtPickTargetType = 'ASSET_BODY' | 'ROTATION_HANDLE'
 
 export interface MrtPickTarget {
     type: MrtPickTargetType
     assetInstanceId: string
+}
+
+/**
+ * Decoration redraw policy (Bentley cache safety). While ANY transient preview
+ * is active (single drag, group drag, rotation) the decorator disables caching
+ * (useCachedDecorations = undefined), so there is NO cache entry — calling
+ * `invalidateCachedDecorations(decorator)` then asserts in DecorationsCache.delete.
+ * In that state we must issue a plain `invalidateDecorations()` (DYNAMIC_REDRAW).
+ * Only when idle (cache present) may we invalidate the cache entry (CACHE_INVALIDATE).
+ *
+ * This pure seam keeps the redraw decision in lockstep with the decorator's own
+ * caching predicate so the two can never drift apart.
+ */
+export type DecorationRedrawPolicy = 'DYNAMIC_REDRAW' | 'CACHE_INVALIDATE'
+
+export function resolveDecorationRedrawPolicy(p: {
+    dragActive: boolean
+    groupDragActive: boolean
+    rotationActive: boolean
+}): DecorationRedrawPolicy {
+    // Mirror useCachedDecorations: any active preview => cache disabled => dynamic.
+    return (p.dragActive || p.groupDragActive || p.rotationActive) ? 'DYNAMIC_REDRAW' : 'CACHE_INVALIDATE'
+}
+
+/** A screen-space axis-aligned rectangle (view pixels). */
+export interface ScreenRect {
+    minX: number
+    minY: number
+    maxX: number
+    maxY: number
+}
+
+/** Normalize two screen points into an ordered rectangle (direction-independent). */
+export function normalizeScreenRect(a: { x: number; y: number }, b: { x: number; y: number }): ScreenRect {
+    return {
+        minX: Math.min(a.x, b.x),
+        minY: Math.min(a.y, b.y),
+        maxX: Math.max(a.x, b.x),
+        maxY: Math.max(a.y, b.y),
+    }
+}
+
+/** Diagonal length (px) of the drag from start to current — used for the marquee
+ * minimum-drag threshold (below it, treat as an empty click). */
+export function screenDragDistance(a: { x: number; y: number }, b: { x: number; y: number }): number {
+    return Math.hypot(b.x - a.x, b.y - a.y)
+}
+
+/** Do two axis-aligned screen rectangles intersect (inclusive)? */
+export function screenRectsIntersect(r: ScreenRect, s: ScreenRect): boolean {
+    return r.minX <= s.maxX && r.maxX >= s.minX && r.minY <= s.maxY && r.maxY >= s.minY
+}
+
+/**
+ * Resolve which application-owned assets a marquee rectangle selects: any asset
+ * whose projected screen-space bounds INTERSECT the marquee (partial overlap is
+ * sufficient — no full containment required). Pure: candidates are supplied as
+ * {assetInstanceId, bounds}; only app-owned candidates should be passed in.
+ */
+export function marqueeSelect(
+    marquee: ScreenRect,
+    candidates: readonly { assetInstanceId: string; bounds: ScreenRect }[],
+): string[] {
+    const out: string[] = []
+    for (const c of candidates) {
+        if (screenRectsIntersect(marquee, c.bounds)) out.push(c.assetInstanceId)
+    }
+    return out
+}
+
+/** Actions offered by the right-click asset context menu. */
+export type AssetContextAction = 'SELECT' | 'DESELECT' | 'DELETE'
+
+export interface AssetContextMenuDecision {
+    /** The application-owned asset the menu targets. */
+    assetInstanceId: string
+    actions: AssetContextAction[]
+}
+
+/**
+ * Pure decision for the right-click context menu. Returns a menu ONLY for an
+ * application-owned MRT AssetInstance (body or handle pick that resolved to an
+ * assetInstanceId); returns undefined for BIM / empty / catalog-test / DEV /
+ * unknown targets. Selected -> DESELECT + DELETE; unselected -> SELECT + DELETE.
+ * Target authority is the assetInstanceId (never screen coordinates).
+ */
+export function resolveAssetContextMenu(
+    target: MrtPickTarget | undefined,
+    isSelected: (assetInstanceId: string) => boolean,
+): AssetContextMenuDecision | undefined {
+    if (!target) return undefined
+    const id = target.assetInstanceId
+    const selected = isSelected(id)
+    return { assetInstanceId: id, actions: selected ? ['DESELECT', 'DELETE'] : ['SELECT', 'DELETE'] }
 }
 
 /**

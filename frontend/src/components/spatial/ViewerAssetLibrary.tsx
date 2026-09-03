@@ -75,6 +75,7 @@ export function ViewerAssetLibrary() {
     const placed = snapshot.instances
     // Selection is store-owned; the panel resolves the AssetInstance from it.
     const selectedPlacedId = snapshot.selectedAssetInstanceId
+    const selectedIdSet = useMemo(() => new Set(snapshot.selectedAssetInstanceIds), [snapshot.selectedAssetInstanceIds])
     const selectedInstance = selectedPlacedId ? placed.find((i) => i.assetInstanceId === selectedPlacedId) : undefined
 
     // Derived BIM spatial association for the selected asset (observational —
@@ -318,22 +319,33 @@ export function ViewerAssetLibrary() {
             {status && <p className="mrt-lib-status">{status}</p>}
 
             <h3>Placed Assets ({placed.length})</h3>
+            {selectedIdSet.size > 1 && (
+                <p className="mrt-selection-status" role="status">{selectedIdSet.size} assets selected</p>
+            )}
             {placed.length === 0 ? (
                 <p className="mrt-lib-empty">No assets placed yet. Select equipment and PLACE IN MODEL.</p>
             ) : (
                 <ul className="mrt-placed-list">
-                    {placed.map((inst) => (
-                        <li key={inst.assetInstanceId}>
-                            <button
-                                type="button"
-                                className={selectedPlacedId === inst.assetInstanceId ? 'mrt-placed-item selected' : 'mrt-placed-item'}
-                                onClick={() => handleSelectPlaced(inst.assetInstanceId)}
-                            >
-                                <span className="mrt-placed-label">{inst.displayLabel}</span>
-                                <span className="mrt-placed-meta">{inst.assetInstanceId} · {inst.roomAssignment.state} · {inst.installationState}</span>
-                            </button>
-                        </li>
-                    ))}
+                    {placed.map((inst) => {
+                        const inMulti = selectedIdSet.has(inst.assetInstanceId)
+                        const isSole = selectedPlacedId === inst.assetInstanceId
+                        const cls = isSole ? 'mrt-placed-item selected'
+                            : inMulti ? 'mrt-placed-item multi-selected'
+                                : 'mrt-placed-item'
+                        return (
+                            <li key={inst.assetInstanceId}>
+                                <button
+                                    type="button"
+                                    className={cls}
+                                    aria-pressed={inMulti}
+                                    onClick={() => handleSelectPlaced(inst.assetInstanceId)}
+                                >
+                                    <span className="mrt-placed-label">{inst.displayLabel}</span>
+                                    <span className="mrt-placed-meta">{inst.assetInstanceId} · {inst.roomAssignment.state} · {inst.installationState}</span>
+                                </button>
+                            </li>
+                        )
+                    })}
                 </ul>
             )}
 
