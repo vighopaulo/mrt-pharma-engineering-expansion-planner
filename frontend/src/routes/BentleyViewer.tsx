@@ -172,6 +172,16 @@ export function BentleyViewer() {
         }
     }, [])
 
+    // DEV diagnostic: read-only snapshot of the object-attached rotation state.
+    const handleInspectRotationState = useCallback(async () => {
+        try {
+            const mod = await import('../components/spatial/spatialAssetOverlay')
+            setFitNote(`Rotation state: ${mod.inspectRotationState()}`)
+        } catch (e) {
+            setFitNote(`Rotation state error: ${e instanceof Error ? e.message : String(e)}`)
+        }
+    }, [])
+
     const handleInspectFeatureAppearance = useCallback(async () => {
         try {
             const mod = await import('../components/viewer/LiveItwinViewer')
@@ -251,6 +261,7 @@ export function BentleyViewer() {
                             <button type="button" onClick={() => void handleInspectCatalogPetCt()}>INSPECT CATALOG PET/CT</button>
                             <button type="button" onClick={() => void handleInspectPlacementIntent()}>INSPECT PLACEMENT INTENT</button>
                             <button type="button" onClick={() => void handleInspectDirectDragState()}>INSPECT DIRECT DRAG STATE</button>
+                            <button type="button" onClick={() => void handleInspectRotationState()}>INSPECT ROTATION STATE</button>
                             {fitNote && <span className="viewer-fit-note">{fitNote}</span>}
                         </div>
 

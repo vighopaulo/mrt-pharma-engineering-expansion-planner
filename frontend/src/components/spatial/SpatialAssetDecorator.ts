@@ -11,7 +11,7 @@
  * decorate() when it must, keeping the overlay stable while idle.
  */
 import { GraphicType, type DecorateContext, type Decorator } from '@itwin/core-frontend'
-import { Box, Cone, Point3d, Range3d } from '@itwin/core-geometry'
+import { Arc3d, Box, Cone, Point3d, Range3d, TorusPipe } from '@itwin/core-geometry'
 import { ColorDef } from '@itwin/core-common'
 import type { AssetInstance } from '../../domain/assets'
 import { applyYaw, buildScannerParts, type ScannerPart, type WorldBox } from './scannerGeometry'
@@ -32,56 +32,100 @@ const PART_COLOR: Record<ScannerPart, [number, number, number]> = {
 /** Highlight color for the directly-selected asset (application-owned render
  * state only — NOT a geometry-identity change and NOT transparency). */
 const SELECTION_COLOR: [number, number, number] = [255, 196, 0] // amber outline
+/** Object-attached rotation handle color. */
+const HANDLE_COLOR: [number, number, number] = [255, 140, 0] // orange ring
 
 export class SpatialAssetDecorator implements Decorator {
     private readonly getInstances: () => readonly AssetInstance[]
     private readonly getSelectedId: () => string | undefined
     private readonly getDragActive: () => boolean
+    private readonly getRotationActive: () => boolean
 
     /**
-     * Cache decorations while IDLE (efficient; recreated only when the viewport
-     * asks) but NOT during an active fluid drag. Bentley reads this getter each
-     * frame: while dragging we return false so the moving scanner is rebuilt
-     * from the transient preview transform every frame; when idle we return true
-     * so nothing churns. This is the narrow fix for the "marker moves but the
-     * scanner geometry stays" defect — cached graphics were being reused at the
-     * stale committed position during the drag.
+     * Cache decorations while IDLE (efficient) but NOT during an active fluid
+     * drag OR rotation. Bentley reads this getter each frame: while manipulating
+     * we return undefined so the active scanner (and its rotation handle) rebuild
+     * from the transient preview every frame; when idle we return true so nothing
+     * churns.
      */
     public get useCachedDecorations(): true | undefined {
-        // `true` => cache (idle); `undefined` => no caching so decorate() runs
-        // every frame while dragging and the scanner follows the preview.
-        return this.getDragActive() ? undefined : true
+        return (this.getDragActive() || this.getRotationActive()) ? undefined : true
     }
 
     /**
-     * pickable transient Id64 <-> assetInstanceId map, rebuilt each decorate().
-     * Bentley calls testDecorationHit(id) with a picked pickable id; we map it
-     * back to the application-owned assetInstanceId.
+     * pickable transient Id64 <-> assetInstanceId maps, rebuilt each decorate().
+     * The BODY map and the ROTATION HANDLE map are separate so a picked id can
+     * be resolved to either an ASSET_BODY (translate) or a ROTATION_HANDLE
+     * (rotate) target for the same assetInstanceId.
      */
     private readonly pickIdToInstance = new Map<string, string>()
     private readonly instanceToPickId = new Map<string, string>()
+    private readonly handlePickIdToInstance = new Map<string, string>()
+    private readonly instanceToHandlePickId = new Map<string, string>()
 
     /** Instances are pulled via a getter so React state can update the source
-     * without recreating the decorator instance. Selection + drag-active are
-     * also getters so the decorator reads live application state each frame. */
+     * without recreating the decorator instance. Selection + drag-active +
+     * rotation-active are getters so the decorator reads live state each frame. */
     constructor(
         getInstances: () => readonly AssetInstance[],
         getSelectedId?: () => string | undefined,
         getDragActive?: () => boolean,
+        getRotationActive?: () => boolean,
     ) {
         this.getInstances = getInstances
         this.getSelectedId = getSelectedId ?? (() => undefined)
         this.getDragActive = getDragActive ?? (() => false)
+        this.getRotationActive = getRotationActive ?? (() => false)
     }
 
-    /** Resolve a picked pickable id back to an application-owned asset id. */
+    /** Resolve a picked BODY pick id to an application-owned asset id. */
     assetIdForPickId(pickId: string): string | undefined {
         return this.pickIdToInstance.get(pickId)
     }
 
-    /** Bentley picking hook: does this pickable id belong to this decorator? */
+    /** Resolve a picked ROTATION HANDLE pick id to its asset id. */
+    handleAssetIdForPickId(pickId: string): string | undefined {
+        return this.handlePickIdToInstance.get(pickId)
+    }
+
+    /** Bentley picking hook: does this pickable id belong to this decorator
+     * (either an asset body or a rotation handle)? */
     testDecorationHit(id: string): boolean {
-        return this.pickIdToInstance.has(id)
+        return this.pickIdToInstance.has(id) || this.handlePickIdToInstance.has(id)
+    }
+
+    /**
+     * DIAGNOSIS/FALLBACK SUPPORT: expose the selected asset's current body +
+     * handle pick ids (read-only). The tool uses this to (a) log the runtime
+     * handle-map generation and (b) resolve a scoped screen-space handle pick
+     * when native locate returns the body instead of the thin torus. Keyed by
+     * assetInstanceId — transient pick ids are never treated as identity.
+     */
+    handlePickIdForInstance(assetInstanceId: string): string | undefined {
+        return this.instanceToHandlePickId.get(assetInstanceId)
+    }
+    bodyPickIdForInstance(assetInstanceId: string): string | undefined {
+        return this.instanceToPickId.get(assetInstanceId)
+    }
+    /** Monotonic generation counter, bumped every decorate() rebuild. */
+    private decorateGeneration = 0
+    getDecorateGeneration(): number {
+        return this.decorateGeneration
+    }
+    /**
+     * Geometry of the selected asset's rotation ring in WORLD space, for the
+     * scoped screen-space fallback. center = ring center (x,y,z), radius = the
+     * ring major radius. Returns undefined if the id isn't the current handle.
+     */
+    rotationRingWorldFor(inst: AssetInstance): { center: [number, number, number]; radius: number } {
+        const p = inst.transform.position
+        const s = inst.transform.scale
+        const w = inst.dimensions.width * s.x
+        const d = inst.dimensions.depth * s.y
+        const h = inst.dimensions.height * s.z
+        const majorRadius = Math.max(Math.hypot(w, d) * 0.5 * 1.15, 1.5)
+        const ringZ = p.z + h + 0.3
+        return { center: [p.x, p.y, ringZ], radius: majorRadius }
     }
 
     /** Pure planning (Bentley-free) used by tests to prove the mapping. */
@@ -93,7 +137,7 @@ export class SpatialAssetDecorator implements Decorator {
         }))
     }
 
-    /** Allocate/reuse a pickable transient id for an instance for this frame. */
+    /** Allocate/reuse a pickable BODY transient id for an instance this frame. */
     private pickIdFor(inst: AssetInstance, iModel: { transientIds: { getNext(): string } } | undefined): string | undefined {
         if (!iModel) return undefined
         const existing = this.instanceToPickId.get(inst.assetInstanceId)
@@ -104,27 +148,94 @@ export class SpatialAssetDecorator implements Decorator {
         return id
     }
 
-    decorate(context: DecorateContext): void {
-        const instances = this.getInstances()
-        // Rebuild the pick map for the current instance set (drop stale entries).
-        const liveIds = new Set(instances.map((i) => i.assetInstanceId))
-        for (const [instId, pickId] of Array.from(this.instanceToPickId)) {
+    /** Allocate/reuse a pickable ROTATION HANDLE transient id for the selected
+     * instance this frame (only the selected asset has a handle). */
+    private handlePickIdFor(inst: AssetInstance, iModel: { transientIds: { getNext(): string } } | undefined): string | undefined {
+        if (!iModel) return undefined
+        const existing = this.instanceToHandlePickId.get(inst.assetInstanceId)
+        if (existing) return existing
+        const id = iModel.transientIds.getNext()
+        this.instanceToHandlePickId.set(inst.assetInstanceId, id)
+        this.handlePickIdToInstance.set(id, inst.assetInstanceId)
+        return id
+    }
+
+    private dropStale(map: Map<string, string>, reverse: Map<string, string>, liveIds: Set<string>): void {
+        for (const [instId, pickId] of Array.from(map)) {
             if (!liveIds.has(instId)) {
-                this.instanceToPickId.delete(instId)
-                this.pickIdToInstance.delete(pickId)
+                map.delete(instId)
+                reverse.delete(pickId)
             }
         }
+    }
+
+    decorate(context: DecorateContext): void {
+        this.decorateGeneration += 1
+        const instances = this.getInstances()
+        const selectedId = this.getSelectedId()
+        // Rebuild the pick maps for the current instance set (drop stale entries).
+        const liveIds = new Set(instances.map((i) => i.assetInstanceId))
+        this.dropStale(this.instanceToPickId, this.pickIdToInstance, liveIds)
+        // Handle map: keep only the currently-selected + live instance.
+        const liveHandleIds = new Set(selectedId && liveIds.has(selectedId) ? [selectedId] : [])
+        this.dropStale(this.instanceToHandlePickId, this.handlePickIdToInstance, liveHandleIds)
         if (!instances.length) return
         const iModel = context.viewport.iModel as unknown as { transientIds: { getNext(): string } }
-        const selectedId = this.getSelectedId()
         for (const inst of instances) {
             try {
+                const selected = inst.assetInstanceId === selectedId
                 const pickId = this.pickIdFor(inst, iModel)
-                this.decorateInstance(context, inst, pickId, inst.assetInstanceId === selectedId)
+                this.decorateInstance(context, inst, pickId, selected)
+                if (selected) {
+                    // Object-attached rotation handle for the selected asset only.
+                    const handlePickId = this.handlePickIdFor(inst, iModel)
+                    this.decorateRotationHandle(context, inst, handlePickId)
+                }
             } catch {
                 // A single bad instance must never break the whole overlay.
             }
         }
+    }
+
+    /**
+     * Draw the object-attached yaw rotation handle: a horizontal torus (ring)
+     * centered on the instance, slightly above its top, pickable with its own
+     * transient id. It follows the instance's (possibly previewed) position.
+     *
+     * IMPORTANT: the handle is a SOLID torus on a WorldDecoration builder — the
+     * SAME reliable pick path as the scanner body. A prior hairline Arc3d on a
+     * WorldOverlay builder had negligible pick area and did not participate in
+     * locate the same way, so clicking the ring resolved to the body underneath
+     * (translate) instead of the handle (rotate). The torus gives a real,
+     * grabbable pick surface while remaining a thin ring (body drag stays
+     * available inside/outside it).
+     */
+    private decorateRotationHandle(context: DecorateContext, inst: AssetInstance, handlePickId: string | undefined): void {
+        const p = inst.transform.position
+        const s = inst.transform.scale
+        const w = inst.dimensions.width * s.x
+        const d = inst.dimensions.depth * s.y
+        const h = inst.dimensions.height * s.z
+        // Ring radius a bit larger than the footprint half-diagonal; sits just
+        // above the top of the scanner so it is easy to grab.
+        const majorRadius = Math.max(Math.hypot(w, d) * 0.5 * 1.15, 1.5)
+        const minorRadius = Math.max(majorRadius * 0.09, 0.18) // tube thickness (pick surface)
+        const ringZ = p.z + h + 0.3
+        const center = Point3d.create(p.x, p.y, ringZ)
+        const arc = Arc3d.createXY(center, majorRadius)
+        const torus = TorusPipe.createAlongArc(arc, minorRadius, true /* capped */)
+        const builder = handlePickId
+            ? context.createGraphicBuilder(GraphicType.WorldDecoration, undefined, handlePickId)
+            : context.createGraphicBuilder(GraphicType.WorldDecoration)
+        const color = ColorDef.from(...HANDLE_COLOR)
+        builder.setSymbology(color, color, 2)
+        if (torus) {
+            builder.addSolidPrimitive(torus)
+        } else {
+            // Fallback to a line ring if the torus could not be built.
+            builder.addArc(arc, false, false)
+        }
+        context.addDecorationFromBuilder(builder)
     }
 
     private decorateInstance(context: DecorateContext, inst: AssetInstance, pickId: string | undefined, selected: boolean): void {

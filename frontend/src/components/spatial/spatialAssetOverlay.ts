@@ -63,21 +63,28 @@ export function ensureDecoratorRegistered(): void {
     if (decorator && removeDecorator) return
     if (!decorator) {
         decorator = new SpatialAssetDecorator(
-            // Render the drag preview transform for the active dragged instance;
-            // committed transforms for all others.
+            // Render the transient preview transform (position or yaw) for the
+            // active instance; committed transforms for all others.
             () => spatialAssetStore.getEffectiveProjectInstances(),
             () => spatialAssetStore.getSnapshot().selectedAssetInstanceId,
             // Disable decoration caching while a drag is active so the moving
             // scanner is rebuilt from the preview transform every frame.
             () => spatialAssetStore.isDragActive(),
+            // Same for an active rotation preview.
+            () => spatialAssetStore.isRotationActive(),
         )
     }
     removeDecorator = IModelApp.viewManager.addDecorator(decorator)
 }
 
-/** Resolve a Bentley pick id (HitDetail.sourceId) to an application asset id. */
+/** Resolve a Bentley BODY pick id (HitDetail.sourceId) to an asset id. */
 export function assetIdForPickId(pickId: string): string | undefined {
     return decorator?.assetIdForPickId(pickId)
+}
+
+/** Resolve a Bentley ROTATION HANDLE pick id to its asset id. */
+export function handleAssetIdForPickId(pickId: string): string | undefined {
+    return decorator?.handleAssetIdForPickId(pickId)
 }
 
 /** The registered decorator (for the direct-manipulation tool's redraw hook). */
@@ -102,9 +109,9 @@ export function disposeOverlay(): void {
 function invalidateDecorations(): void {
     const vp = IModelApp.viewManager?.selectedView
     if (!vp || !decorator) return
-    if (spatialAssetStore.isDragActive()) {
-        // During a drag the decorator is NOT caching; force a plain decoration
-        // redraw so the scanner follows the preview transform this frame.
+    if (spatialAssetStore.isDragActive() || spatialAssetStore.isRotationActive()) {
+        // During a drag/rotation the decorator is NOT caching; force a plain
+        // decoration redraw so the scanner follows the preview this frame.
         vp.invalidateDecorations()
     } else {
         // Idle: the decorator caches; invalidate the cache so the next frame
@@ -475,6 +482,71 @@ export function commitDrag(): { ok: boolean; reason: string; assetInstanceId?: s
 export function cancelDrag(): void {
     spatialAssetStore.cancelDrag()
     if (import.meta.env.DEV) console.info('[mrt-direct] DRAG_CANCELLED')
+}
+
+// --- object-attached fluid rotation ---
+/** Begin an object-attached fluid rotation of an asset. */
+export function beginRotate(assetInstanceId: string): boolean {
+    const r = spatialAssetStore.beginRotate(assetInstanceId)
+    if (r.ok && import.meta.env.DEV) console.info('[mrt-rotate] ROTATE_START assetInstanceId=%s startYaw=%s', assetInstanceId, r.preview.startYaw)
+    return r.ok
+}
+
+/** Update the transient rotation preview to an absolute yaw (degrees). */
+export function updateRotatePreview(previewYawDegrees: number): void {
+    spatialAssetStore.updateRotatePreview(previewYawDegrees)
+}
+
+/** Commit the active rotation: ONE authoritative rotate + ONE ASSET_ROTATED. */
+export function commitRotate(): { ok: boolean; reason: string; yaw?: number; assetInstanceId?: string } {
+    const r = spatialAssetStore.commitRotate()
+    if (!r.ok) {
+        if (import.meta.env.DEV) console.info('[mrt-rotate] ROTATE_COMMIT_SKIPPED reason=%s', r.reason)
+        return { ok: false, reason: r.reason }
+    }
+    if (import.meta.env.DEV) console.info('[mrt-rotate] ROTATE_COMMIT assetInstanceId=%s yaw=%s ASSET_ROTATED=1', r.instance.assetInstanceId, r.instance.transform.rotation.yaw)
+    return { ok: true, reason: 'COMMITTED', yaw: r.instance.transform.rotation.yaw, assetInstanceId: r.instance.assetInstanceId }
+}
+
+/** Cancel the active rotation: discard preview, restore committed yaw. */
+export function cancelRotate(): void {
+    spatialAssetStore.cancelRotate()
+    if (import.meta.env.DEV) console.info('[mrt-rotate] ROTATE_CANCELLED')
+}
+
+// --- controlled delete ---
+export interface DeleteAssetResult {
+    ok: boolean
+    reason: string
+    removedInstanceId?: string
+}
+
+/** Delete the given USER_PLACED asset (product delete). One ASSET_REMOVED. */
+export function deleteAsset(assetInstanceId: string): DeleteAssetResult {
+    const r = spatialAssetStore.deleteAsset(assetInstanceId)
+    if (!r.ok) {
+        if (import.meta.env.DEV) console.error('[mrt-delete] DELETE_FAILED reason=%s message=%s', r.reason, r.message)
+        return { ok: false, reason: r.reason }
+    }
+    if (import.meta.env.DEV) console.info('[mrt-delete] ASSET_REMOVED assetInstanceId=%s', r.removedInstanceId)
+    return { ok: true, reason: 'REMOVED', removedInstanceId: r.removedInstanceId }
+}
+
+/** DEV: read-only rotation-state inspection. */
+export function inspectRotationState(): string {
+    const snap = spatialAssetStore.getSnapshot()
+    const rp = snap.rotationPreview
+    const committed = rp ? spatialAssetStore.getInstance(rp.assetInstanceId) : spatialAssetStore.getSelectedInstance()
+    const summary = [
+        `activeTool=${IModelApp.toolAdmin?.activeTool?.toolId ?? '—'}`,
+        `selected=${snap.selectedAssetInstanceId ?? '—'}`,
+        `interaction=${snap.interaction}`,
+        `rotationActive=${snap.rotationActive}`,
+        `committedYaw=${committed ? committed.transform.rotation.yaw : '—'}`,
+        `previewYaw=${rp ? rp.previewYaw.toFixed(1) : '—'}`,
+    ].join(' | ')
+    if (import.meta.env.DEV) console.info('[rotation-inspect] %s', summary)
+    return summary
 }
 
 /**

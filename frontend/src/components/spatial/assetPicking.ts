@@ -130,3 +130,133 @@ export function rayIntersectZPlane(ray: Ray3, planeZ: number): [number, number, 
     if (!Number.isFinite(t)) return undefined
     return [ray.origin[0] + ray.direction[0] * t, ray.origin[1] + ray.direction[1] * t, planeZ]
 }
+
+/** What kind of MRT pickable a located hit resolves to. */
+export type MrtPickTargetType = 'ASSET_BODY' | 'ROTATION_HANDLE'
+
+export interface MrtPickTarget {
+    type: MrtPickTargetType
+    assetInstanceId: string
+}
+
+/**
+ * Resolve a located hit into a typed MRT pick target, or undefined for BIM /
+ * unknown / non-MRT hits. Two independent resolvers are supplied: one that maps
+ * a pick id to an asset BODY, and one that maps a pick id to a ROTATION HANDLE.
+ * The rotation-handle resolver is checked first so a handle drawn over the body
+ * takes precedence for its own pick id. BIM element hits are always ignored.
+ */
+export function resolveMrtPickTarget(
+    hit: { sourceId?: string; isElementHit: boolean },
+    resolveHandleAssetId: (pickId: string) => string | undefined,
+    resolveBodyAssetId: (pickId: string) => string | undefined,
+): MrtPickTarget | undefined {
+    if (!hit.sourceId || hit.isElementHit) return undefined
+    const handleAsset = resolveHandleAssetId(hit.sourceId)
+    if (handleAsset) return { type: 'ROTATION_HANDLE', assetInstanceId: handleAsset }
+    const bodyAsset = resolveBodyAssetId(hit.sourceId)
+    if (bodyAsset) return { type: 'ASSET_BODY', assetInstanceId: bodyAsset }
+    return undefined
+}
+
+/**
+ * Scoped screen-space hit test for the object-attached rotation ring, used ONLY
+ * as a fallback for the SELECTED asset when native decoration locate returns the
+ * body (or nothing) instead of the thin torus. Given the ring's projected center
+ * and a set of sample points around the projected ring (all in screen/view px),
+ * plus the pointer position, return true when the pointer lies within
+ * `tolerancePx` of the ring outline.
+ *
+ * We approximate the (possibly elliptical, under perspective) projected ring by
+ * the minimum distance from the pointer to a polyline of projected samples. This
+ * keeps the test independent of the projection being a perfect circle.
+ */
+export function pointerNearProjectedRing(
+    pointer: { x: number; y: number },
+    ringSamples: readonly { x: number; y: number }[],
+    tolerancePx: number,
+): boolean {
+    if (ringSamples.length < 2) return false
+    let minDist = Infinity
+    for (let i = 0; i < ringSamples.length; i++) {
+        const a = ringSamples[i]
+        const b = ringSamples[(i + 1) % ringSamples.length]
+        const d = distancePointToSegment(pointer, a, b)
+        if (d < minDist) minDist = d
+    }
+    return minDist <= tolerancePx
+}
+
+function distancePointToSegment(
+    p: { x: number; y: number },
+    a: { x: number; y: number },
+    b: { x: number; y: number },
+): number {
+    const abx = b.x - a.x, aby = b.y - a.y
+    const apx = p.x - a.x, apy = p.y - a.y
+    const len2 = abx * abx + aby * aby
+    let t = len2 > 0 ? (apx * abx + apy * aby) / len2 : 0
+    t = Math.max(0, Math.min(1, t))
+    const cx = a.x + t * abx, cy = a.y + t * aby
+    return Math.hypot(p.x - cx, p.y - cy)
+}
+
+/** World-space sample points around a horizontal ring (center + radius, in the
+ * Z = center.z plane). Returned in world coordinates for the caller to project. */
+export function ringWorldSamples(
+    center: [number, number, number],
+    radius: number,
+    count = 32,
+): [number, number, number][] {
+    const out: [number, number, number][] = []
+    for (let i = 0; i < count; i++) {
+        const a = (i / count) * Math.PI * 2
+        out.push([center[0] + Math.cos(a) * radius, center[1] + Math.sin(a) * radius, center[2]])
+    }
+    return out
+}
+
+const RAD2DEG = 180 / Math.PI
+
+/** Normalize degrees into [0, 360). */
+export function normalizeDeg(deg: number): number {
+    if (!Number.isFinite(deg)) return 0
+    const m = deg % 360
+    return m < 0 ? m + 360 : m
+}
+
+/**
+ * Signed angle in DEGREES from vector A to vector B in the XY plane, in
+ * (-180, 180]. Uses atan2(cross, dot). Positive = counter-clockwise about +Z.
+ */
+export function signedAngleXYDeg(
+    ax: number, ay: number, bx: number, by: number,
+): number {
+    const cross = ax * by - ay * bx
+    const dot = ax * bx + ay * by
+    if (cross === 0 && dot === 0) return 0
+    return Math.atan2(cross, dot) * RAD2DEG
+}
+
+/**
+ * Compute the fluid preview yaw for an object-attached rotation:
+ *   deltaAngle = signed angle from the start grab vector to the current vector
+ *                (both measured from the pivot center in the XY plane),
+ *   previewYaw = normalize(startYaw + deltaAngle).
+ * All inputs/outputs in DEGREES. Returns undefined if either vector is
+ * degenerate (pointer exactly on the center).
+ */
+export function computePreviewYaw(input: {
+    startYaw: number
+    center: { x: number; y: number }
+    startPoint: { x: number; y: number }
+    currentPoint: { x: number; y: number }
+}): number | undefined {
+    const ax = input.startPoint.x - input.center.x
+    const ay = input.startPoint.y - input.center.y
+    const bx = input.currentPoint.x - input.center.x
+    const by = input.currentPoint.y - input.center.y
+    if ((ax === 0 && ay === 0) || (bx === 0 && by === 0)) return undefined
+    const delta = signedAngleXYDeg(ax, ay, bx, by)
+    return normalizeDeg(input.startYaw + delta)
+}

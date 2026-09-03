@@ -421,3 +421,21 @@
     border-radius: 5px;
     padding: 0.3rem 0.45rem;
 }
+
+/* Controlled delete of the selected USER_PLACED asset. */
+.mrt-manip-delete {
+    flex: 1 1 auto;
+    padding: 0.4rem 0.5rem;
+    font-size: 0.75rem;
+    font-weight: 700;
+    border-radius: 6px;
+    cursor: pointer;
+    border: 1px solid #b91c1c;
+    background: #b91c1c;
+    color: #fff;
+}
+
+.mrt-manip-delete:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}

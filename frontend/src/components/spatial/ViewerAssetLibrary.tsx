@@ -25,6 +25,7 @@ import {
 import {
     beginMoveForAsset,
     cancelMove,
+    deleteAsset,
     ensureDirectManipulationReady,
     rotateAssetYaw,
     selectAsset,
@@ -186,6 +187,22 @@ export function ViewerAssetLibrary() {
         setRotateStatus(r.ok ? `Rotated: ${r.assetInstanceId} → ${r.yaw}°` : `Rotate failed: ${r.reason}`)
     }, [selectedPlacedId])
 
+    const handleDelete = useCallback(() => {
+        if (!selectedInstance) return
+        setEnterError(null)
+        // Explicit deliberate confirmation before destructive delete.
+        const label = `${selectedInstance.displayLabel} (${selectedInstance.assetInstanceId})`
+        const confirmed = typeof window !== 'undefined' && typeof window.confirm === 'function'
+            ? window.confirm(`Delete ${selectedInstance.displayLabel}?\n${selectedInstance.assetInstanceId}`)
+            : false
+        if (!confirmed) {
+            setRotateStatus(`Delete cancelled: ${label}`)
+            return
+        }
+        const r = deleteAsset(selectedInstance.assetInstanceId)
+        setRotateStatus(r.ok ? `Deleted: ${r.removedInstanceId}` : `Delete failed: ${r.reason}`)
+    }, [selectedInstance])
+
     return (
         <div className="mrt-asset-library" aria-label="MRT Pharma Asset Library">
             <h3>Asset Library</h3>
@@ -317,6 +334,18 @@ export function ViewerAssetLibrary() {
                         >
                             ROTATE RIGHT 90°
                         </button>
+                        {/* Controlled delete of the selected USER_PLACED asset.
+                            Explicit confirmation; disabled while manipulating. */}
+                        {selectedInstance.spatialSource === 'USER_PLACED' && (
+                            <button
+                                type="button"
+                                className="mrt-manip-delete"
+                                disabled={interaction !== 'IDLE'}
+                                onClick={() => handleDelete()}
+                            >
+                                DELETE
+                            </button>
+                        )}
                     </div>
                     <pre className="mrt-placed-inspect">{inspectPlacedAsset(selectedInstance.assetInstanceId)}</pre>
                 </div>

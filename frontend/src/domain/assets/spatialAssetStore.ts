@@ -25,7 +25,7 @@ import {
     type PlacementIntent,
     type PlacementResult,
 } from './placement'
-import { moveAssetTo, rotateAssetYawBy, type AssetJournalEvent } from './commands'
+import { moveAssetTo, normalizeYawDegrees, removeAsset, rotateAsset, rotateAssetYawBy, type AssetJournalEvent } from './commands'
 import type { AssetInstance, ScenarioProvenance, SpatialPosition, SpatialRotation } from './types'
 
 export interface SpatialAssetStoreOptions {
@@ -39,7 +39,7 @@ export type StoreListener = () => void
  * Narrow, mutually-exclusive spatial interaction state. Only one interaction
  * can be active at a time so two Bentley tools never compete for clicks.
  */
-export type SpatialInteractionState = 'IDLE' | 'PLACING' | 'MOVING'
+export type SpatialInteractionState = 'IDLE' | 'PLACING' | 'MOVING' | 'ROTATING'
 
 /**
  * A resolved intent to MOVE an existing instance. Bound to one assetInstanceId
@@ -90,6 +90,32 @@ export type DragCommitResult =
     | { ok: true; instance: AssetInstance; event: AssetJournalEvent }
     | { ok: false; reason: MoveFailure; message: string }
 
+/**
+ * Transient yaw preview used ONLY while an object-attached fluid rotation is
+ * active. Never persisted, never serialized, never journaled. The authoritative
+ * committed yaw stays on the AssetInstance until rotation release.
+ */
+export interface RotationPreview {
+    assetInstanceId: string
+    startYaw: number
+    previewYaw: number
+    /** World-space center the rotation pivots about (the instance position). */
+    center: SpatialPosition
+}
+
+export type RotationCommitResult =
+    | { ok: true; instance: AssetInstance; event: AssetJournalEvent }
+    | { ok: false; reason: RotateFailure; message: string }
+
+export type DeleteResult =
+    | { ok: true; removedInstanceId: string; event: AssetJournalEvent }
+    | { ok: false; reason: DeleteFailure; message: string }
+
+export type DeleteFailure =
+    | 'ASSET_NOT_FOUND'
+    | 'INTERACTION_ACTIVE'
+    | 'DELETE_NOT_ALLOWED_FOR_SOURCE'
+
 /** Public read-only snapshot for UI consumers (stable per version). */
 export interface SpatialAssetSnapshot {
     version: number
@@ -104,6 +130,9 @@ export interface SpatialAssetSnapshot {
     /** Active fluid-drag preview (transient), if any. */
     dragPreview: DragPreview | undefined
     dragActive: boolean
+    /** Active object-attached rotation preview (transient), if any. */
+    rotationPreview: RotationPreview | undefined
+    rotationActive: boolean
 }
 
 export class SpatialAssetStore {
@@ -113,6 +142,7 @@ export class SpatialAssetStore {
     private intent: PlacementIntent | undefined
     private moveIntent: MoveIntent | undefined
     private dragPreview: DragPreview | undefined
+    private rotationPreview: RotationPreview | undefined
     private selectedId: string | undefined
     private readonly listeners = new Set<StoreListener>()
     private version = 0
@@ -152,6 +182,7 @@ export class SpatialAssetStore {
      * MOVING (so command-move/placement cannot start mid-drag). */
     getInteractionState(): SpatialInteractionState {
         if (this.intent !== undefined) return 'PLACING'
+        if (this.rotationPreview !== undefined) return 'ROTATING'
         if (this.moveIntent !== undefined || this.dragPreview !== undefined) return 'MOVING'
         return 'IDLE'
     }
@@ -169,6 +200,8 @@ export class SpatialAssetStore {
             selectedAssetInstanceId: this.selectedId,
             dragPreview: this.dragPreview,
             dragActive: this.dragPreview !== undefined,
+            rotationPreview: this.rotationPreview,
+            rotationActive: this.rotationPreview !== undefined,
         }
     }
 
@@ -430,20 +463,148 @@ export class SpatialAssetStore {
         this.emit()
     }
 
+    // --- object-attached fluid yaw rotation (transient preview; ONE commit) ---
     /**
-     * Instances with the active drag preview applied to the dragged instance
-     * (what the overlay renders during a drag). Non-dragged instances use their
-     * committed transforms.
+     * Begin an object-attached fluid rotation of an instance. Records the start
+     * yaw and pivot center. Rejected if any interaction is already active. The
+     * authoritative rotation is NOT changed here — only a transient preview.
+     */
+    beginRotate(assetInstanceId: string): { ok: true; preview: RotationPreview } | { ok: false; reason: RotateFailure } {
+        if (this.getInteractionState() !== 'IDLE') {
+            return { ok: false, reason: 'SPATIAL_INTERACTION_ALREADY_ACTIVE' }
+        }
+        const inst = this.getInstance(assetInstanceId)
+        if (!inst) return { ok: false, reason: 'ASSET_NOT_FOUND' }
+        const startYaw = normalizeYawDegrees(inst.transform.rotation.yaw)
+        this.rotationPreview = {
+            assetInstanceId,
+            startYaw,
+            previewYaw: startYaw,
+            center: { ...inst.transform.position },
+        }
+        this.selectedId = assetInstanceId
+        this.emit()
+        return { ok: true, preview: this.rotationPreview }
+    }
+
+    isRotationActive(): boolean {
+        return this.rotationPreview !== undefined
+    }
+
+    getRotationPreview(): RotationPreview | undefined {
+        return this.rotationPreview
+    }
+
+    /**
+     * Update the transient rotation preview to an absolute yaw (already computed
+     * by the caller's angular math), normalized to [0, 360). Fluid — no event,
+     * no committed change.
+     */
+    updateRotatePreview(previewYawDegrees: number): void {
+        const rp = this.rotationPreview
+        if (!rp) return
+        if (!Number.isFinite(previewYawDegrees)) return // ignore invalid; keep last
+        this.rotationPreview = { ...rp, previewYaw: normalizeYawDegrees(previewYawDegrees) }
+        this.emit()
+    }
+
+    /**
+     * Commit the active rotation: exactly ONE authoritative rotation transition
+     * + ONE ASSET_ROTATED event. Position + identity preserved (yaw only).
+     * Clears the preview.
+     */
+    commitRotate(): RotationCommitResult {
+        const rp = this.rotationPreview
+        if (!rp) return { ok: false, reason: 'ROTATION_INVALID', message: 'no active rotation' }
+        this.rotationPreview = undefined // consume once
+
+        const inst = this.getInstance(rp.assetInstanceId)
+        if (!inst) {
+            this.emit()
+            return { ok: false, reason: 'ASSET_NOT_FOUND', message: `asset gone: ${rp.assetInstanceId}` }
+        }
+        const rotation: SpatialRotation = {
+            yaw: normalizeYawDegrees(rp.previewYaw),
+            pitch: inst.transform.rotation.pitch,
+            roll: inst.transform.rotation.roll,
+        }
+        const cmd = rotateAsset(inst, rotation)
+        if (!cmd.ok) {
+            this.emit()
+            return { ok: false, reason: 'ROTATION_INVALID', message: cmd.errors.map((e) => `${e.field} ${e.message}`).join('; ') }
+        }
+        this.instances = this.instances.map((i) => (i.assetInstanceId === cmd.instance.assetInstanceId ? cmd.instance : i))
+        this.emit()
+        return { ok: true, instance: cmd.instance, event: cmd.event }
+    }
+
+    /** Cancel the active rotation: discard preview, restore committed yaw, no event. */
+    cancelRotate(): void {
+        if (this.rotationPreview === undefined) return
+        this.rotationPreview = undefined
+        this.emit()
+    }
+
+    // --- controlled single-asset delete ---
+    /**
+     * Remove ONE application-owned instance from the store. Only USER_PLACED
+     * instances are deletable through the product path (DEV fixtures excluded).
+     * Rejected while any interaction is active. Emits ONE ASSET_REMOVED,
+     * preserves the shared definition/geometry/catalog and all other instances,
+     * clears selection if the deleted instance was selected. Never touches the
+     * iModel.
+     */
+    deleteAsset(assetInstanceId: string): DeleteResult {
+        if (this.getInteractionState() !== 'IDLE') {
+            return { ok: false, reason: 'INTERACTION_ACTIVE', message: `interaction active: ${this.getInteractionState()}` }
+        }
+        const inst = this.getInstance(assetInstanceId)
+        if (!inst) return { ok: false, reason: 'ASSET_NOT_FOUND', message: `asset not found: ${assetInstanceId}` }
+        if (inst.spatialSource !== 'USER_PLACED') {
+            return { ok: false, reason: 'DELETE_NOT_ALLOWED_FOR_SOURCE', message: `delete allowed only for USER_PLACED; got ${inst.spatialSource}` }
+        }
+        const removed = removeAsset(inst) // structured ASSET_REMOVED descriptor
+        // Enrich the event with prior transform/scenario for the journal.
+        const event: AssetJournalEvent = {
+            type: 'ASSET_REMOVED',
+            assetInstanceId: inst.assetInstanceId,
+            projectId: inst.projectId,
+            detail: {
+                assetDefinitionId: inst.assetDefinitionId,
+                geometryRepresentationId: inst.geometryRepresentationId,
+                createdFrom: inst.createdFrom ?? '',
+                priorX: inst.transform.position.x, priorY: inst.transform.position.y, priorZ: inst.transform.position.z,
+                priorYaw: inst.transform.rotation.yaw,
+                scenarioId: inst.scenario?.scenarioId ?? '',
+                scenarioState: inst.scenario?.scenarioState ?? '',
+            },
+        }
+        this.instances = this.instances.filter((i) => i.assetInstanceId !== assetInstanceId)
+        if (this.selectedId === assetInstanceId) this.selectedId = undefined
+        this.emit()
+        return { ok: true, removedInstanceId: removed.ok ? removed.removedInstanceId : assetInstanceId, event }
+    }
+
+    /**
+     * Instances with the active transient preview applied to the active instance
+     * (what the overlay renders): drag preview → position; rotation preview →
+     * yaw. Only one preview can be active at a time. Non-active instances use
+     * their committed transforms.
      */
     getEffectiveProjectInstances(): readonly AssetInstance[] {
         const dp = this.dragPreview
+        const rp = this.rotationPreview
         const base = this.getProjectInstances()
-        if (!dp) return base
-        return base.map((i) =>
-            i.assetInstanceId === dp.assetInstanceId
-                ? { ...i, transform: { ...i.transform, position: dp.previewPosition } }
-                : i,
-        )
+        if (!dp && !rp) return base
+        return base.map((i) => {
+            if (dp && i.assetInstanceId === dp.assetInstanceId) {
+                return { ...i, transform: { ...i.transform, position: dp.previewPosition } }
+            }
+            if (rp && i.assetInstanceId === rp.assetInstanceId) {
+                return { ...i, transform: { ...i.transform, rotation: { ...i.transform.rotation, yaw: rp.previewYaw } } }
+            }
+            return i
+        })
     }
 
     // --- direct instance insertion (used by DEV fixtures + placement) ---

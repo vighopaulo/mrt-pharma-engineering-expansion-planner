@@ -1,0 +1,183 @@
+{
+  "report": "MRT Pharma Object-Attached Fluid Yaw Rotation + Controlled Delete Foundation",
+  "continues_from_checkpoint": "8b5bf5ca3231f8b17e6bffeefd6d559c1d879fa3",
+  "repository_baseline": {
+    "PRECHECK_HEAD": "8b5bf5ca3231f8b17e6bffeefd6d559c1d879fa3",
+    "PRECHECK_ORIGIN_MAIN": "8b5bf5ca3231f8b17e6bffeefd6d559c1d879fa3",
+    "PRECHECK_DIVERGENCE": "0 / 0",
+    "local_only_untouched": [
+      "frontend/.env",
+      "AS_IS_DIGITAL_TWIN_PHASE_1A_SEAM_REPORT.md"
+    ]
+  },
+  "rotation": {
+    "OBJECT_ATTACHED_ROTATION_AFFORDANCE": "YES",
+    "ROTATION_HANDLE_PICKING_MECHANISM": "native Bentley decoration picking; separate pickable transient id per selected instance (WorldOverlay Arc3d ring) -> ROTATION_HANDLE",
+    "DIRECT_ROTATION_TARGET_KEY": "assetInstanceId",
+    "DIRECT_ROTATION_AXIS": "Z / YAW",
+    "ROTATION_UNIT": "DEGREES",
+    "FLUID_YAW_PREVIEW": "YES",
+    "rotation_math": "computePreviewYaw: pivot=center; delta=atan2(cross,dot) start->current in XY; previewYaw=normalize(startYaw+delta)",
+    "store": "RotationPreview{assetInstanceId,startYaw,previewYaw,center}; beginRotate/updateRotatePreview/commitRotate(one ASSET_ROTATED)/cancelRotate; interaction ROTATING; getEffectiveProjectInstances applies preview yaw to active instance only",
+    "ROTATION_PREVIEW_NON_AUTHORITATIVE": "PASS",
+    "ASSET_ROTATED_EVENTS_DURING_POINTER_MOVE": 0,
+    "ASSET_ROTATED_EVENT_COUNT_SUCCESSFUL_RELEASE": 1,
+    "ROTATION_ESC_CANCEL": "PASS",
+    "ROTATION_CANCEL_REQUIRES_COMPENSATING_ROTATE": "NO",
+    "DIRECT_ROTATION_PRESERVES_POSITION": "PASS",
+    "DIRECT_ROTATION_IDENTITY_IMMUTABILITY": "PASS",
+    "GANTRY_FOLLOWS_ROTATION_PREVIEW": "PASS",
+    "BORE_FOLLOWS_ROTATION_PREVIEW": "PASS",
+    "TABLE_FOLLOWS_ROTATION_PREVIEW": "PASS",
+    "ROTATION_TARGET_ISOLATION_BY_ASSET_INSTANCE_ID": "PASS",
+    "ROTATION_PRIMARY_CANCEL_INPUT": "ESC",
+    "CONTROLLED_ROTATION_FALLBACK_REGRESSION": 0
+  },
+  "delete": {
+    "ASSET_DELETE_IMPLEMENTED": "YES",
+    "DELETE_TARGET_KEY": "assetInstanceId",
+    "DELETE_ALLOWED_SPATIAL_SOURCE": "USER_PLACED",
+    "DELETE_CONFIRMATION_REQUIRED": "YES",
+    "confirmation": "window.confirm('Delete <displayLabel>?\\n<assetInstanceId>')",
+    "DELETE_EVENT": "ASSET_REMOVED",
+    "DELETE_EVENT_COUNT_SUCCESS": 1,
+    "DELETE_EVENT_COUNT_CANCEL": 0,
+    "domain_command": "removeAsset reused; store.deleteAsset removes one instance, emits ASSET_REMOVED with prior transform+scenario, clears selection, guarded by interaction",
+    "DELETE_CATALOG_RECORD": "NO",
+    "DELETE_ASSET_DEFINITION": "NO",
+    "DELETE_GEOMETRY_REPRESENTATION": "NO",
+    "DELETE_OTHER_INSTANCES": "NO",
+    "DELETE_BENTLEY_IMODEL_ELEMENT": "NO",
+    "DELETE_SUCCESS": "PASS",
+    "DELETE_CANCEL": "PASS",
+    "DELETE_CLEARS_SELECTION": "PASS",
+    "DELETE_SINGLE_INSTANCE_ISOLATION": "PASS",
+    "DELETE_BLOCKED_WHILE_INTERACTION_ACTIVE": "PASS",
+    "DELETED_ASSET_PICKABLE_AFTER_REDRAW": "NO",
+    "ui": "DELETE control in Placed Assets next to MOVE / ROTATE +/-90 (USER_PLACED only)"
+  },
+  "state_and_safety": {
+    "SPATIAL_ASSET_STATE_SOURCE_OF_TRUTH": "ONE",
+    "OVERLAY_STATE_SOURCE_OF_TRUTH": "SpatialAssetStore",
+    "ROTATION_UI_UPDATE": "EVENT_DRIVEN_OR_EXPLICIT",
+    "DELETE_UI_UPDATE": "EVENT_DRIVEN_OR_EXPLICIT",
+    "EVENT_JOURNAL_UI_IMPLEMENTED": "NO",
+    "EVENT_JOURNAL_COMPATIBILITY": "PASS",
+    "AUTOMATIC_ROOM_ASSIGNMENT": "NO",
+    "ROOM_SNAPPING_IMPLEMENTED": "NO",
+    "AUTH_FLOW_CHANGED": "NO",
+    "VIEWER_LIFECYCLE_CHANGED": "NO",
+    "TRANSPARENCY_WORK_RESUMED": "NO",
+    "CAMERA_BEHAVIOR_CHANGED": "NO",
+    "IMODEL_MODIFIED": "NO",
+    "BENTLEY_CHANGESET_CREATED": "NO",
+    "BENTLEY_RESOURCE_MODIFIED": "NO"
+  },
+  "targeted_correction_rotation_handle_pick": {
+    "manual_evidence": {
+      "DELETE_FUNCTIONALLY_CONFIRMED": "YES",
+      "OBJECT_ATTACHED_ROTATION_VISIBLE_IN_BROWSER": "YES (ring renders)",
+      "FLUID_ROTATION_VISIBLE_IN_BROWSER_BEFORE_FIX": "NO",
+      "PRIMARY_REMAINING_FAILURE_STAGE": "ROTATION_HANDLE_PICK_OR_ROTATION_START"
+    },
+    "root_cause": "handle drawn as hairline Arc3d on GraphicType.WorldOverlay -> negligible pick area + different locate path; clicking the ring resolved to the body's WorldDecoration pick id -> translate instead of rotate. Offline classification was already correct; runtime never produced the handle pick id.",
+    "correction": "handle now a SOLID TorusPipe (createAlongArc) on a WorldDecoration builder with its own handle pick id (same reliable pick path as the body); thin ring above the scanner top, grabbable, body drag preserved",
+    "ROTATION_HANDLE_PICK_ID_CREATED": "YES",
+    "ROTATION_HANDLE_PICK_ID_UNIQUE_FROM_BODY": "YES",
+    "ROTATION_HANDLE_GRAPHIC_TYPE": "WorldDecoration (was WorldOverlay)",
+    "ROTATION_HANDLE_PICKABLE_ID_APPLIED": "YES",
+    "ROTATION_HANDLE_PICK_TARGET_USABLE": "YES",
+    "DECORATOR_TEST_DECORATION_HIT_ACCEPTS_HANDLE": "YES",
+    "ROTATION_HANDLE_FILTER_ACCEPTED": "YES",
+    "BODY_TRANSLATION_REMAINS_ACCESSIBLE": "YES",
+    "BIM_ELEMENT_ACCEPTED_AS_ROTATION_HANDLE": "NO",
+    "diagnostic": "[direct-pick] target=ROTATION_HANDLE|ASSET_BODY|NONE",
+    "rotation_math_changed": "NO",
+    "delete_changed": "NO",
+    "DELETE_REGRESSION": 0
+  },
+  "diagnosis_pass_2_runtime_pick_and_fallback": {
+    "manual_evidence": {
+      "TorusPipe_WorldDecoration_handle_drag": "still FAIL (body picks over thin torus at cursor aperture)",
+      "body_translation_same_path": "PASS (WorldDecoration picking is functional -> differentiator is thin-tube pick loss)"
+    },
+    "instrumentation_added": [
+      "[rotation-pick] sourceId/isDecoration/bodyAssetId/handleAssetId/targetType/assetInstanceId/selected",
+      "[rotation-handle-map] assetInstanceId/bodyPickId/handlePickId/sameId/handleRegistered/generation",
+      "[rotation-start] stage=INPUT|STORE_BEGIN result/rotationPreviewActive",
+      "[rotation-preview] stage=BEGIN|UPDATE (first 5 frames only)"
+    ],
+    "correction": "scoped screen-space rotation-ring fallback (section 34): when native locate does not resolve ROTATION_HANDLE, project the SELECTED asset ring to view and resolve ROTATION_HANDLE(selectedId) when pointer within 14px of the projected ring outline",
+    "ROTATION_FALLBACK_TARGET_KEY": "assetInstanceId",
+    "fallback_scope": "selected asset only; requires rendered handle; ring hole excluded (body translate preserved); never BIM; never unselected; not a generic raycaster",
+    "BODY_TRANSLATION_REMAINS_ACCESSIBLE": "YES",
+    "BIM_ELEMENT_ACCEPTED_AS_ROTATION_HANDLE": "NO",
+    "UNKNOWN_DECORATION_ACCEPTED": "NO",
+    "ROTATION_POINTER_PLANE": "HORIZONTAL_Z",
+    "NON_FINITE_ROTATION_PREVIEW": "IGNORED",
+    "native_pick_still_primary": true,
+    "rotation_math_changed": "NO",
+    "delete_changed": "NO",
+    "DELETE_REGRESSION": 0
+  },
+  "machine_verification": {
+    "TYPECHECK": "PASS",
+    "OFFLINE_TEST_COUNT": 217,
+    "previous_baseline": 186,
+    "NEW_TEST_COUNT": 31,
+    "OFFLINE_TEST_REGRESSIONS": 0,
+    "new_test_file": "frontend/src/tests/objectRotationDelete.test.ts",
+    "PRODUCTION_BUILD": "PASS",
+    "CORE_FRONTEND_VERSION": "5.12.5",
+    "WORKER_ASSET_REAL": "YES",
+    "DRACO_WASM_ASSET_REAL": "YES",
+    "dev_server": {
+      "viewer": "HTTP 200",
+      "worker_content_type": "text/javascript",
+      "wasm_content_type": "application/wasm"
+    }
+  },
+  "manual_acceptance": {
+    "OBJECT_ATTACHED_ROTATION_AFFORDANCE": "YES",
+    "OBJECT_ATTACHED_ROTATION_VISIBLE_IN_BROWSER": "YES",
+    "ROTATION_HANDLE_ATTACHED_TO_SELECTED_ASSET": "YES",
+    "ROTATION_HANDLE_DRAG_FUNCTIONALLY_WORKING": "YES",
+    "FLUID_ROTATION_VISIBLE_IN_BROWSER": "YES",
+    "OBJECT_ATTACHED_ROTATION_MANUAL_ACCEPTANCE": "PASS",
+    "user_rotation_assessment": "Rotation is working perfectly.",
+    "DELETE_VISIBLE_IN_BROWSER": "YES",
+    "DELETE_FUNCTIONALLY_CONFIRMED": "YES",
+    "DELETE_MANUAL_ACCEPTANCE": "PASS",
+    "user_delete_assessment": "Delete works.",
+    "rotation_handle_final_architecture": {
+      "ROTATION_HANDLE_GRAPHIC_TYPE": "WorldDecoration",
+      "ROTATION_HANDLE_GEOMETRY": "TorusPipe.createAlongArc (solid orange ring)",
+      "ROTATION_HANDLE_PICKING_PRIMARY": "native Bentley decoration pick (testDecorationHit + HitDetail.sourceId)",
+      "ROTATION_HANDLE_PICKING_FALLBACK": "scoped selected-asset screen-space projected-ring band (14px); NOT a generic raycaster",
+      "ROTATION_FALLBACK_TARGET_KEY": "assetInstanceId",
+      "ROTATION_HANDLE_TARGET_KEY": "assetInstanceId"
+    },
+    "historical_failure": "ring rendered but did not rotate (hairline Arc3d/WorldOverlay -> then thin TorusPipe lost native pick to body); resolved post-correction",
+    "macbook_cancellation_policy": {
+      "ESC": "AUTHORITATIVE_CANCEL_INPUT",
+      "RIGHT_CLICK_CANCEL": "OPTIONAL_NOT_REQUIRED",
+      "RIGHT_CLICK_CANCEL_BLOCKS_CHECKPOINT": "NO"
+    }
+  },
+  "checkpoint_status": "MANUAL_ACCEPTANCE_PASS — staging/commit/push in progress (rotation working perfectly + delete works)",
+  "files_added": [
+    "frontend/src/tests/objectRotationDelete.test.ts",
+    "MRT_PHARMA_OBJECT_ROTATION_DELETE_FOUNDATION_REPORT.md",
+    "mrt_pharma_object_rotation_delete_foundation_data.json"
+  ],
+  "files_modified": [
+    "frontend/src/domain/assets/spatialAssetStore.ts",
+    "frontend/src/components/spatial/assetPicking.ts",
+    "frontend/src/components/spatial/SpatialAssetDecorator.ts",
+    "frontend/src/components/spatial/MrtDirectManipulationTool.ts",
+    "frontend/src/components/spatial/spatialAssetOverlay.ts",
+    "frontend/src/components/spatial/ViewerAssetLibrary.tsx",
+    "frontend/src/routes/BentleyViewer.tsx",
+    "frontend/src/routes/BentleyViewer.css"
+  ]
+}
