@@ -78,6 +78,20 @@ export function BentleyViewer() {
     // viewport. Dynamically imports the viewer module so unit tests / the
     // non-viewer bundle never pull in @itwin. Never loops or mutates the iModel.
     const [fitNote, setFitNote] = useState<string | null>(null)
+
+    // Developer Inspector panel (UI-only, non-authoritative). Verbose DEV
+    // diagnostics render HERE — in the right-side inspection area — instead of
+    // being painted over the 3D viewport. State is bounded: a title, the current
+    // content, and open/closed. It never mutates SpatialAssetStore, the BIM, or
+    // viewer state; CLEAR empties content, CLOSE hides the panel.
+    const [devInspector, setDevInspector] = useState<{ open: boolean; title: string; content: string }>(
+        { open: false, title: '', content: '' },
+    )
+    const showDev = useCallback((title: string, content: string) => {
+        setDevInspector({ open: true, title, content })
+    }, [])
+    const clearDev = useCallback(() => setDevInspector((s) => ({ ...s, content: '' })), [])
+    const closeDev = useCallback(() => setDevInspector((s) => ({ ...s, open: false })), [])
     const handleFitLiveModel = useCallback(async () => {
         try {
             const mod = await import('../components/viewer/LiveItwinViewer')
@@ -116,11 +130,11 @@ export function BentleyViewer() {
     const handleInspectGenericPetCt = useCallback(async () => {
         try {
             const mod = await import('../components/spatial/spatialAssetOverlay')
-            setFitNote(`Asset: ${mod.inspectGenericPetCt()}`)
+            showDev('Generic PET/CT', mod.inspectGenericPetCt())
         } catch (e) {
-            setFitNote(`Asset inspect error: ${e instanceof Error ? e.message : String(e)}`)
+            showDev('Generic PET/CT', `error: ${e instanceof Error ? e.message : String(e)}`)
         }
-    }, [])
+    }, [showDev])
 
     // Catalog-backed PET/CT (real GE Discovery MI identity, generic geometry).
     const handleShowCatalogPetCt = useCallback(async () => {
@@ -144,53 +158,74 @@ export function BentleyViewer() {
     const handleInspectCatalogPetCt = useCallback(async () => {
         try {
             const mod = await import('../components/spatial/spatialAssetOverlay')
-            setFitNote(`Catalog asset: ${mod.inspectCatalogPetCt()}`)
+            showDev('Catalog PET/CT', mod.inspectCatalogPetCt())
         } catch (e) {
-            setFitNote(`Catalog inspect error: ${e instanceof Error ? e.message : String(e)}`)
+            showDev('Catalog PET/CT', `error: ${e instanceof Error ? e.message : String(e)}`)
         }
-    }, [])
+    }, [showDev])
 
     // DEV diagnostic: bounded snapshot of the active placement intent (creates
     // no AssetInstance).
     const handleInspectPlacementIntent = useCallback(async () => {
         try {
             const mod = await import('../components/spatial/spatialAssetOverlay')
-            setFitNote(`Placement intent: ${mod.inspectPlacementIntent()}`)
+            showDev('Placement Intent', mod.inspectPlacementIntent())
         } catch (e) {
-            setFitNote(`Placement intent error: ${e instanceof Error ? e.message : String(e)}`)
+            showDev('Placement Intent', `error: ${e instanceof Error ? e.message : String(e)}`)
         }
-    }, [])
+    }, [showDev])
 
     // DEV diagnostic: read-only snapshot of the direct-drag interaction state
     // (active tool id, selection, interaction, committed/preview/effective).
     const handleInspectDirectDragState = useCallback(async () => {
         try {
             const mod = await import('../components/spatial/spatialAssetOverlay')
-            setFitNote(`Direct drag state: ${mod.inspectDirectDragState()}`)
+            showDev('Direct Drag', mod.inspectDirectDragState())
         } catch (e) {
-            setFitNote(`Direct drag state error: ${e instanceof Error ? e.message : String(e)}`)
+            showDev('Direct Drag', `error: ${e instanceof Error ? e.message : String(e)}`)
         }
-    }, [])
+    }, [showDev])
 
     // DEV diagnostic: read-only snapshot of the object-attached rotation state.
     const handleInspectRotationState = useCallback(async () => {
         try {
             const mod = await import('../components/spatial/spatialAssetOverlay')
-            setFitNote(`Rotation state: ${mod.inspectRotationState()}`)
+            showDev('Rotation', mod.inspectRotationState())
         } catch (e) {
-            setFitNote(`Rotation state error: ${e instanceof Error ? e.message : String(e)}`)
+            showDev('Rotation', `error: ${e instanceof Error ? e.message : String(e)}`)
         }
-    }, [])
+    }, [showDev])
+
+    // DEV diagnostic: read-only bounded inventory of the live BIM's spatial
+    // structure (candidate floor/room classes + counts + geometry availability).
+    const handleInspectBimSpatialStructure = useCallback(async () => {
+        try {
+            const mod = await import('../components/spatial/spatialAssetOverlay')
+            showDev('BIM Spatial Structure', await mod.inspectBimSpatialStructure())
+        } catch (e) {
+            showDev('BIM Spatial Structure', `error: ${e instanceof Error ? e.message : String(e)}`)
+        }
+    }, [showDev])
+
+    // DEV diagnostic: read-only floor/room association of the selected asset.
+    const handleInspectSpatialAssociation = useCallback(async () => {
+        try {
+            const mod = await import('../components/spatial/spatialAssetOverlay')
+            showDev('Spatial Association', await mod.inspectSpatialAssociation())
+        } catch (e) {
+            showDev('Spatial Association', `error: ${e instanceof Error ? e.message : String(e)}`)
+        }
+    }, [showDev])
 
     const handleInspectFeatureAppearance = useCallback(async () => {
         try {
             const mod = await import('../components/viewer/LiveItwinViewer')
             const r = await mod.inspectFeatureAppearance()
-            setFitNote(`Feature appearance: ${r.summary}`)
+            showDev('Feature Appearance', r.summary)
         } catch (e) {
-            setFitNote(`Appearance inspect error: ${e instanceof Error ? e.message : String(e)}`)
+            showDev('Feature Appearance', `error: ${e instanceof Error ? e.message : String(e)}`)
         }
-    }, [])
+    }, [showDev])
 
     const handleInspectRenderState = useCallback(async () => {
         try {
@@ -199,17 +234,18 @@ export function BentleyViewer() {
             // BEFORE inspecting, so we catch any transition of the stuck child.
             mod.watchTileLoads()
             const first = await mod.inspectRenderState()
-            setFitNote(`Render state: ${first.summary}`)
-            // Bounded tile-selection series: t=0 (above) + t=1s/3s/5s. Max four
-            // reads, no polling loop, no fit, no mutation.
-            mod.readTileCounts('t=0')
-            window.setTimeout(() => setFitNote(mod.readTileCounts('t=1s')), 1000)
-            window.setTimeout(() => setFitNote(mod.readTileCounts('t=3s')), 3000)
-            window.setTimeout(() => setFitNote(mod.readTileCounts('t=5s')), 5000)
+            // Bounded tile-selection series: t=0 (now) + t=1s/3s/5s, accumulated
+            // into the Developer Inspector panel (not painted over the viewport).
+            const lines = [`Render state: ${first.summary}`, mod.readTileCounts('t=0')]
+            showDev('Render State', lines.join('\n'))
+            const append = (s: string) => { lines.push(s); showDev('Render State', lines.join('\n')) }
+            window.setTimeout(() => append(mod.readTileCounts('t=1s')), 1000)
+            window.setTimeout(() => append(mod.readTileCounts('t=3s')), 3000)
+            window.setTimeout(() => append(mod.readTileCounts('t=5s')), 5000)
         } catch (e) {
-            setFitNote(`Inspect error: ${e instanceof Error ? e.message : String(e)}`)
+            showDev('Render State', `error: ${e instanceof Error ? e.message : String(e)}`)
         }
-    }, [])
+    }, [showDev])
 
     return (
         <main className="viewer-page">
@@ -262,6 +298,8 @@ export function BentleyViewer() {
                             <button type="button" onClick={() => void handleInspectPlacementIntent()}>INSPECT PLACEMENT INTENT</button>
                             <button type="button" onClick={() => void handleInspectDirectDragState()}>INSPECT DIRECT DRAG STATE</button>
                             <button type="button" onClick={() => void handleInspectRotationState()}>INSPECT ROTATION STATE</button>
+                            <button type="button" onClick={() => void handleInspectBimSpatialStructure()}>INSPECT BIM SPATIAL STRUCTURE</button>
+                            <button type="button" onClick={() => void handleInspectSpatialAssociation()}>INSPECT SPATIAL ASSOCIATION</button>
                             {fitNote && <span className="viewer-fit-note">{fitNote}</span>}
                         </div>
 
@@ -277,6 +315,19 @@ export function BentleyViewer() {
             </section>
 
             <aside className="viewer-inspector" aria-label="Inspection panel">
+                {devInspector.open && (
+                    <div className="dev-inspector" aria-label="Developer Inspector">
+                        <div className="dev-inspector-head">
+                            <strong>Developer Inspector</strong>
+                            <span className="dev-inspector-title">{devInspector.title || '—'}</span>
+                            <span className="dev-inspector-actions">
+                                <button type="button" onClick={clearDev}>CLEAR</button>
+                                <button type="button" onClick={closeDev}>CLOSE</button>
+                            </span>
+                        </div>
+                        <pre className="dev-inspector-body">{devInspector.content || '(empty)'}</pre>
+                    </div>
+                )}
                 <h2>Inspection</h2>
                 {!selection ? (
                     <p className="inspector-empty">Select an element in the model to inspect it.</p>

@@ -608,3 +608,116 @@ export function rotateAssetYaw(assetInstanceId: string, deltaDegrees: number): R
     }
     return { ok: true, reason: 'ROTATED', yaw: r.instance.transform.rotation.yaw, assetInstanceId: r.instance.assetInstanceId }
 }
+
+// ---------------------------------------------------------------------------
+// BIM spatial semantics: floor + room association (observational, read-only)
+// ---------------------------------------------------------------------------
+//
+// The association is DERIVED state: it is computed on demand from an asset's
+// authoritative position + a cached, Bentley-free SpatialModelSemantics
+// snapshot built by the (dynamically imported) bentleySpatialAdapter. It NEVER
+// mutates an asset's position, Z, rotation, or identity. The cache is refreshed
+// explicitly (e.g. by a DEV inspector) — there is no per-frame BIM query and no
+// authoritative room/floor change during a drag preview.
+
+import type { SpatialAssociationResult, SpatialModelSemantics } from '../../domain/assets'
+import { EMPTY_MODEL_SEMANTICS, computeSpatialAssociation, summarizeAssociation } from '../../domain/assets'
+
+/** Cached model semantics (Bentley-free). Refreshed explicitly, never per-frame. */
+let cachedModelSemantics: SpatialModelSemantics = { ...EMPTY_MODEL_SEMANTICS }
+let semanticsLoaded = false
+/** Monotonic generation; bumped each successful refresh so consumers can detect
+ * whether they computed against the same BIM semantics snapshot. */
+let semanticsGeneration = 0
+
+/** The current cached semantics (may be empty until refreshed). */
+export function getCachedModelSemantics(): SpatialModelSemantics {
+    return cachedModelSemantics
+}
+
+/** The current semantics generation (0 until first refresh). */
+export function getSemanticsGeneration(): number {
+    return semanticsGeneration
+}
+
+/** Whether the semantics cache has been loaded at least once. */
+export function isSemanticsLoaded(): boolean {
+    return semanticsLoaded
+}
+
+/**
+ * Refresh the cached SpatialModelSemantics from the live iModel via the adapter
+ * (dynamic import so the Bentley query code is never pulled into tests). Bounded,
+ * read-only, one-shot per call. Returns the refreshed semantics.
+ */
+export async function refreshModelSemantics(): Promise<SpatialModelSemantics> {
+    try {
+        const { buildModelSemantics } = await import('./bentleySpatialAdapter')
+        cachedModelSemantics = await buildModelSemantics()
+        semanticsLoaded = true
+        semanticsGeneration += 1
+    } catch (e) {
+        if (import.meta.env.DEV) console.error('[bentley-spatial] REFRESH_ERROR', e instanceof Error ? e.message : String(e))
+    }
+    return cachedModelSemantics
+}
+
+/**
+ * Compute the derived spatial association for one instance from its COMMITTED
+ * position and the cached semantics. Pure wrt the asset (no mutation). Returns
+ * undefined if the instance is not found.
+ */
+export function getAssociationForInstance(assetInstanceId: string): SpatialAssociationResult | undefined {
+    const inst = spatialAssetStore.getInstance(assetInstanceId)
+    if (!inst) return undefined
+    return computeSpatialAssociation({
+        assetInstanceId,
+        position: { ...inst.transform.position },
+        semantics: cachedModelSemantics,
+    })
+}
+
+/**
+ * DEV: inspect the live BIM spatial structure (bounded class inventory).
+ * Read-only; refreshes the cached semantics as a side effect so a subsequent
+ * INSPECT SPATIAL ASSOCIATION uses fresh data.
+ */
+export async function inspectBimSpatialStructure(): Promise<string> {
+    try {
+        const { discoverBimSpatialInventory, summarizeRoomRanges } = await import('./bentleySpatialAdapter')
+        const inv = await discoverBimSpatialInventory()
+        await refreshModelSemantics()
+        const roomRanges = await summarizeRoomRanges()
+        const summary = [
+            `floorClass=${inv.floorSourceClass}`,
+            `roomClass=${inv.roomSourceClass}`,
+            `roomCount=${inv.roomObjectCount}`,
+            `classes=[${inv.summary}]`,
+            `floorAvail=${cachedModelSemantics.floorAvailability}`,
+            `roomAvail=${cachedModelSemantics.roomAvailability}`,
+            `gen=${semanticsGeneration}`,
+            `ranges=[${roomRanges}]`,
+        ].join(' | ')
+        if (import.meta.env.DEV) console.info('[bentley-spatial] INSPECT_STRUCTURE %s', summary)
+        return summary
+    } catch (e) {
+        return 'INSPECT_STRUCTURE_ERROR: ' + (e instanceof Error ? e.message : String(e))
+    }
+}
+
+/**
+ * DEV: inspect the spatial association of the currently selected asset. Refreshes
+ * the semantics cache first (if never loaded) so the result reflects the live
+ * BIM. Read-only.
+ */
+export async function inspectSpatialAssociation(): Promise<string> {
+    const snap = spatialAssetStore.getSnapshot()
+    const selected = snap.selectedAssetInstanceId
+    if (!selected) return 'NO_SELECTED_ASSET'
+    if (!semanticsLoaded) await refreshModelSemantics()
+    const result = getAssociationForInstance(selected)
+    if (!result) return `NOT_FOUND: ${selected}`
+    const summary = `${summarizeAssociation(result)} | semanticsGeneration=${semanticsGeneration}`
+    if (import.meta.env.DEV) console.info('[spatial-assoc] %s', summary)
+    return summary
+}

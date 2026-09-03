@@ -13,7 +13,8 @@
  * file itself is Bentley-free except for the store type it observes.
  */
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
-import type { AssetLibraryEntry, SpatialAssetSnapshot } from '../../domain/assets'
+import type { AssetLibraryEntry, SpatialAssetSnapshot, SpatialAssociationResult } from '../../domain/assets'
+import { formatAssociationSlotLabel } from '../../domain/assets'
 import {
     beginPlacementForLibraryEntry,
     cancelPlacement,
@@ -27,10 +28,24 @@ import {
     cancelMove,
     deleteAsset,
     ensureDirectManipulationReady,
+    getAssociationForInstance,
+    isSemanticsLoaded,
+    refreshModelSemantics,
     rotateAssetYaw,
     selectAsset,
 } from './spatialAssetOverlay'
 import { resolveMoveStatus, resolvePlacementStatus } from './placementStatus'
+
+/**
+ * Render a floor/room association slot. Delegates to the SINGLE shared domain
+ * formatter (formatAssociationSlotLabel) so the Placed Assets UI and the DEV
+ * inspector can never disagree about the same result. Never prints bare
+ * "ASSIGNED" — the domain invariant guarantees a reference when ASSIGNED.
+ */
+function formatAssociationSlot(assoc: SpatialAssociationResult | undefined, slot: 'floor' | 'room'): string {
+    if (!assoc) return '—'
+    return formatAssociationSlotLabel(assoc, slot)
+}
 
 function useSpatialSnapshot(): SpatialAssetSnapshot {
     return useSyncExternalStore(subscribeSpatialAssets, () => spatialAssetStore.getSnapshot())
@@ -61,6 +76,33 @@ export function ViewerAssetLibrary() {
     // Selection is store-owned; the panel resolves the AssetInstance from it.
     const selectedPlacedId = snapshot.selectedAssetInstanceId
     const selectedInstance = selectedPlacedId ? placed.find((i) => i.assetInstanceId === selectedPlacedId) : undefined
+
+    // Derived BIM spatial association for the selected asset (observational —
+    // never mutates position/identity). Recomputed from the COMMITTED position
+    // only: skipped while a drag/rotation preview is active so authoritative
+    // floor/room never changes per preview frame. Semantics are loaded once.
+    const [association, setAssociation] = useState<SpatialAssociationResult | undefined>(undefined)
+    const committedPos = selectedInstance
+        ? `${selectedInstance.transform.position.x},${selectedInstance.transform.position.y},${selectedInstance.transform.position.z}`
+        : ''
+    useEffect(() => {
+        let cancelled = false
+        if (!selectedPlacedId) { setAssociation(undefined); return }
+        // Do not recompute authoritative association mid-preview.
+        if (dragActive || snapshot.rotationActive) return
+        void (async () => {
+            // Ensure semantics are loaded before computing so the UI never renders
+            // an association against empty semantics (which would disagree with the
+            // DEV inspector after its own refresh). Both consumers thus compute from
+            // the SAME shared cache + generation via the SAME getAssociationForInstance seam.
+            if (!isSemanticsLoaded()) await refreshModelSemantics()
+            if (cancelled) return
+            setAssociation(getAssociationForInstance(selectedPlacedId))
+        })()
+        return () => { cancelled = true }
+        // committedPos is included so a committed drag/move re-associates.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [selectedPlacedId, committedPos, dragActive, snapshot.rotationActive])
 
     // Track the previous snapshot to derive success/cancel transitions for BOTH
     // placement and move. The stale "Placing:"/"Moving:" text bug is avoided by
@@ -346,6 +388,16 @@ export function ViewerAssetLibrary() {
                                 DELETE
                             </button>
                         )}
+                    </div>
+                    {/* BIM spatial association (observational; from committed
+                        position). Distinguishes honest statuses — a missing room
+                        because the BIM lacks room semantics is NOT the same as a
+                        room that simply doesn't contain the point. */}
+                    <div className="mrt-spatial-assoc">
+                        <div className="mrt-lib-detail-row"><span>Floor</span><span>{formatAssociationSlot(association, 'floor')}</span></div>
+                        <div className="mrt-lib-detail-row"><span>Room</span><span>{formatAssociationSlot(association, 'room')}</span></div>
+                        <div className="mrt-lib-detail-row"><span>Source</span><span>{association ? association.provenance.source : '—'}</span></div>
+                        <div className="mrt-lib-detail-row"><span>Method</span><span>{association ? association.provenance.method : '—'}</span></div>
                     </div>
                     <pre className="mrt-placed-inspect">{inspectPlacedAsset(selectedInstance.assetInstanceId)}</pre>
                 </div>

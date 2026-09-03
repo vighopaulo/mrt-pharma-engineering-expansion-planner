@@ -1,0 +1,287 @@
+{
+  "build": "MRT Pharma Bentley Spatial Semantics (Floor + Room Association) Foundation",
+  "precheck": {
+    "HEAD": "fc355ab29fd19d7f9c2dde84d7c95069bb502233",
+    "origin_main": "fc355ab29fd19d7f9c2dde84d7c95069bb502233",
+    "divergence": "0 / 0"
+  },
+  "architecture": {
+    "pure_domain_module": "frontend/src/domain/assets/spatialSemantics.ts",
+    "bentley_adapter_module": "frontend/src/components/spatial/bentleySpatialAdapter.ts",
+    "wiring": "frontend/src/components/spatial/spatialAssetOverlay.ts (cached semantics + inspectors)",
+    "ui": "frontend/src/components/spatial/ViewerAssetLibrary.tsx (Floor/Room/Source/Method rows)",
+    "dev_controls": "frontend/src/routes/BentleyViewer.tsx (INSPECT BIM SPATIAL STRUCTURE, INSPECT SPATIAL ASSOCIATION)",
+    "domain_bentley_free": true,
+    "adapter_dynamic_imported": true,
+    "read_only": true
+  },
+  "association_model": {
+    "floor_statuses": [
+      "ASSIGNED",
+      "NOT_FOUND_AT_POSITION",
+      "NOT_AVAILABLE_FROM_BIM",
+      "AMBIGUOUS",
+      "OUTSIDE_MODELED_SPACE"
+    ],
+    "room_statuses": [
+      "ASSIGNED",
+      "NOT_FOUND_AT_POSITION",
+      "NOT_AVAILABLE_FROM_BIM",
+      "AMBIGUOUS",
+      "OUTSIDE_MODELED_SPACE"
+    ],
+    "methods": [
+      "BIM_ROOM_VOLUME",
+      "BIM_ROOM_FOOTPRINT",
+      "BIM_ELEMENT_RANGE",
+      "STOREY_ELEVATION_RANGE",
+      "DERIVED_RANGE",
+      "NONE"
+    ],
+    "provenance_sources": [
+      "MANUAL",
+      "BIM_DERIVED",
+      "NOT_ASSIGNED"
+    ],
+    "ROOM_ASSOCIATION_POINT": "ASSET_INSTANCE_ORIGIN",
+    "SPATIAL_BOUNDARY_POLICY": "INCLUSIVE",
+    "ROOM_ASSIGNMENT_SOURCE": "BIM_DERIVED (when room found) else NOT_ASSIGNED"
+  },
+  "flags": {
+    "FLOOR_ASSOCIATION_IMPLEMENTED": "YES",
+    "ROOM_ASSOCIATION_IMPLEMENTED": "YES",
+    "FLOOR_ASSOCIATION_DETERMINISTIC": "PASS",
+    "SPATIAL_ASSOCIATION_PROVENANCE": "PASS",
+    "SPATIAL_ASSOCIATION_POSITION_IMMUTABILITY": "PASS",
+    "SPATIAL_ASSOCIATION_IDENTITY_IMMUTABILITY": "PASS",
+    "DRAG_COMMIT_REASSOCIATION": "PASS",
+    "DRAG_PREVIEW_ASSOCIATION_NON_AUTHORITATIVE": "PASS",
+    "ROTATION_ASSOCIATION_IMMUTABILITY": "PASS",
+    "DELETE_SPATIAL_ASSOCIATION_ISOLATION": "PASS",
+    "SPATIAL_ASSOCIATION_STATUS_SEMANTICS": "PASS",
+    "AMBIGUOUS_ROOM_NOT_SILENTLY_ASSIGNED": "PASS",
+    "SPATIAL_DOMAIN_BENTLEY_INDEPENDENT": "PASS",
+    "PLACEMENT_SPATIAL_ASSOCIATION_UPDATE": "EVENT_DRIVEN_OR_EXPLICIT",
+    "DRAG_COMMIT_SPATIAL_ASSOCIATION_UPDATE": "EVENT_DRIVEN_OR_EXPLICIT",
+    "AUTHORITATIVE_ROOM_CHANGES_DURING_DRAG_PREVIEW": 0,
+    "AUTHORITATIVE_FLOOR_CHANGES_DURING_DRAG_PREVIEW": 0,
+    "ROOM_ASSOCIATION_CHANGES_POSITION": "NO",
+    "FLOOR_ASSOCIATION_CHANGES_POSITION": "NO",
+    "AUTOMATIC_ROOM_ASSIGNMENT": "NO",
+    "ROOM_SNAPPING_IMPLEMENTED": "NO",
+    "FLOOR_SNAPPING_IMPLEMENTED": "NO",
+    "COLLISION_DETECTION_IMPLEMENTED": "NO",
+    "CLEARANCE_ENFORCEMENT_IMPLEMENTED": "NO",
+    "SPATIAL_VALIDITY_BLOCKS_DRAG": "NO",
+    "SPATIAL_VALIDITY_BLOCKS_ROTATION": "NO",
+    "SPATIAL_VALIDITY_BLOCKS_PLACEMENT": "NO"
+  },
+  "targeted_correction_floor_consistency": {
+    "manual_evidence": {
+      "BIM_SPATIAL_STRUCTURE_VISIBLE_IN_BROWSER": "YES",
+      "BIM_SPATIAL_INVENTORY_MANUAL_ACCEPTANCE": "PASS",
+      "SPATIAL_ASSOCIATION_MANUAL_VISIBILITY": "PASS",
+      "floorClass": "SpatialComposition:CompositeElement",
+      "roomClass": "BuildingSpatial:Space",
+      "roomCount": 8,
+      "current_room_status": "NOT_FOUND_AT_POSITION",
+      "current_validity": "OUTSIDE_MODELED_ROOM"
+    },
+    "FLOOR_INCONSISTENCY_ROOT_CAUSE": "C (STATUS_REFERENCE_INCONSISTENCY): floorStatus=ASSIGNED with floor=undefined; rendered two ways (A/E). Class B guarded via shared generation.",
+    "corrections": [
+      "domain invariant normalizeAssignment downgrades ASSIGNED-without-reference to NOT_FOUND_AT_POSITION",
+      "single shared formatter formatAssociationSlotLabel used by UI + inspector",
+      "summarizeAssociation exposes explicit floorStatus/floorId/floorLabel/roomStatus/roomId/roomLabel + semanticsGeneration",
+      "adapter downgrades floorAvailability when no range/elevation (CompositeElement not asserted as authoritative floor)",
+      "semantics generation stamped; UI awaits isSemanticsLoaded before computing (one shared cache/generation)",
+      "INSPECT BIM SPATIAL STRUCTURE now lists the 8 space ranges (summarizeRoomRanges)"
+    ],
+    "ASSIGNED_FLOOR_REQUIRES_REFERENCE": "PASS",
+    "ASSIGNED_ROOM_REQUIRES_REFERENCE": "PASS",
+    "FLOOR_UI_INSPECTOR_CONSISTENCY_OFFLINE": "PASS",
+    "ROOM_UI_INSPECTOR_CONSISTENCY_OFFLINE": "PASS",
+    "FLOOR_DISPLAY_IDENTITY_NOT_STATUS": "PASS",
+    "ROOM_NOT_FOUND_DISPLAY": "PASS",
+    "SPATIAL_ASSOCIATION_CALCULATION_COUNT_ARCHITECTURE": "ONE_SHARED_SEAM",
+    "COMPOSITE_ELEMENT_FLOOR_INTERPRETATION": "composite/structure nodes; generally not storeys and without placement geometry; not asserted authoritative without range/elevation",
+    "FLOOR_SOURCE_CLASS": "SpatialComposition:CompositeElement",
+    "FLOOR_SOURCE_CONFIDENCE": "DERIVED_OR_NOT_AVAILABLE (evidence-based)",
+    "FLOOR_ASSOCIATION_BASIS": "vertical range if present else nearest elevation (DERIVED_RANGE)",
+    "ROOM_SOURCE_CLASS": "BuildingSpatial:Space",
+    "ROOM_OBJECT_COUNT": 8,
+    "ROOM_SOURCE_CONFIDENCE": "AUTHORITATIVE_BIM",
+    "ROOM_GEOMETRY_TYPE": "RANGE_ONLY (placement bbox) or METADATA_ONLY",
+    "CURRENT_ROOM_NOT_FOUND_VALIDATED": "MANUAL_CONFIRMATION_REQUIRED (compare committed position to the 8 space ranges shown by INSPECT BIM SPATIAL STRUCTURE)",
+    "FLOOR_UI_INSPECTOR_CONSISTENCY_VISIBLE_IN_BROWSER": "MANUAL_CONFIRMATION_REQUIRED",
+    "ROOM_UI_INSPECTOR_CONSISTENCY_VISIBLE_IN_BROWSER": "MANUAL_CONFIRMATION_REQUIRED",
+    "LIVE_ROOM_ASSIGNMENT_VISIBLE_IN_BROWSER": "MANUAL_CONFIRMATION_REQUIRED / NOT_TESTABLE_WITH_CURRENT_BIM_VIEW",
+    "DRAG_COMMIT_REASSOCIATION_VISIBLE_IN_BROWSER": "MANUAL_CONFIRMATION_REQUIRED / NOT_TESTABLE_WITH_CURRENT_BIM_VIEW"
+  },
+  "targeted_correction_inspector_ux_and_range_extraction": {
+    "objective_A_developer_inspector": {
+      "DEV_INSPECTOR_UX_CORRECTION_IMPLEMENTED": "YES",
+      "VERBOSE_DEV_TEXT_OVER_3D_VIEWPORT": "NO",
+      "DEV_INSPECT_ACTION_TARGET": "DEVELOPER_INSPECTOR_PANEL",
+      "DEV_INSPECTOR_STATE_AUTHORITY": "UI_ONLY",
+      "DEV_INSPECTOR_UPDATE": "EXPLICIT_EVENT",
+      "DEV_INSPECTOR_LONG_OUTPUT": "SCROLLABLE",
+      "DEV_INSPECTOR_CLEAR_MUTATES_ENGINEERING_STATE": "NO",
+      "DEV_INSPECTOR_CLOSE_MUTATES_ENGINEERING_STATE": "NO",
+      "location": "right-side inspection aside (does not cover 3D viewport)",
+      "dev_capabilities_preserved": "YES (only display location changed)"
+    },
+    "objective_B_range_extraction": {
+      "SPACE_RANGE_NAN_ROOT_CAUSE": "BBoxLow/BBoxHigh selected as point/struct columns under UseECSqlPropertyIndexes were not decomposed; .x/.y/.z undefined -> undefined+origin = NaN; NaN range accepted as RANGE_ONLY",
+      "SPACE_RANGE_RAW_VALUE_TYPE": "point/struct column (object, not scalar) under index row format",
+      "fix": "select explicit scalar columns BBoxLow.X/.Y/.Z, BBoxHigh.X/.Y/.Z, Origin.X/.Y/.Z; validate via validateWorldRange (finite + ordered) before accepting",
+      "ROOM_RANGE_REQUIRES_FINITE_COORDINATES": "YES",
+      "NONFINITE_ROOM_RANGE_ACCEPTED": "NO",
+      "ROOM_RANGE_ORDER_VALIDATED": "YES",
+      "NONFINITE_FLOOR_RANGE_ACCEPTED": "NO",
+      "ROOM_SOURCE_CLASS": "BuildingSpatial:Space",
+      "ROOM_SOURCE_CONFIDENCE": "AUTHORITATIVE_BIM",
+      "ROOM_GEOMETRY_TYPE": "RANGE_ONLY if finite bbox present else METADATA_ONLY (evidence-based)",
+      "NOT_FOUND_REQUIRES_USABLE_ROOM_GEOMETRY": "PASS",
+      "OUTSIDE_ROOM_REQUIRES_USABLE_GEOMETRY": "PASS",
+      "USABLE_ROOM_RANGE_COUNT": "MANUAL_CONFIRMATION_REQUIRED (INSPECT BIM SPATIAL STRUCTURE)",
+      "INVALID_ROOM_RANGE_COUNT": "MANUAL_CONFIRMATION_REQUIRED",
+      "CURRENT_ROOM_NOT_FOUND_VALIDATED": "depends on USABLE_ROOM_RANGE_COUNT: YES if >0 and point outside all; NOT_APPLICABLE if 0",
+      "no_false_geometric_claim": "NaN/Infinity never treated as valid room geometry; RANGE_UNAVAILABLE shown instead"
+    },
+    "manual": {
+      "DEV_INSPECTOR_UX_VISIBLE_IN_BROWSER": "MANUAL_CONFIRMATION_REQUIRED",
+      "ROOM_RANGE_EXTRACTION_VISIBLE_IN_BROWSER": "MANUAL_CONFIRMATION_REQUIRED",
+      "LIVE_ROOM_ASSIGNMENT_VISIBLE_IN_BROWSER": "MANUAL_CONFIRMATION_REQUIRED / NOT_TESTABLE_WITH_CURRENT_BIM_VIEW"
+    }
+  },
+  "completion_finite_range_validation": {
+    "manual_ux_acceptance": {
+      "DEV_INSPECTOR_UX_VISIBLE_IN_BROWSER": "PASS",
+      "DEV_INSPECTOR_CLEAR_VISIBLE_IN_BROWSER": "PASS",
+      "DEV_INSPECTOR_CLOSE_VISIBLE_IN_BROWSER": "PASS",
+      "VERBOSE_DEV_TEXT_OVER_3D_VIEWPORT": "NO",
+      "ROOM_RANGE_EXTRACTION_VISIBLE_IN_BROWSER": "PASS",
+      "NONFINITE_ROOM_RANGE_VISIBLE": "NO",
+      "BIM_SPACE_RANGE_EXTRACTION_VALID": "YES"
+    },
+    "observed_finite_ranges_examples": {
+      "Floor 1 Main Corridor": "low=(12,7,0) high=(18,13,3)",
+      "Radiopharmacy": "low=(2,12,0) high=(8,18,3)",
+      "Cyclotron Room": "low=(9,12,0) high=(15,18,3)",
+      "note": "example values from browser; full 8-space inventory read via INSPECT BIM SPATIAL STRUCTURE"
+    },
+    "BIM_SPACE_OBJECT_COUNT": 8,
+    "ROOM_SOURCE_CLASS": "BuildingSpatial:Space",
+    "ROOM_SOURCE_CONFIDENCE": "AUTHORITATIVE_BIM",
+    "ROOM_GEOMETRY_TYPE": "RANGE_ONLY (finite bbox ranges observed)",
+    "USABLE_ROOM_RANGE_COUNT": "MANUAL_CONFIRMATION_REQUIRED (read full panel inventory)",
+    "INVALID_ROOM_RANGE_COUNT": "MANUAL_CONFIRMATION_REQUIRED (expected 0)",
+    "CURRENT_SCANNER_ASSET_INSTANCE_ID": "MANUAL_CONFIRMATION_REQUIRED",
+    "CURRENT_SCANNER_POSITION": "MANUAL_CONFIRMATION_REQUIRED",
+    "CURRENT_ROOM_STATUS": "MANUAL_CONFIRMATION_REQUIRED (compare committed position to 8 ranges)",
+    "CURRENT_ROOM_NOT_FOUND_VALIDATED": "MANUAL (YES if usable ranges >0 and point outside all; NOT_APPLICABLE if 0)",
+    "ROOM_TEST_CANDIDATE": "prefer Scanner Room if finite + reachable; identify from panel",
+    "LIVE_ROOM_ASSIGNMENT_VISIBLE_IN_BROWSER": "MANUAL_CONFIRMATION_REQUIRED / NOT_TESTABLE_WITH_CURRENT_BIM_VIEW",
+    "DRAG_COMMIT_REASSOCIATION_VISIBLE_IN_BROWSER": "MANUAL_CONFIRMATION_REQUIRED / NOT_TESTABLE_WITH_CURRENT_BIM_VIEW",
+    "ROOM_ASSOCIATION_SCREEN_INFERENCE": "NO",
+    "offline_tests_added": [
+      "MULTI_ROOM_FINITE_RANGE_VALIDATION",
+      "ROOM_POINT_CONTAINMENT_DETERMINISTIC",
+      "containment position immutability"
+    ],
+    "future_work_recorded_not_implemented": {
+      "ROTATION_HANDLE_VISUAL_REFINEMENT_REQUIRED": "YES",
+      "PREFERRED_ROTATION_HANDLE_IDLE_APPEARANCE": "FAINT_GREY_OR_HIDDEN",
+      "UNSELECTED_ASSET_ROTATION_HANDLE_REQUIRED": "NO",
+      "CATALOG_TEST_GEOMETRY_ROTATION_HANDLE_REQUIRED": "NO",
+      "SINGLE_ASSET_SELECTION": "YES",
+      "SINGLE_ASSET_TRANSLATION": "YES",
+      "MULTI_ASSET_SELECTION": "NO",
+      "GROUP_TRANSLATION": "NO",
+      "NEXT_BUILD": "MULTI_SELECT_AND_GROUP_TRANSLATION_FOUNDATION",
+      "no_group_identity_collapse": "each AssetInstance remains individually selectable/inspectable/deletable/movable; one ASSET_MOVED per moved instance",
+      "group_rotation": "specified separately later"
+    },
+    "live_room_assignment_manual_browser_evidence": {
+      "LIVE_ROOM_ASSIGNMENT_VISIBLE_IN_BROWSER": "PASS",
+      "DRAG_COMMIT_REASSOCIATION_VISIBLE_IN_BROWSER": "PASS",
+      "CURRENT_SCANNER_ASSET_INSTANCE_ID": "PETCT-GE-DISCOVERY-MI-0001",
+      "CURRENT_SCANNER_POSITION": "(12.00, 7.92, 4.85)",
+      "CURRENT_ROOM_STATUS": "ASSIGNED",
+      "CURRENT_ROOM_ID": "0x20000000018",
+      "CURRENT_ROOM_LABEL": "Floor 2 Main Corridor",
+      "CURRENT_ASSOCIATION_METHOD": "DERIVED_RANGE",
+      "CURRENT_ASSOCIATION_SOURCE": "BIM_DERIVED",
+      "CURRENT_SPATIAL_VALIDITY": "VALID_ASSOCIATED",
+      "CURRENT_FLOOR_STATUS": "AMBIGUOUS",
+      "ARBITRARY_FLOOR_SELECTION": "NO",
+      "semanticsGeneration": 2,
+      "ROOM_ASSOCIATION_CHANGES_POSITION": "NO",
+      "AUTHORITATIVE_ROOM_CHANGES_DURING_DRAG_PREVIEW": 0,
+      "ROOM_SOURCE_CLASS": "BuildingSpatial:Space",
+      "ROOM_SOURCE_CONFIDENCE": "AUTHORITATIVE_BIM",
+      "ROOM_GEOMETRY_TYPE": "RANGE_ONLY",
+      "note": "First LIVE-browser proof (beyond offline fixtures) of a real BIM-derived room association; floor AMBIGUOUS honestly reported (no reference), invariant holds"
+    },
+    "CHECKPOINT": "HOLD_FOR_AUTH_DIAGNOSIS_REVIEW"
+  },
+  "machine_verification": {
+    "TYPECHECK": "PASS",
+    "OFFLINE_TEST_COUNT": 254,
+    "checkpoint_baseline": 217,
+    "NEW_TEST_COUNT": 37,
+    "OFFLINE_TEST_REGRESSIONS": 0,
+    "new_test_file": "frontend/src/tests/spatialSemantics.test.ts",
+    "PRODUCTION_BUILD": "PASS",
+    "CORE_FRONTEND_VERSION": "5.12.5",
+    "WORKER_ASSET_REAL": "YES",
+    "DRACO_WASM_ASSET_REAL": "YES",
+    "DEV_SERVER_VIEWER": 200,
+    "worker_mime": "text/javascript",
+    "wasm_mime": "application/wasm"
+  },
+  "closed_systems": {
+    "AUTH_FLOW_CHANGED": "NO",
+    "VIEWER_LIFECYCLE_CHANGED": "NO",
+    "TRANSPARENCY_WORK_RESUMED": "NO",
+    "CAMERA_BEHAVIOR_CHANGED": "NO",
+    "IMODEL_MODIFIED": "NO",
+    "BENTLEY_CHANGESET_CREATED": "NO",
+    "BENTLEY_RESOURCE_MODIFIED": "NO"
+  },
+  "manipulation_regression": {
+    "PLACEMENT_REGRESSION": 0,
+    "DIRECT_DRAG_REGRESSION": 0,
+    "OBJECT_ATTACHED_ROTATION_REGRESSION": 0,
+    "DELETE_REGRESSION": 0
+  },
+  "live_bim_discovery": {
+    "SPATIAL_CLASS_INVENTORY": "MANUAL_CONFIRMATION_REQUIRED",
+    "FLOOR_SOURCE_CLASS": "MANUAL_CONFIRMATION_REQUIRED",
+    "FLOOR_SOURCE_CONFIDENCE": "MANUAL_CONFIRMATION_REQUIRED",
+    "FLOOR_ASSOCIATION_BASIS": "storey vertical range if present, else nearest elevation (DERIVED_RANGE)",
+    "ROOM_SOURCE_CLASS": "MANUAL_CONFIRMATION_REQUIRED",
+    "ROOM_OBJECT_COUNT": "MANUAL_CONFIRMATION_REQUIRED",
+    "ROOM_SOURCE_CONFIDENCE": "MANUAL_CONFIRMATION_REQUIRED",
+    "ROOM_GEOMETRY_TYPE": "MANUAL_CONFIRMATION_REQUIRED (adapter yields RANGE_ONLY from placement bbox, or METADATA_ONLY)",
+    "BIM_SPATIAL_STRUCTURE_VISIBLE_IN_BROWSER": "MANUAL_CONFIRMATION_REQUIRED",
+    "FLOOR_ASSOCIATION_VISIBLE_IN_BROWSER": "MANUAL_CONFIRMATION_REQUIRED",
+    "ROOM_ASSOCIATION_VISIBLE_IN_BROWSER": "MANUAL_CONFIRMATION_REQUIRED",
+    "DRAG_COMMIT_REASSOCIATION_VISIBLE_IN_BROWSER": "MANUAL_CONFIRMATION_REQUIRED",
+    "honest_absence_is_valid": "ROOM_SOURCE_CLASS=NOT_AVAILABLE + roomStatus=NOT_AVAILABLE_FROM_BIM is an accepted result"
+  },
+  "checkpoint_status": "NOT_STAGED_NOT_COMMITTED_NOT_PUSHED — awaiting manual BIM inventory + association acceptance",
+  "files_added": [
+    "frontend/src/domain/assets/spatialSemantics.ts",
+    "frontend/src/components/spatial/bentleySpatialAdapter.ts",
+    "frontend/src/tests/spatialSemantics.test.ts",
+    "MRT_PHARMA_BENTLEY_SPATIAL_SEMANTICS_FOUNDATION_REPORT.md",
+    "mrt_pharma_bentley_spatial_semantics_foundation_data.json"
+  ],
+  "files_modified": [
+    "frontend/src/domain/assets/index.ts",
+    "frontend/src/components/spatial/spatialAssetOverlay.ts",
+    "frontend/src/components/spatial/ViewerAssetLibrary.tsx",
+    "frontend/src/routes/BentleyViewer.tsx"
+  ]
+}

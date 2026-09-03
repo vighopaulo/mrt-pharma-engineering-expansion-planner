@@ -439,3 +439,64 @@
     opacity: 0.5;
     cursor: not-allowed;
 }
+
+/* Developer Inspector — verbose DEV diagnostics live HERE (side panel), never
+   painted over the 3D viewport. Bounded height + scroll so long output (e.g. 8
+   room ranges) stays contained. */
+.dev-inspector {
+    border: 1px solid #cfd4dc;
+    border-radius: 6px;
+    background: #0b0e14;
+    color: #e6edf3;
+    margin-bottom: 1rem;
+    overflow: hidden;
+}
+
+.dev-inspector-head {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.4rem 0.6rem;
+    background: #161b22;
+    border-bottom: 1px solid #2b313a;
+    font-size: 0.78rem;
+}
+
+.dev-inspector-title {
+    color: #9fb3c8;
+    flex: 1 1 auto;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.dev-inspector-actions {
+    display: inline-flex;
+    gap: 0.35rem;
+}
+
+.dev-inspector-actions button {
+    font-size: 0.68rem;
+    padding: 0.15rem 0.5rem;
+    background: #21262d;
+    color: #e6edf3;
+    border: 1px solid #363b42;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+.dev-inspector-actions button:hover {
+    background: #2d333b;
+}
+
+.dev-inspector-body {
+    margin: 0;
+    padding: 0.6rem;
+    max-height: 320px;
+    overflow: auto;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 0.72rem;
+    line-height: 1.35;
+    white-space: pre-wrap;
+    word-break: break-word;
+}
