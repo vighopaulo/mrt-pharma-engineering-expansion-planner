@@ -1,0 +1,56 @@
+{
+  "diagnosis": "MRT Pharma page-refresh authentication failure (DIAGNOSIS ONLY)",
+  "AUTH_FIX_IMPLEMENTED": "NO",
+  "precheck": {
+    "HEAD": "fc355ab29fd19d7f9c2dde84d7c95069bb502233",
+    "origin_main": "fc355ab29fd19d7f9c2dde84d7c95069bb502233",
+    "divergence": "0 / 0"
+  },
+  "manual_evidence": {
+    "PAGE_REFRESH_AUTH_BUG": "CONFIRMED",
+    "REFRESH_FAILURE_ROUTE": "/signin-callback",
+    "OIDC_CODE_PRESENT": "YES",
+    "OIDC_STATE_PRESENT": "YES",
+    "AUTHORIZATION_REDIRECT_RETURNED": "YES",
+    "OIDC_SETTINGS_REHYDRATION": "FAIL",
+    "error_string": "Could not load oidc settings from local storage. Ensure the client is configured properly"
+  },
+  "source_investigation": {
+    "SIGNIN_CALLBACK_COMPONENT_FILE": "frontend/src/routes/SigninCallback.tsx -> frontend/src/components/viewer/SigninCallbackHandler.tsx",
+    "SIGNIN_CALLBACK_COMPLETION_API": "BrowserAuthorizationClient.handleSignInCallback() (static, configuration-less)",
+    "SIGNIN_CALLBACK_AUTH_CLIENT_SOURCE": "throwaway new BrowserAuthorizationClient({}) inside the static method",
+    "SIGNIN_CALLBACK_STORAGE_DEPENDENCY": "window.localStorage key 'oidc.<state-nonce>'",
+    "AUTH_CLIENT_FACTORY": "frontend/src/components/viewer/LiveItwinViewer.tsx (useMemo over primitive config values)",
+    "AUTH_CLIENT_MEMOIZATION": "React useMemo keyed on clientId/authority/scope/redirectUri/postSignoutRedirectUri",
+    "AUTH_CLIENT_CONFIG_SOURCE": "getViewerConfig() / browserAuthClientOptions() (env-derived)",
+    "AUTH_CLIENT_REHYDRATION_ON_HARD_REFRESH": "viewer route recreates the client; callback route does NOT create the app client",
+    "OIDC_SETTINGS_ERROR_SOURCE_FILE": "node_modules/@itwin/browser-authorization/lib/cjs/Client.js (loadSettingsFromStorage)",
+    "OIDC_SETTINGS_ERROR_SOURCE_PACKAGE": "@itwin/browser-authorization@2.0.4 (oidc-client-ts@3.5.0)",
+    "OIDC_SETTINGS_EXPECTED_STORAGE_KEY": "oidc.${state}",
+    "OIDC_SETTINGS_EXPECTED_STORAGE_TYPE": "LOCAL_STORAGE",
+    "signin_redirect_initiator": "only /viewer route (LiveItwinViewer.signInRedirect); /signin-callback never writes oidc settings"
+  },
+  "root_cause": {
+    "PAGE_REFRESH_AUTH_FAILURE_CLASS": "E (CALLBACK_ROUTE_BOOTSTRAP_ORDER_DEFECT) + G (REFRESH_TRIGGERS_HANDLING_OF_STALE_CONSUMED_CALLBACK)",
+    "PAGE_REFRESH_AUTH_ROOT_CAUSE": "Hard refresh of /signin-callback re-invokes static handleSignInCallback(), which requires localStorage['oidc.<state>'] — a one-time entry written by signinRedirect and consumed/removed by the first successful callback. On refresh it is absent, so the library throws. The callback route treats a re-loaded consumed callback as a live one and surfaces the raw error instead of routing onward.",
+    "not_the_cause": "PKCE config correct; redirect URI matches; app viewer client configured properly"
+  },
+  "recommended_narrow_correction_not_applied": {
+    "location": "frontend/src/components/viewer/SigninCallbackHandler.tsx",
+    "approach": "detect absent localStorage['oidc.<state>'] (or catch this specific settings error) and navigate('/viewer', replace) instead of showing an error; optionally strip consumed code/state query params",
+    "must_not_change": ["PKCE", "auth client factory/memoization", "storage scope", "redirect flow", "StrictMode auth handling", "viewer lifecycle"]
+  },
+  "closed_systems": {
+    "AUTH_FLOW_CHANGED": "NO",
+    "PKCE_CHANGED": "NO",
+    "SIGNIN_CALLBACK_BEHAVIOR_CHANGED": "NO",
+    "AUTH_CLIENT_MEMOIZATION_CHANGED": "NO",
+    "VIEWER_LIFECYCLE_CHANGED": "NO",
+    "TRANSPARENCY_WORK_RESUMED": "NO",
+    "CAMERA_BEHAVIOR_CHANGED": "NO",
+    "IMODEL_MODIFIED": "NO",
+    "BENTLEY_CHANGESET_CREATED": "NO",
+    "BENTLEY_RESOURCE_MODIFIED": "NO"
+  },
+  "CHECKPOINT": "HOLD_FOR_AUTH_DIAGNOSIS_REVIEW"
+}

@@ -1,0 +1,72 @@
+{
+  "build": "MRT Pharma page-refresh auth callback recovery (FIX)",
+  "precheck": {
+    "HEAD": "b47107c2ea374398b3d143da68599e87d040aa46",
+    "origin_main": "b47107c2ea374398b3d143da68599e87d040aa46",
+    "divergence": "0 / 0"
+  },
+  "root_cause": {
+    "PAGE_REFRESH_AUTH_BUG": "CONFIRMED",
+    "PAGE_REFRESH_AUTH_FAILURE_CLASS": "CALLBACK_ROUTE_BOOTSTRAP_ORDER_DEFECT + STALE_OR_CONSUMED_CALLBACK_REPLAY_ON_REFRESH",
+    "PAGE_REFRESH_AUTH_ROOT_CAUSE": "SigninCallbackHandler called handleSignInCallback() unconditionally; static completer needs one-time localStorage['oidc.<state>'] which is consumed by first completion; on refresh it is gone -> library throws and raw error was shown"
+  },
+  "fix": {
+    "CALLBACK_COMPONENT_FILE": "frontend/src/components/viewer/SigninCallbackHandler.tsx",
+    "CALLBACK_DECISION_SEAM": "frontend/src/lib/authCallbackDecision.ts",
+    "CALLBACK_STORAGE_KEY_DERIVATION": "'oidc.' + <url state param>",
+    "CALLBACK_STORAGE_TYPE": "LOCAL_STORAGE",
+    "decision_tree": "no code/state -> RECOVER_EMPTY -> /viewer(replace); code/state present but oidc.<state> absent -> RECOVER_STALE -> /viewer(replace, no replay); present -> PROCESS_CALLBACK -> handleSignInCallback() -> success /viewer(replace) / genuine error preserved",
+    "STALE_CALLBACK_DETECTION_IMPLEMENTED": "YES",
+    "STALE_CALLBACK_RECOVERY_ROUTE": "/viewer",
+    "STALE_CALLBACK_RECOVERY_USES_REPLACE": "YES",
+    "CONSUMED_CALLBACK_REPLAY": "NO",
+    "FRESH_CALLBACK_COMPLETION_PRESERVED": "YES",
+    "FRESH_CALLBACK_FINAL_ROUTE": "/viewer",
+    "FRESH_CALLBACK_USES_REPLACE": "YES",
+    "GENUINE_CALLBACK_FAILURE_PRESERVED": "YES",
+    "STRICTMODE_DUPLICATE_CALLBACK_COMPLETION": "NO",
+    "reentry_guard": "startedRef (completes at most once per mount)",
+    "AUTH_SECRET_LOGGING": "NO"
+  },
+  "closed_systems": {
+    "PKCE_CHANGED": "NO",
+    "STATE_VALIDATION_CHANGED": "NO",
+    "TOKEN_STORAGE_POLICY_CHANGED": "NO",
+    "AUTH_CLIENT_FACTORY_CHANGED": "NO",
+    "AUTH_CLIENT_MEMOIZATION_CHANGED": "NO",
+    "VIEWER_LIFECYCLE_CHANGED": "NO",
+    "CAMERA_BEHAVIOR_CHANGED": "NO",
+    "SPATIAL_SEMANTICS_CHANGED": "NO",
+    "DIRECT_DRAG_CHANGED": "NO",
+    "OBJECT_ATTACHED_ROTATION_CHANGED": "NO",
+    "DELETE_CHANGED": "NO",
+    "IMODEL_MODIFIED": "NO"
+  },
+  "machine_verification": {
+    "TYPECHECK": "PASS",
+    "OFFLINE_TEST_COUNT": 262,
+    "NEW_AUTH_TEST_COUNT": 8,
+    "OFFLINE_TEST_REGRESSIONS": 0,
+    "new_test_file": "frontend/src/tests/authCallbackDecision.test.ts",
+    "PRODUCTION_BUILD": "PASS",
+    "CORE_FRONTEND_VERSION": "5.12.5",
+    "WORKER_ASSET_REAL": "YES",
+    "DRACO_WASM_ASSET_REAL": "YES",
+    "DEV_SERVER_VIEWER": 200
+  },
+  "manual_acceptance": {
+    "VIEWER_HARD_REFRESH_RECOVERY": "MANUAL_CONFIRMATION_REQUIRED",
+    "STALE_CALLBACK_HARD_REFRESH_RECOVERY": "MANUAL_CONFIRMATION_REQUIRED",
+    "REPEATED_VIEWER_REFRESH": "MANUAL_CONFIRMATION_REQUIRED"
+  },
+  "checkpoint_status": "NOT_STAGED_NOT_COMMITTED_NOT_PUSHED — HOLD_FOR_MANUAL_AUTH_ACCEPTANCE",
+  "files_added": [
+    "frontend/src/lib/authCallbackDecision.ts",
+    "frontend/src/tests/authCallbackDecision.test.ts",
+    "MRT_PHARMA_PAGE_REFRESH_AUTH_FIX_REPORT.md",
+    "mrt_pharma_page_refresh_auth_fix_data.json"
+  ],
+  "files_modified": [
+    "frontend/src/components/viewer/SigninCallbackHandler.tsx"
+  ]
+}
