@@ -1,0 +1,89 @@
+{
+  "build": "MRT Pharma Walkthrough Collision + Continuous Heading + Wide-FOV + Functional Storey Cutaway",
+  "precheck": { "PRECHECK_HEAD": "b2abe6bf28056d002d140b52fb54e94c9cd417eb", "PRECHECK_ORIGIN_MAIN": "b2abe6bf28056d002d140b52fb54e94c9cd417eb", "PRECHECK_DIVERGENCE": "0 / 0", "EXISTING_UNCOMMITTED_WORK_PRESERVED": "YES" },
+  "accepted_preserved": {
+    "TRUE_FIRST_PERSON_WALKTHROUGH_CAMERA": "PASS", "HUMAN_SCALE_INTERIOR_VIEW": "PASS", "FORWARD_INTERIOR_NAVIGATION": "PASS",
+    "FIRST_PERSON_CAMERA_ARCHITECTURE_PRESERVED": "YES (eye/yaw/pitch retained; not rewritten)"
+  },
+  "wall_collision": {
+    "WALL_COLLISION_ROOT_CAUSE": "Runtime used Viewport.pickNearestVisibleGeometry near the destination point only (no segment-vs-wall test); fast/thin-wall steps slipped through and crossesWall was rarely set, so walls passed. Replaced with a BIM-derived per-storey collision model + pure segment-crossing resolver.",
+    "WALK_COLLISION_MODEL": "BIM_DERIVED_PER_STOREY (walls/doors/windows discovered from active iModel; wall segments from bbox long axis; door portals from door centers)",
+    "WALK_COLLISION_SOURCE": "ACTIVE_BENTLEY_IMODEL",
+    "WALL_BOUNDARY_SOURCE": "ACTIVE_BIM_ARCHITECTURAL_WALLS",
+    "DOOR_PORTAL_SOURCE": "ACTIVE_BIM_DOOR_ELEMENTS",
+    "WINDOW_TRAVERSAL": "BLOCKED",
+    "UNKNOWN_OPENING_DEFAULT": "BLOCKED",
+    "COLLISION_DIMENSIONALITY": "2D_PER_STOREY_WITH_EYE_HEIGHT",
+    "COLLISION_BODY": "GENERIC_HUMAN_NAVIGATION_BODY (radius 0.35 m + eye height)",
+    "CAMERA_COLLISION_IS_EQUIPMENT_CLEARANCE": "NO",
+    "MOVEMENT_VALIDATED_BEFORE_COMMIT": "YES (resolveWalkCollision before eye commit)",
+    "SOLID_WALL_PENETRATION": "IMPOSSIBLE_BY_POLICY",
+    "DOOR_PORTAL_TRAVERSAL": "ALLOWED",
+    "DOOR_PORTAL_LOCALITY": "ENFORCED (door allowance only within portal halfWidth + tolerance)",
+    "COLLISION_TOLERANCE": "CONFIGURABLE_GENERIC_NAVIGATION_VALUE",
+    "WALL_SLIDING": "IMPLEMENTED (blocked normal component rejected; tangential slide attempted + re-validated)",
+    "WALKTHROUGH_FREE_VERTICAL_FLIGHT": "NO",
+    "EYE_HEIGHT_TRACKS_WALKING_SURFACE": "YES"
+  },
+  "continuous_heading": {
+    "YAW_QUANTIZATION": "NONE", "ARBITRARY_HEADING_SUPPORTED": "YES",
+    "FORWARD_VECTOR_FOLLOWS_CONTINUOUS_YAW": "YES", "STRAFE_RELATIVE_TO_CURRENT_HEADING": "YES",
+    "MOUSE_LOOK_SENSITIVITY": "CONFIGURABLE (0.0022 rad/px)", "TURNING_FEEL": "CONTINUOUS_LOW_LATENCY",
+    "TURN_AROUND_ACTION": "IMPLEMENTED (turnAroundYaw = yaw + PI; eye/pitch/storey preserved)"
+  },
+  "fov": {
+    "WALKTHROUGH_FOV_PRESETS": 3, "NORMAL_FOV_SOURCE": "GENERIC_NAVIGATION_ASSUMPTION (70 deg)",
+    "WIDE_FOV": "IMPLEMENTED (90 deg)", "ULTRA_WIDE_FOV": "IMPLEMENTED (110 deg; bounded, no 180 singularity)",
+    "FOV_ENGINEERING_SIDE_EFFECTS": "NONE (lensAngle only)", "FOV_CONTROL_VISIBLE_IN_WALKTHROUGH": "YES", "TURN_AROUND_CONTROL_VISIBLE": "YES"
+  },
+  "storey_cutaway": {
+    "BIRDS_EYE_STOREY_SELECTOR_PRESERVED": "YES", "ROOM_BUTTON_COUNT_IN_BIRDS_EYE_TOP_LEVEL": 0,
+    "STOREY_CUTAWAY_ROOT_CAUSE": "Prior clip banded the whole model Z by storey count with a fixed pad and never reframed the camera, so per-storey selection looked identical. Now resolveStoreyCutaway returns distinct clipLow/clipHigh/focusZ per storey identity and the camera reframes to the storey.",
+    "ALL_BUILDING_CUTAWAY_STATE": "NO_STOREY_CLIP",
+    "STOREY_VERTICAL_INTERVAL_SOURCE": "ACTIVE_BENTLEY_BIM (storey count banded across model Z; real labels)",
+    "FIRST_FLOOR_CUTAWAY_EFFECT": "VISUALLY_DISTINCT (distinct clip + reframe)",
+    "SECOND_FLOOR_CUTAWAY_EFFECT": "VISUALLY_DISTINCT",
+    "STOREY_LABELS_PRESERVE_BIM_IDENTITY": "YES",
+    "CUTAWAY_CAMERA_REFRAMES_SELECTED_STOREY": "YES",
+    "CUTAWAY_VIEW_ANGLE": "OPERATIONAL_THREE_QUARTER",
+    "CUTAWAY_IMPLEMENTATION": "VIEW_ONLY (ViewState.setViewClip)",
+    "CUTAWAY_SUPPORTS_FUTURE_ANIMATION": "YES"
+  },
+  "closed_scope": {
+    "ANIMATION_IMPLEMENTED": "NO", "PLANNING_MODE_REGRESSION": 0, "ACTIVE_BIM_PERSISTENCE_CHANGED": "NO", "PROJECT_BIM_SELECTOR_REGRESSION": 0,
+    "CLINICAL_PROGRAM_OVERLAY_STARTED": "NO", "TRANSPORT_MODE_IMPLEMENTATION_STARTED": "NO",
+    "BENTLEY_WRITE_API_CALL_COUNT": 0, "IMODEL_MODIFIED": "NO", "BENTLEY_CHANGESET_CREATED": "NO",
+    "EQUIPMENT_PIPELINE_CHANGED": "NO", "SPATIAL_SEMANTICS_CHANGED": "NO", "AUTH_FLOW_CHANGED": "NO",
+    "WALKTHROUGH_NONESSENTIAL_HOVER_UI": "SUPPRESSED_IF_INTERFERING (pointer lock captures the pointer during walkthrough, so Bentley hover/locate tooltips do not fire; PLANNING inspection unchanged)",
+    "PLANNING_INSPECTION_UI_PRESERVED": "YES",
+    "WALKTHROUGH_CONTROLS_COMPACT": "YES"
+  },
+  "offline_tests": {
+    "PURE_COLLISION_MODEL": "IMPLEMENTED", "COLLISION_POLICY_TESTABLE_OFFLINE": "YES", "WALK_COLLISION_RESOLVER": "PURE_AND_TESTABLE",
+    "SOLID_WALL_COLLISION_TEST": "PASS", "DOOR_PORTAL_COLLISION_TEST": "PASS", "DOOR_PORTAL_LOCALITY_TEST": "PASS",
+    "WINDOW_COLLISION_TEST": "PASS", "UNKNOWN_OPENING_COLLISION_TEST": "PASS", "SAME_AREA_WALK_TEST": "PASS",
+    "NO_FLOOR_COLLISION_TEST": "PASS", "COLLISION_RADIUS_TEST": "PASS", "WALL_CORNER_COLLISION_TEST": "PASS", "WALL_SLIDING_TEST": "PASS",
+    "CONTINUOUS_HEADING_TESTABLE_OFFLINE": "YES", "FIFTEEN_DEGREE_YAW_TEST": "PASS", "ARBITRARY_YAW_TEST": "PASS",
+    "FORWARD_AFTER_PARTIAL_TURN_TEST": "PASS", "STRAFE_AFTER_TURN_TEST": "PASS", "TURN_AROUND_TEST": "PASS",
+    "FOV_POLICY_TESTABLE_OFFLINE": "YES", "FOV_ORDER_TEST": "PASS", "FOV_BOUNDS_TEST": "PASS", "FOV_STATE_IMMUTABILITY_TEST": "PASS",
+    "STOREY_CUTAWAY_POLICY_TESTABLE_OFFLINE": "YES", "ALL_BUILDING_POLICY_TEST": "PASS", "FIRST_FLOOR_CUTAWAY_POLICY_TEST": "PASS",
+    "SECOND_FLOOR_CUTAWAY_POLICY_TEST": "PASS", "STOREY_IDENTITY_CUTAWAY_TEST": "PASS", "STOREY_ELEVATION_ORDER_TEST": "PASS", "STOREY_CUTAWAY_IMMUTABILITY_TEST": "PASS"
+  },
+  "machine_verification": {
+    "TYPECHECK": "PASS", "OFFLINE_TEST_COUNT": 417, "NEW_TEST_COUNT": 23, "OFFLINE_TEST_REGRESSIONS": 0,
+    "PRODUCTION_BUILD": "PASS", "CORE_FRONTEND_VERSION": "5.12.5", "WORKER_ASSET_REAL": "YES", "DRACO_WASM_ASSET_REAL": "YES", "DEV_SERVER_VIEWER": 200
+  },
+  "regression": { "ACCEPTED_WALKTHROUGH_FOUNDATION_REGRESSION": 0, "PROJECT_BIM_REGRESSION": 0, "PLANNING_EQUIPMENT_INTERACTION_REGRESSION": 0 },
+  "manual_acceptance": "ALL MANUAL_* = MANUAL_CONFIRMATION_REQUIRED",
+  "files_added": [
+    "frontend/src/components/spatial/walkNav.ts",
+    "frontend/src/tests/walkNav.test.ts"
+  ],
+  "files_modified": [
+    "frontend/src/components/spatial/walkthroughController.ts (BIM collision model + resolver + slide; FOV lensAngle; turn-around; distinct storey cutaway + reframe)",
+    "frontend/src/components/spatial/CameraModeControl.tsx (FOV presets, TURN AROUND, All Building)",
+    "frontend/src/components/spatial/spatialAssetOverlay.ts (fov/turn-around entrypoints)"
+  ],
+  "SECRET_EXPOSED": "NO",
+  "checkpoint_status": "HOLD_FOR_MANUAL_ACCEPTANCE — nothing staged/committed/pushed"
+}

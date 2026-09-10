@@ -5,7 +5,7 @@
  * logic — no Bentley, no React render needed.
  */
 import { describe, expect, it } from 'vitest'
-import { resolveMoveStatus, resolvePlacementStatus } from '../components/spatial/placementStatus'
+import { normalModePlacementGuidanceCount, resolveMoveStatus, resolvePlacementStatus, shouldShowPlacementStatusLine } from '../components/spatial/placementStatus'
 
 describe('resolvePlacementStatus', () => {
     it('active placement status contains "Placing"', () => {
@@ -88,5 +88,24 @@ describe('resolveMoveStatus', () => {
         const s = resolveMoveStatus({ active: false, wasActive: false })
         expect(s.phase).toBe('IDLE')
         expect(s.text).toBe('')
+    })
+})
+
+describe('placement copy — no duplicate guidance (Correction 2)', () => {
+    it('normal mode shows exactly one placement guidance block while active', () => {
+        expect(normalModePlacementGuidanceCount('PLACEMENT_ACTIVE')).toBe(1)
+    })
+    it('the status line is suppressed during active placement (the card owns the instruction)', () => {
+        // The card renders the ACTIVE instruction; the status line must not
+        // duplicate it. It only renders terminal (succeeded/cancelled) toasts.
+        expect(shouldShowPlacementStatusLine('PLACEMENT_ACTIVE')).toBe(false)
+        expect(shouldShowPlacementStatusLine('PLACEMENT_SUCCEEDED')).toBe(true)
+        expect(shouldShowPlacementStatusLine('PLACEMENT_CANCELLED')).toBe(true)
+        expect(shouldShowPlacementStatusLine('IDLE')).toBe(false)
+    })
+    it('no guidance block outside active placement', () => {
+        expect(normalModePlacementGuidanceCount('IDLE')).toBe(0)
+        expect(normalModePlacementGuidanceCount('PLACEMENT_SUCCEEDED')).toBe(0)
+        expect(normalModePlacementGuidanceCount('PLACEMENT_CANCELLED')).toBe(0)
     })
 })

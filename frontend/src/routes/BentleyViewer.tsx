@@ -7,9 +7,10 @@
  * inspection panel (selected element identity + Bentley properties + MRT
  * binding). READ-ONLY; no building drag/drop (Sec 28), no live mutation (Sec 29).
  */
-import { Suspense, lazy, useCallback, useMemo, useReducer, useState } from 'react'
+import { Suspense, lazy, useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react'
 import { getViewerConfig, isViewerConfigured, ViewerConfigError, type ViewerConfig } from '../lib/viewerConfig'
 import { authReducer, INITIAL_AUTH_STATE } from '../lib/viewerAuth'
+import { resolveFloatingPanelAction, type FloatingPanelId, type FloatingPanelAction } from '../components/spatial/floatingPanels'
 import {
     VIEWER_CAMERA_CAPABILITIES,
     BASIC_CLIPPING_CAPABILITY,
@@ -29,6 +30,27 @@ const LiveItwinViewer = lazy(() => import('../components/viewer/LiveItwinViewer'
 // the Bentley placement stack it pulls in through the overlay).
 const ViewerAssetLibrary = lazy(() =>
     import('../components/spatial/ViewerAssetLibrary').then((m) => ({ default: m.ViewerAssetLibrary })),
+)
+// DEV-only Medical Clinic demo ingestion panel (isolated + lazy so tests / the
+// non-viewer bundle never import the Bentley write workflow).
+const ClinicIngestionPanel = lazy(() =>
+    import('../components/spatial/ClinicIngestionPanel').then((m) => ({ default: m.ClinicIngestionPanel })),
+)
+// DEV-only BIM audit diagnostics in a dedicated, reliably hit-testable panel.
+const AuditDiagnosticsPanel = lazy(() =>
+    import('../components/spatial/AuditDiagnosticsPanel').then((m) => ({ default: m.AuditDiagnosticsPanel })),
+)
+// NORMAL-MODE project BIM selector (active BIM + switch). Not dev-gated.
+const ProjectBimSelector = lazy(() =>
+    import('../components/spatial/ProjectBimSelector').then((m) => ({ default: m.ProjectBimSelector })),
+)
+// NORMAL-MODE camera/view mode control (Planning / Walkthrough / Bird's-eye).
+const CameraModeControl = lazy(() =>
+    import('../components/spatial/CameraModeControl').then((m) => ({ default: m.CameraModeControl })),
+)
+// NORMAL-MODE MRT Pharma clinical-program overlay panel (room repurposing).
+const ClinicalProgramControl = lazy(() =>
+    import('../components/spatial/ClinicalProgramControl').then((m) => ({ default: m.ClinicalProgramControl })),
 )
 // Right-click asset context menu (viewport overlay). Isolated/lazy so vitest
 // never pulls the Bentley overlay stack.
@@ -50,6 +72,91 @@ export function BentleyViewer() {
     const [auth, dispatch] = useReducer(authReducer, INITIAL_AUTH_STATE)
     const [selection, setSelection] = useState<Selection | null>(null)
     const configured = isViewerConfigured()
+
+    // Product viewer mode (PRESENTATION only). Default NORMAL_PLANNING: the DEV
+    // control block + raw diagnostics stay OUT of the viewport. DEVELOPER mode is
+    // opt-in and reveals the developer drawer. Pushed to the overlay so the lazy
+    // product panels observe the same mode (hide the raw engineering dump etc.).
+    const [devMode, setDevMode] = useState(false)
+    const toggleDevMode = useCallback(() => {
+        setDevMode((prev) => {
+            const next = !prev
+            void import('../components/spatial/spatialAssetOverlay')
+                .then((m) => m.setViewerMode(next ? 'DEVELOPER' : 'NORMAL_PLANNING'))
+                .catch(() => { /* overlay not yet loaded; panels default to normal */ })
+            if (!next) setOpenPanel(null) // leaving dev mode closes dev tool panels
+            return next
+        })
+    }, [])
+
+    // FLOATING TOOL-PANEL lifecycle: at most one major dev tool panel open at a
+    // time. VISIBILITY only — never mutates feature state (active BIM, camera
+    // mode, Clinical Program ON/OFF, assignments). Uses the pure lifecycle seam.
+    const [openPanel, setOpenPanel] = useState<FloatingPanelId | null>(null)
+    const dispatchPanel = useCallback((action: FloatingPanelAction, targetPanel?: FloatingPanelId) => {
+        setOpenPanel((cur) => resolveFloatingPanelAction({ currentlyOpenPanel: cur, action, targetPanel }).nextOpenPanel)
+    }, [])
+    // Esc closes the open tool panel (does not exit Bird's-eye / turn off features).
+    useEffect(() => {
+        if (!openPanel) return
+        const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') dispatchPanel('ESCAPE') }
+        window.addEventListener('keydown', onKey)
+        return () => window.removeEventListener('keydown', onKey)
+    }, [openPanel, dispatchPanel])
+
+    // Reversible, view-only planning appearance (opaque architecture + hide the
+    // room/space VOLUME semantics that otherwise dominate as translucent boxes).
+    // DEFAULT ON — applied only AFTER the viewer is ready (never at view-open),
+    // so it cannot blank the viewport on load. Toggleable in normal mode.
+    const [planningAppearance, setPlanningAppearanceState] = useState(true)
+    const applyPlanningAppearance = useCallback((next: boolean) => {
+        void import('../components/viewer/LiveItwinViewer')
+            .then((m) => m.setPlanningAppearance(next))
+            .catch(() => { /* viewer not ready */ })
+    }, [])
+    const togglePlanningAppearance = useCallback(() => {
+        setPlanningAppearanceState((prev) => {
+            const next = !prev
+            applyPlanningAppearance(next)
+            return next
+        })
+    }, [applyPlanningAppearance])
+
+    // Auto-apply the DEFAULT-ON planning appearance ONCE the viewer is ready.
+    // Gated on AUTHENTICATED (viewer only mounts then) and guarded by a ref so
+    // it runs a single logical time. setPlanningAppearance returns
+    // NO_ACTIVE_VIEWPORT gracefully until the viewport exists, so we retry on a
+    // short bounded schedule and stop as soon as it succeeds. This is the SAFE
+    // post-ready application point (never onViewOpen), so it cannot blank the
+    // viewport on load. View-only; emits no engineering events.
+    const planningAutoAppliedRef = useRef(false)
+    useEffect(() => {
+        if (auth.state !== 'AUTHENTICATED') return
+        if (planningAutoAppliedRef.current) return
+        if (!planningAppearance) return
+        let cancelled = false
+        let attempts = 0
+        const maxAttempts = 20 // ~ 20 * 500ms = 10s bounded
+        const tryApply = () => {
+            if (cancelled || planningAutoAppliedRef.current) return
+            attempts += 1
+            void import('../components/viewer/LiveItwinViewer')
+                .then((m) => m.setPlanningAppearance(true))
+                .then((res) => {
+                    if (cancelled) return
+                    if (res && res.ok) {
+                        planningAutoAppliedRef.current = true
+                    } else if (attempts < maxAttempts) {
+                        window.setTimeout(tryApply, 500)
+                    }
+                })
+                .catch(() => {
+                    if (!cancelled && attempts < maxAttempts) window.setTimeout(tryApply, 500)
+                })
+        }
+        const t = window.setTimeout(tryApply, 500)
+        return () => { cancelled = true; window.clearTimeout(t) }
+    }, [auth.state, planningAppearance])
 
     // STABLE identity: handleSelect is passed to <LiveItwinViewer>. If it were
     // recreated every render it would (via the child's effects) contribute to
@@ -216,6 +323,10 @@ export function BentleyViewer() {
         }
     }, [showDev])
 
+    // NOTE: RUN BIM CONTENT AUDIT and PROBE BENTLEY CLOUD PERMISSIONS moved into
+    // the dedicated AuditDiagnosticsPanel (own hit-testable drawer) — they were
+    // unreliable buried at the bottom of the crowded, clipped .viewer-dev-drawer.
+
     // DEV diagnostic: read-only floor/room association of the selected asset.
     const handleInspectSpatialAssociation = useCallback(async () => {
         try {
@@ -225,6 +336,10 @@ export function BentleyViewer() {
             showDev('Spatial Association', `error: ${e instanceof Error ? e.message : String(e)}`)
         }
     }, [showDev])
+
+    // NOTE: DIAGNOSE CLINICAL PROGRAM OVERLAY moved into the dedicated
+    // AuditDiagnosticsPanel (own reliably hit-testable drawer) — it was invisible
+    // buried at the bottom of the crowded, clipped .viewer-dev-drawer.
 
     const handleInspectFeatureAppearance = useCallback(async () => {
         try {
@@ -291,26 +406,121 @@ export function BentleyViewer() {
                                 onAuthError={handleAuthError}
                             />
                         )}
-                        {/* DEV diagnostics OUTSIDE the Bentley toolbars. Grouped
-                            under a DEV label; separate from the PRODUCT UI. */}
-                        <div className="viewer-fit-control">
-                            <span className="viewer-dev-label">DEV</span>
-                            <button type="button" onClick={() => void handleFitLiveModel()}>FIT LIVE MODEL</button>
-                            <button type="button" onClick={() => void handleInspectRenderState()}>INSPECT RENDER STATE</button>
-                            <button type="button" onClick={() => void handleInspectFeatureAppearance()}>INSPECT FEATURE APPEARANCE</button>
-                            <button type="button" onClick={() => void handleShowGenericPetCt()}>SHOW GENERIC PET/CT</button>
-                            <button type="button" onClick={() => void handleHideGenericPetCt()}>HIDE GENERIC PET/CT</button>
-                            <button type="button" onClick={() => void handleInspectGenericPetCt()}>INSPECT GENERIC PET/CT</button>
-                            <button type="button" onClick={() => void handleShowCatalogPetCt()}>SHOW CATALOG PET/CT</button>
-                            <button type="button" onClick={() => void handleHideCatalogPetCt()}>HIDE CATALOG PET/CT</button>
-                            <button type="button" onClick={() => void handleInspectCatalogPetCt()}>INSPECT CATALOG PET/CT</button>
-                            <button type="button" onClick={() => void handleInspectPlacementIntent()}>INSPECT PLACEMENT INTENT</button>
-                            <button type="button" onClick={() => void handleInspectDirectDragState()}>INSPECT DIRECT DRAG STATE</button>
-                            <button type="button" onClick={() => void handleInspectRotationState()}>INSPECT ROTATION STATE</button>
-                            <button type="button" onClick={() => void handleInspectBimSpatialStructure()}>INSPECT BIM SPATIAL STRUCTURE</button>
-                            <button type="button" onClick={() => void handleInspectSpatialAssociation()}>INSPECT SPATIAL ASSOCIATION</button>
-                            {fitNote && <span className="viewer-fit-note">{fitNote}</span>}
+                        {/* Compact planning control bar (always present, top-right,
+                            does not cover the model). Mode toggle + view-only
+                            planning appearance. */}
+                        <div className="viewer-mode-bar">
+                            <button
+                                type="button"
+                                className={devMode ? 'viewer-mode-btn active' : 'viewer-mode-btn'}
+                                aria-pressed={devMode}
+                                onClick={toggleDevMode}
+                                title="Toggle developer tools"
+                            >
+                                {devMode ? 'Developer mode: ON' : 'Developer'}
+                            </button>
+                            <button
+                                type="button"
+                                className={planningAppearance ? 'viewer-mode-btn active' : 'viewer-mode-btn'}
+                                aria-pressed={planningAppearance}
+                                onClick={togglePlanningAppearance}
+                                title="Solid architectural surfaces for planning legibility"
+                            >
+                                {planningAppearance ? 'Planning view: solid' : 'Planning view'}
+                            </button>
                         </div>
+
+                        {/* NORMAL-MODE project BIM selector (active BIM + switch).
+                            Always available (not dev-gated); its own top-left panel. */}
+                        <div className="viewer-projectbim-bar">
+                            <Suspense fallback={null}>
+                                <ProjectBimSelector />
+                            </Suspense>
+                        </div>
+
+                        {/* NORMAL-MODE VIEW / camera-mode control (Planning /
+                            Walkthrough / Bird's-eye). Own top-left panel, below
+                            the Asset Library area's top; never dev-gated. */}
+                        <div className="viewer-camera-bar">
+                            <Suspense fallback={null}>
+                                <CameraModeControl />
+                            </Suspense>
+                        </div>
+
+                        {/* NORMAL-MODE MRT Pharma CLINICAL PROGRAM overlay +
+                            room repurposing. Own right-side panel below the VIEW
+                            control; never dev-gated (dev only reveals ids). */}
+                        <div className="viewer-program-bar">
+                            <Suspense fallback={null}>
+                                <ClinicalProgramControl iModelId={config?.iModelId} devMode={devMode} />
+                            </Suspense>
+                        </div>
+
+                        {/* DEVELOPER MODE: compact toolbar toggles the tool panels.
+                            Developer mode ON no longer means every panel is open. */}
+                        {devMode && (
+                            <div className="viewer-devbar" aria-label="Developer panels">
+                                <span className="viewer-dev-label">DEV</span>
+                                <button type="button" className={openPanel === 'DEV_TOOLS' ? 'active' : ''} aria-pressed={openPanel === 'DEV_TOOLS'} onClick={() => dispatchPanel('TOGGLE', 'DEV_TOOLS')}>Tools</button>
+                                <button type="button" className={openPanel === 'AUDIT_DIAGNOSTICS' ? 'active' : ''} aria-pressed={openPanel === 'AUDIT_DIAGNOSTICS'} onClick={() => dispatchPanel('TOGGLE', 'AUDIT_DIAGNOSTICS')}>Diagnostics</button>
+                                <button type="button" className={openPanel === 'INGESTION' ? 'active' : ''} aria-pressed={openPanel === 'INGESTION'} onClick={() => dispatchPanel('TOGGLE', 'INGESTION')}>Ingestion</button>
+                            </div>
+                        )}
+
+                        {/* Outside-click backdrop: closes the open tool panel. Only
+                            mounted while a panel is open; transparent; below panels. */}
+                        {openPanel && (
+                            <div className="viewer-panel-backdrop" aria-hidden="true" onPointerDown={() => dispatchPanel('OUTSIDE_CLICK')} />
+                        )}
+
+                        {/* DEVELOPER MODE ONLY: the diagnostics block lives in a
+                            dedicated right-side drawer, never over the model center. */}
+                        {devMode && openPanel === 'DEV_TOOLS' && (
+                            <div className="viewer-dev-drawer" aria-label="Developer tools" onPointerDown={(e) => e.stopPropagation()}>
+                                <div className="viewer-panel-head"><span className="viewer-dev-label">DEVELOPER</span><button type="button" className="viewer-panel-close" aria-label="Close" onClick={() => dispatchPanel('CLOSE', 'DEV_TOOLS')}>×</button></div>
+                                <button type="button" onClick={() => void handleFitLiveModel()}>FIT LIVE MODEL</button>
+                                <button type="button" onClick={() => void handleInspectRenderState()}>INSPECT RENDER STATE</button>
+                                <button type="button" onClick={() => void handleInspectFeatureAppearance()}>INSPECT FEATURE APPEARANCE</button>
+                                <button type="button" onClick={() => void handleShowGenericPetCt()}>SHOW GENERIC PET/CT</button>
+                                <button type="button" onClick={() => void handleHideGenericPetCt()}>HIDE GENERIC PET/CT</button>
+                                <button type="button" onClick={() => void handleInspectGenericPetCt()}>INSPECT GENERIC PET/CT</button>
+                                <button type="button" onClick={() => void handleShowCatalogPetCt()}>SHOW CATALOG PET/CT</button>
+                                <button type="button" onClick={() => void handleHideCatalogPetCt()}>HIDE CATALOG PET/CT</button>
+                                <button type="button" onClick={() => void handleInspectCatalogPetCt()}>INSPECT CATALOG PET/CT</button>
+                                <button type="button" onClick={() => void handleInspectPlacementIntent()}>INSPECT PLACEMENT INTENT</button>
+                                <button type="button" onClick={() => void handleInspectDirectDragState()}>INSPECT DIRECT DRAG STATE</button>
+                                <button type="button" onClick={() => void handleInspectRotationState()}>INSPECT ROTATION STATE</button>
+                                <button type="button" onClick={() => void handleInspectBimSpatialStructure()}>INSPECT BIM SPATIAL STRUCTURE</button>
+                                <button type="button" onClick={() => void handleInspectSpatialAssociation()}>INSPECT SPATIAL ASSOCIATION</button>
+                                {fitNote && <span className="viewer-fit-note">{fitNote}</span>}
+                            </div>
+                        )}
+
+                        {/* DEV-ONLY: Medical Clinic demo ingestion lives in its OWN
+                            dedicated panel (bottom-left), NOT buried at the bottom of
+                            the crowded, clipped diagnostics drawer where its controls
+                            fell below the overflow fold and clicks missed. High
+                            z-index + own scroll so pointer events always reach it. */}
+                        {devMode && openPanel === 'INGESTION' && (
+                            <div className="viewer-ingest-drawer" aria-label="Medical Clinic ingestion" onPointerDown={(e) => e.stopPropagation()}>
+                                <div className="viewer-panel-head"><span className="viewer-dev-label">INGESTION</span><button type="button" className="viewer-panel-close" aria-label="Close" onClick={() => dispatchPanel('CLOSE', 'INGESTION')}>×</button></div>
+                                <Suspense fallback={<span className="viewer-dev-label">Loading ingestion…</span>}>
+                                    <ClinicIngestionPanel />
+                                </Suspense>
+                            </div>
+                        )}
+
+                        {/* DEV-ONLY: BIM audit diagnostics in its own dedicated,
+                            reliably hit-testable panel (bottom-center-left), using
+                            the same proven pattern as the ingestion drawer. */}
+                        {devMode && openPanel === 'AUDIT_DIAGNOSTICS' && (
+                            <div className="viewer-audit-drawer" aria-label="BIM audit diagnostics" onPointerDown={(e) => e.stopPropagation()}>
+                                <div className="viewer-panel-head"><span className="viewer-dev-label">BIM AUDIT</span><button type="button" className="viewer-panel-close" aria-label="Close" onClick={() => dispatchPanel('CLOSE', 'AUDIT_DIAGNOSTICS')}>×</button></div>
+                                <Suspense fallback={<span className="viewer-dev-label">Loading audit…</span>}>
+                                    <AuditDiagnosticsPanel />
+                                </Suspense>
+                            </div>
+                        )}
 
                         {/* PRODUCT: Asset Library + controlled placement + placed
                             assets. Additive; does not replace the DEV fixtures. */}
@@ -335,7 +545,7 @@ export function BentleyViewer() {
             </section>
 
             <aside className="viewer-inspector" aria-label="Inspection panel">
-                {devInspector.open && (
+                {devMode && devInspector.open && (
                     <div className="dev-inspector" aria-label="Developer Inspector">
                         <div className="dev-inspector-head">
                             <strong>Developer Inspector</strong>

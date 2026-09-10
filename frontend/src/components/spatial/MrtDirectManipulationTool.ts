@@ -92,6 +92,19 @@ export class MrtDirectManipulationTool extends PrimitiveTool {
         return false
     }
 
+    /**
+     * The MRT direct-manipulation tool has NO user-facing tool settings, so it
+     * supplies no properties (documented contract: "If undefined is returned
+     * then no ToolSettings will be displayed."). NOTE: this controls the
+     * CONTENT only — the empty AppUI Tool Settings *widget* is owned by
+     * @itwin/appui-react (via @itwin/viewer-react) and is removed at the
+     * frontstage level via the Viewer `defaultUiConfig.hideToolSettings` option.
+     * This override remains as correct defense-in-depth. No DOM hacking.
+     */
+    public override supplyToolSettingsProperties(): undefined {
+        return undefined
+    }
+
     public override async onPostInstall(): Promise<void> {
         await super.onPostInstall()
         // Do NOT enable passive locate or AccuSnap. Passive locate-on-motion is

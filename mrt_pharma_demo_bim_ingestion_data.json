@@ -1,0 +1,77 @@
+{
+  "report": "MRT Pharma Medical Clinic Demo — browser-runtime ingestion workflow IMPLEMENTED (awaiting user file-select + START INGESTION)",
+  "precheck": {
+    "PRECHECK_HEAD": "b2abe6bf28056d002d140b52fb54e94c9cd417eb",
+    "PRECHECK_ORIGIN_MAIN": "b2abe6bf28056d002d140b52fb54e94c9cd417eb",
+    "PRECHECK_DIVERGENCE": "0 / 0",
+    "staged": "none"
+  },
+  "ifc_reconfirmed": {
+    "path": "/Users/paulonaodowan/Downloads/Clinic_Architectural.ifc",
+    "size": "12M",
+    "schema": "IFC2X3 (ISO-10303-21)",
+    "walls": 1065,
+    "doors": 254,
+    "windows": 58,
+    "spaces": 269,
+    "storeys": 4,
+    "identity": "VERIFIED (matches exactly)"
+  },
+  "workflow_implementation": {
+    "path_used": "iTwin cloud: create iModel -> iTwin Storage upload -> Synchronization storageConnections (connectorType=IFC) -> run -> poll runs to terminal state. Endpoint sequence verified against Bentley Storage + Synchronization tutorials. Content rephrased for licensing compliance.",
+    "explicit_two_stage_gate": "PREFLIGHT (read-only) then a SEPARATE explicit START INGESTION (writes). Nothing runs on page load or on file selection.",
+    "token": "existing browser runtime (IModelApp.authorizationClient.getAccessToken); never displayed, logged, or persisted",
+    "target": "MRTway Medical Clinic Demo (SEPARATE iModel); existing-name check STOPS if it already exists (no duplicate)",
+    "fixture": "MRTway Hospital Campus Development untouched (never referenced for write)",
+    "open_seam": "temporary non-destructive URL override /viewer?imodel=<id> (guarded by isPlausibleBentleyId); with no query the fixture loads unchanged",
+    "files_added": [
+      "frontend/src/components/spatial/bentleyClinicIngestion.ts",
+      "frontend/src/components/spatial/ClinicIngestionPanel.tsx",
+      "frontend/src/tests/viewerConfigOverride.test.ts"
+    ],
+    "files_modified": [
+      "frontend/src/lib/viewerConfig.ts (optional ?imodel/?itwin override + isPlausibleBentleyId)",
+      "frontend/src/routes/BentleyViewer.tsx (lazy ingestion panel mounted in DEV drawer)",
+      "frontend/src/routes/BentleyViewer.css (panel styles)"
+    ]
+  },
+  "machine_verification": {
+    "TYPECHECK": "PASS",
+    "OFFLINE_TEST_COUNT": 352,
+    "NEW_TEST_COUNT": 2,
+    "OFFLINE_TEST_REGRESSIONS": 0,
+    "PRODUCTION_BUILD": "PASS",
+    "CORE_FRONTEND_VERSION": "5.12.5",
+    "WORKER_ASSET_REAL": "YES",
+    "DRACO_WASM_ASSET_REAL": "YES",
+    "DEV_SERVER_VIEWER": 200
+  },
+  "live_write_results_pending": {
+    "DEMO_IMODEL_CREATED": "PENDING_USER_START",
+    "DEMO_IMODEL_NAME": "MRTway Medical Clinic Demo",
+    "DEMO_IMODEL_ID": "NOT_CREATED",
+    "ENGINEERING_FIXTURE_PRESERVED": "YES",
+    "IFC_UPLOADED": "PENDING_USER_START",
+    "UPLOADED_SOURCE": "Clinic_Architectural.ifc (user-selected at run time)",
+    "SYNCHRONIZATION_CONNECTION_CREATED": "PENDING_USER_START",
+    "SYNCHRONIZATION_CONNECTION_ID": "NOT_CREATED",
+    "IFC_SYNCHRONIZATION_STARTED": "PENDING_USER_START",
+    "IFC_SYNCHRONIZATION_STATUS": "NOT_STARTED",
+    "DEMO_IMODEL_CHANGESET_CREATED": "PENDING",
+    "DEMO_IMODEL_NONEMPTY": "PENDING",
+    "DEMO_IMODEL_OPENED_IN_MRT_PHARMA": "PENDING (via /viewer?imodel=<id> after SUCCEEDED)",
+    "FIRST_DEMO_VIEW_HAS_MRT_ASSET": "NO",
+    "DEMO_BIM_VISUAL_REALISM": "MANUAL_CONFIRMATION_REQUIRED"
+  },
+  "constraints_honored": {
+    "ENGINEERING_FIXTURE_MODIFIED": "NO",
+    "SOURCE_IFC_MODIFIED": "NO",
+    "AUTH_FLOW_CHANGED": "NO (token read via existing client only)",
+    "INTERACTION_CODE_CHANGED": "NO",
+    "SPATIAL_SEMANTICS_CHANGED": "NO",
+    "VISUAL_PLANNING_CHANGED": "NO",
+    "AUTO_INGEST_ON_LOAD_OR_SELECT": "NO",
+    "SECRET_EXPOSED": "NO"
+  },
+  "checkpoint_status": "NONE — nothing staged/committed/pushed"
+}

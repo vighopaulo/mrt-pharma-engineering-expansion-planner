@@ -1,0 +1,69 @@
+{
+  "build": "MRT Pharma MacBook Walkthrough Steering + Final Navigation Acceptance",
+  "precheck": { "PRECHECK_HEAD": "b2abe6bf28056d002d140b52fb54e94c9cd417eb", "PRECHECK_ORIGIN_MAIN": "b2abe6bf28056d002d140b52fb54e94c9cd417eb", "PRECHECK_DIVERGENCE": "0 / 0", "EXISTING_UNCOMMITTED_WORK_PRESERVED": "YES" },
+  "accepted_preserved": {
+    "TRUE_FIRST_PERSON_WALKTHROUGH_CAMERA": "PASS", "HUMAN_SCALE_INTERIOR_VIEW": "PASS", "FORWARD_INTERIOR_NAVIGATION": "PASS",
+    "REMOTE_ORBIT_BEHAVIOR": "RESOLVED", "TOO_CLOSE_TO_TARGET_ERROR": "RESOLVED", "TURN_AROUND_ACTION": "PASS",
+    "FOV_CONTROLS_PRESENT": "YES", "BIRDS_EYE_STOREY_SELECTOR": "PASS",
+    "FIRST_PERSON_CAMERA_ARCHITECTURE_CHANGED": "NO"
+  },
+  "input_profile": "MACBOOK_TRACKPAD_PLUS_KEYBOARD",
+  "macbook_steering": {
+    "MACBOOK_TRACKPAD_FINE_STEERING_ROOT_CAUSE": "Steering depended on pointer-lock movementX. On Apple trackpads, pointer-lock mouse deltas are unreliable/absent (one-finger motion without a button often yields no mousemove; locked deltas are inconsistent across Safari/Chrome on macOS). The product cannot rely on pointer lock as the only fine-steering path.",
+    "fix": "Added continuous, time-based ARROW-KEY yaw (Left/Right) integrated in the update loop (frame-rate independent, no quantization, no OS key-repeat dependence) as the reliable primary steering, PLUS a click-drag look fallback (pointerdown+drag on the canvas -> yaw/pitch, no pointer lock needed). Pointer lock is no longer forced.",
+    "WASD_SEMANTICS": "PRESERVED (A/D strafe, not turn)",
+    "LEFT_RIGHT_ARROW_ROLE": "CONTINUOUS_YAW",
+    "KEYBOARD_YAW_MODEL": "TIME_BASED_CONTINUOUS",
+    "KEYBOARD_SMALL_HEADING_CORRECTION": "YES", "KEYBOARD_ARBITRARY_HEADING": "YES", "KEYBOARD_YAW_QUANTIZATION": "NONE",
+    "KEYBOARD_YAW_OS_REPEAT_DEPENDENCE": "NO (keydown marks active; loop integrates by elapsed time; keyup clears)",
+    "KEYBOARD_YAW_FRAME_RATE_INDEPENDENT": "YES", "KEYBOARD_YAW_RATE": "CONFIGURABLE_GENERIC_NAVIGATION_VALUE (1.4 rad/s)",
+    "KEYBOARD_PITCH_FALLBACK": "DEFERRED_WITH_REASON (drag-look already provides pitch on trackpad; a modifier+arrow pitch mapping deferred to avoid conflicting with accepted arrow-up/down = forward/back)",
+    "TRACKPAD_CONTINUOUS_LOOK": "PARTIAL (works when the browser delivers trackpad mousemove; not relied upon)",
+    "TRACKPAD_CLICK_DRAG_LOOK": "IMPLEMENTED (pointer down+drag on canvas => first-person yaw/pitch, not orbit)",
+    "WALKTHROUGH_CAMERA_INPUT_OWNER": "FIRST_PERSON_CONTROLLER",
+    "MACBOOK_WALKTHROUGH_HELP": "YES (W/S Walk · A/D Strafe · <-/-> Turn · Shift Faster · Drag to look · Esc release)"
+  },
+  "preserved_regressions": {
+    "TURN_AROUND_ACTION_REGRESSION": 0, "FOV_CONTROL_REGRESSION": 0,
+    "WALL_COLLISION_ARCHITECTURE_PRESERVED": "YES", "DOOR_CONSTRAINED_TRAVERSAL_POLICY_CHANGED": "NO",
+    "BIRDS_EYE_STOREY_SELECTOR_REGRESSION": 0, "ROOM_BUTTON_COUNT_IN_BIRDS_EYE_TOP_LEVEL": 0,
+    "STOREY_CUTAWAY_ARCHITECTURE_PRESERVED": "YES", "PLANNING_INPUT_RESTORATION": "YES"
+  },
+  "offline_tests": {
+    "KEYBOARD_YAW_TESTABLE_OFFLINE": "YES",
+    "KEYBOARD_NO_TURN_TEST": "PASS", "KEYBOARD_LEFT_TURN_TEST": "PASS", "KEYBOARD_RIGHT_TURN_TEST": "PASS",
+    "KEYBOARD_SMALL_TURN_TEST": "PASS", "KEYBOARD_LONG_HOLD_TEST": "PASS", "KEYBOARD_YAW_FRAME_RATE_TEST": "PASS",
+    "KEYBOARD_OPPOSING_TURN_TEST": "PASS", "KEYBOARD_TURN_THEN_FORWARD_TEST": "PASS (candidateEye follows updated yaw)",
+    "KEYBOARD_TURN_STRAFE_TEST": "PASS", "TURN_AROUND_REGRESSION_TEST": "PASS",
+    "KEYBOARD_STEERING_FOV_IMMUTABILITY_TEST": "PASS (yaw does not touch fovDeg)",
+    "KEYBOARD_STEERING_COLLISION_PIPELINE_TEST": "PASS (translation after yaw still passes through resolveWalkCollision)",
+    "KEYBOARD_FINE_STEERING_NORMAL_MODE": "YES",
+    "NAVIGATION_ACCEPTANCE_POLICY_TESTABLE_OFFLINE": "YES",
+    "NAVIGATION_ACCEPTED_TEST": "PASS", "NAVIGATION_WALL_BLOCKER_TEST": "PASS",
+    "NAVIGATION_MACBOOK_STEERING_BLOCKER_TEST": "PASS", "NAVIGATION_CUTAWAY_BLOCKER_TEST": "PASS"
+  },
+  "machine_verification": {
+    "TYPECHECK": "PASS", "OFFLINE_TEST_COUNT": 427, "NEW_TEST_COUNT": 10, "OFFLINE_TEST_REGRESSIONS": 0,
+    "PRODUCTION_BUILD": "PASS", "CORE_FRONTEND_VERSION": "5.12.5", "WORKER_ASSET_REAL": "YES", "DRACO_WASM_ASSET_REAL": "YES", "DEV_SERVER_VIEWER": 200
+  },
+  "closed_scope": {
+    "CLINICAL_PROGRAM_OVERLAY_STARTED": "NO", "TRANSPORT_MODE_IMPLEMENTATION_STARTED": "NO",
+    "BENTLEY_WRITE_API_CALL_COUNT": 0, "IMODEL_MODIFIED": "NO", "ACTIVE_BIM_PERSISTENCE_CHANGED": "NO",
+    "PROJECT_BIM_SELECTOR_REGRESSION": 0, "EQUIPMENT_PIPELINE_CHANGED": "NO", "SPATIAL_SEMANTICS_CHANGED": "NO", "AUTH_FLOW_CHANGED": "NO"
+  },
+  "regression": { "WALKTHROUGH_FOUNDATION_REGRESSION": 0, "PROJECT_BIM_REGRESSION": 0, "EQUIPMENT_INTERACTION_REGRESSION": 0 },
+  "navigation_baseline": "HOLD_FOR_MANUAL_ACCEPTANCE",
+  "manual_acceptance": "ALL MANUAL_* = MANUAL_CONFIRMATION_REQUIRED",
+  "files_added": [
+    "(none — extends existing walkNav.ts + walkNav.test.ts + walkthroughController.ts)"
+  ],
+  "files_modified": [
+    "frontend/src/components/spatial/walkNav.ts (resolveKeyboardYaw + resolveNavigationAcceptance)",
+    "frontend/src/tests/walkNav.test.ts (keyboard yaw + acceptance tests)",
+    "frontend/src/components/spatial/walkthroughController.ts (arrow-key yaw in loop; click-drag look; pointer lock no longer forced)",
+    "frontend/src/components/spatial/CameraModeControl.tsx (MacBook help line)",
+    "frontend/src/routes/BentleyViewer.css (help line style)"
+  ],
+  "SECRET_EXPOSED": "NO",
+  "checkpoint_status": "HOLD_FOR_MANUAL_ACCEPTANCE — nothing staged/committed/pushed"
+}

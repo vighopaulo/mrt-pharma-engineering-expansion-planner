@@ -1,0 +1,103 @@
+{
+  "build": "UPTAKE_01_PERSISTENCE_REGRESSION_DIAGNOSTIC_AND_SAFE_RECOVERY",
+  "precheck": {
+    "head": "b2abe6bf28056d002d140b52fb54e94c9cd417eb",
+    "originMain": "b2abe6bf28056d002d140b52fb54e94c9cd417eb",
+    "divergence": "0 0",
+    "existingUncommittedWorkPreserved": true,
+    "envUntouched": true,
+    "seamReportUntouched": true
+  },
+  "regression": {
+    "MANUAL_UPTAKE_01_REGRESSION": "FAIL",
+    "ACTIVE_IMODEL_CORRECT": "YES",
+    "ACTIVE_IMODEL_ID": "36381ef4-b5f5-4d6d-b64b-2dbd69ba26a4",
+    "EXPECTED_ASSIGNMENT_COUNT": 1,
+    "ACTUAL_ASSIGNMENT_COUNT_PRE_RECOVERY": 0,
+    "EXPECTED_PLANNING_VOLUME_COUNT": 1,
+    "ACTUAL_PLANNING_VOLUME_COUNT_PRE_RECOVERY": 0,
+    "VISIBILITY_FAILURE": "NO",
+    "STOREY_FILTER_FAILURE": "NO"
+  },
+  "keys": {
+    "CURRENT_ASSIGNMENT_STORAGE_KEY_PATTERN": "mrtpharma.clinicalProgram.v1.<iModelId>",
+    "CURRENT_VOLUME_STORAGE_KEY_PATTERN": "mrtpharma.clinicalVolume.v1.<iModelId>",
+    "HISTORICAL_ASSIGNMENT_KEY_PATTERNS": "mrtpharma.clinicalProgram.v1.<iModelId> (only v1 present in tree)",
+    "HISTORICAL_VOLUME_KEY_PATTERNS": "mrtpharma.clinicalVolume.v1.<iModelId> (only v1 present in tree)",
+    "HISTORICAL_PERSISTENCE_KEYS_SEARCHED": "YES"
+  },
+  "provenCodeFix": {
+    "defect": "planning-volume empty-overwrite / hydration race (sync planningVolumes=[] then async hydrate; persist could write [])",
+    "fix": "planningVolumesHydrated gate; persistPlanningVolumes no-op until hydrated; async bind only if active iModel unchanged (LOAD->BIND->write)",
+    "assignmentsAffected": false,
+    "PERSISTENCE_SAVE_BEFORE_HYDRATION": "PROHIBITED",
+    "IMODEL_SWITCH_PERSISTENCE_ORDER": "LOAD_BIND_THEN_WRITE",
+    "ASSIGNMENT_VOLUME_HYDRATION_ISOLATION": "YES",
+    "EMPTY_STATE_OVERWRITE_PATH_AUDITED": "YES",
+    "PERSISTENCE_RECOVERY_SCOPE": "MINIMUM_PROVEN_FIX"
+  },
+  "diagnostic": {
+    "pureClassifier": "clinicalPersistenceDiagnostic.ts (classifyClinicalPersistenceRegression + recoveryActionForClass)",
+    "liveDiagnostic": "spatialAssetOverlay.diagnoseClinicalProgramPersistence (read-only namespace scan)",
+    "button": "DIAGNOSE CLINICAL PROGRAM PERSISTENCE",
+    "CLINICAL_PERSISTENCE_DIAGNOSTIC": "IMPLEMENTED",
+    "PERSISTENCE_DIAGNOSTIC_SECRET_SAFE": "YES",
+    "liveClassRequiresBrowserRun": true
+  },
+  "recoveryPolicy": {
+    "AUTO_RECONSTRUCT_WHEN_PERSISTED_DATA_ABSENT": "NO",
+    "RECONSTRUCTION_REQUIRES_USER_APPROVAL": "YES",
+    "MANUAL_VALUES_USED_AS_SYNTHETIC_PERSISTENCE": "NO",
+    "UPTAKE_01_RECREATED_BEFORE_DIAGNOSIS": "NO",
+    "RECOVERY_MUTATES_PERSISTED_GEOMETRY": "NO",
+    "RECOVERY_AUTO_LOCKS_VOLUME": "NO",
+    "UPTAKE_01_DUPLICATED": "NO",
+    "NEW_CLINICAL_ASSIGNMENTS_CREATED": 0,
+    "MULTI_VOLUME_COMPOSITION_RESUMED": "NO",
+    "RECOVERY_SOURCE_AUTHORITY": "PERSISTED_APPLICATION_DATA"
+  },
+  "liveFieldsPendingBrowserRun": [
+    "CURRENT_ASSIGNMENT_STORAGE_PRESENT", "CURRENT_ASSIGNMENT_RECORD_COUNT",
+    "CURRENT_VOLUME_STORAGE_PRESENT", "CURRENT_VOLUME_RECORD_COUNT",
+    "UPTAKE_ASSIGNMENT_FOUND_CURRENT", "UPTAKE_VOLUME_FOUND_CURRENT",
+    "UPTAKE_ASSIGNMENT_FOUND_LEGACY", "UPTAKE_VOLUME_FOUND_LEGACY",
+    "PERSISTENCE_REGRESSION_CLASS", "RECOVERY_ACTION",
+    "POST_RECOVERY_ASSIGNMENT_COUNT", "POST_RECOVERY_PLANNING_VOLUME_COUNT",
+    "POST_RECOVERY_UPTAKE_IDENTITY", "POST_RECOVERY_VOLUME_FOUND",
+    "POST_RECOVERY_CONTAINMENT_RESULT"
+  ],
+  "offlineTests": {
+    "PERSISTENCE_CURRENT_LOADER_FAILURE_TEST": "PASS",
+    "PERSISTENCE_LEGACY_RECOVERY_TEST": "PASS",
+    "PERSISTENCE_GENUINELY_ABSENT_TEST": "PASS",
+    "PERSISTENCE_PARTIAL_ASSIGNMENT_TEST": "PASS",
+    "PERSISTENCE_PARTIAL_VOLUME_TEST": "PASS",
+    "PERSISTENCE_MIGRATION_IDEMPOTENCE_TEST": "NOT_APPLICABLE",
+    "PERSISTENCE_RECOVERY_IMODEL_ISOLATION_TEST": "PASS (iModel-scoped keys, existing suite)"
+  },
+  "closed": {
+    "TRUE_3D_SPATIAL_FOUNDATION_CHANGED": "NO",
+    "EQUIPMENT_PIPELINE_CHANGED": "NO",
+    "NAVIGATION_ARCHITECTURE_CHANGED": "NO",
+    "TRANSPORT_MODE_IMPLEMENTATION_STARTED": "NO",
+    "PATIENT_ANIMATION_IMPLEMENTED": "NO",
+    "CARRIER_ANIMATION_IMPLEMENTED": "NO",
+    "SIMULATION_CHANGED": "NO",
+    "ECONOMIC_MODEL_CHANGED": "NO",
+    "BENTLEY_WRITE_API_CALL_COUNT": 0,
+    "IMODEL_MODIFIED": "NO"
+  },
+  "verification": {
+    "TYPECHECK": "PASS",
+    "OFFLINE_TEST_COUNT": 603,
+    "NEW_TEST_COUNT": 9,
+    "OFFLINE_TEST_REGRESSIONS": 0,
+    "PRODUCTION_BUILD": "PASS",
+    "CORE_FRONTEND_VERSION": "5.12.5",
+    "WORKER_ASSET_REAL": "YES",
+    "DRACO_WASM_ASSET_REAL": "YES",
+    "DEV_SERVER": "PASS",
+    "VIEWER_HTTP_STATUS": 200
+  },
+  "checkpoint": "HOLD_FOR_PERSISTENCE_RECOVERY_MANUAL_ACCEPTANCE"
+}

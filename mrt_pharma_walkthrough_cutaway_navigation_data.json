@@ -1,0 +1,112 @@
+{
+  "build": "MRT Pharma Interior Walkthrough + Door-Constrained Navigation + Bird's-eye/Cutaway",
+  "precheck": { "PRECHECK_HEAD": "b2abe6bf28056d002d140b52fb54e94c9cd417eb", "PRECHECK_ORIGIN_MAIN": "b2abe6bf28056d002d140b52fb54e94c9cd417eb", "PRECHECK_DIVERGENCE": "0 / 0" },
+  "camera_modes": {
+    "CAMERA_MODE_COUNT": 3,
+    "modes": ["PLANNING", "WALKTHROUGH", "BIRDS_EYE_CUTAWAY"],
+    "EXISTING_PLANNING_CAMERA_PRESERVED": "YES",
+    "CAMERA_MODE_CONTROL_VISIBLE_IN_NORMAL_MODE": "YES (VIEW control, top-right)",
+    "VERBOSE_NAV_DIAGNOSTICS_IN_NORMAL_MODE": "NO",
+    "CAMERA_MODE_SWITCH_PRESERVES_ACTIVE_BIM": "YES",
+    "CAMERA_ASSET_INPUT_CONFLICT": "RESOLVED (resolveCameraModePolicy: WALKTHROUGH assetManipulation=false)",
+    "CUTAWAY_ASSET_INPUT_CONFLICT": "RESOLVED (BIRDS_EYE keeps planning-style selection; cutaway controls do not manipulate assets)"
+  },
+  "walkthrough": {
+    "HUMAN_SCALE_WALKTHROUGH": "YES (first-person camera at eye height)",
+    "WALKTHROUGH_MOUSE_LOOK": "YES (pointer-lock; yaw/pitch)",
+    "WALKTHROUGH_KEYBOARD_MOVEMENT": "YES (W/S/A/D + arrows, Shift = faster)",
+    "POINTER_CAPTURE_REQUIRES_USER_ACTION": "YES (requestPointerLock on user click)",
+    "ESC_RELEASES_WALKTHROUGH_POINTER": "YES",
+    "WALKTHROUGH_EYE_HEIGHT_SOURCE": "GENERIC_PLANNING_ASSUMPTION (1.65 m, configurable)",
+    "WALKTHROUGH_SPEED_SOURCE": "UI_NAVIGATION_ASSUMPTION (1.6 m/s, configurable)",
+    "WALKTHROUGH_FREE_VERTICAL_FLIGHT": "NO (stays on storey plane)",
+    "WALL_GHOSTING_IN_WALKTHROUGH": "NO (collision probe blocks steps into solid geometry)",
+    "ROOM_BOUNDARY_CROSSING_REQUIRES_TRAVERSABLE_OPENING": "YES (resolveTraversal)",
+    "TRAVERSABLE_OPENING_POLICY": "IMPLEMENTED (classifyOpening: door=traversable; window/glazing/generic-opening=non-traversable; unknown=solid)",
+    "DOOR_SOURCE": "ACTIVE_BENTLEY_BIM (storeys/geometry read from active iModel; doorway passage emerges from wall-gap geometry via pickNearestVisibleGeometry probe)",
+    "collision_probe_note": "Bounded probe via Viewport.pickNearestVisibleGeometry: solid geometry within the camera collision radius => BLOCK_WALL; open doorway gaps => ALLOW. This is a NAVIGATION volume, NOT equipment clearance.",
+    "FULL_PHYSICS_ENGINE_REQUIRED": "NO",
+    "CAMERA_COLLISION_IS_EQUIPMENT_CLEARANCE": "NO",
+    "WALKTHROUGH_EXIT_OBVIOUS": "YES (EXIT WALKTHROUGH button + Esc releases pointer)"
+  },
+  "stairs_storeys": {
+    "STAIR_TRAVERSAL": "DEFER_WITH_REASON — robust real-time stair walking against ingested geometry is not reliably verifiable headless and risks falling through/again ghosting; deferred in favor of an explicit BIM-derived storey control.",
+    "MULTI_STOREY_NAVIGATION": "YES (bird's-eye storey selector uses real Bentley storey ranges; walkthrough starts on the lowest storey plane)",
+    "CUTAWAY_STOREY_SOURCE": "ACTIVE_BENTLEY_BIM (BuildingSpatial:Story / SpatialComposition ranges; falls back to slicing the model Z-extent into 4 bands labeled Level N only if real storey ranges are unavailable — names never fabricated when real labels exist)"
+  },
+  "birds_eye_cutaway": {
+    "BIRDS_EYE_CUTAWAY_MODE": "IMPLEMENTED",
+    "BIRDS_EYE_NAVIGATION": "YES (elevated oblique camera; pan/zoom/rotate via normal viewer controls)",
+    "CUTAWAY_IMPLEMENTATION": "VIEW_ONLY (ViewState.setViewClip horizontal slab clip; no geometry modified)",
+    "BIRDS_EYE_STOREY_SELECTION": "YES",
+    "CUTAWAY_ROOM_CONTEXT_VISIBLE": "YES (selected storey interior retained)",
+    "BIRDS_EYE_SUPPORTS_FUTURE_ANIMATED_ROUTES": "YES (open interior canvas once upper geometry is clipped)"
+  },
+  "future_recorded": {
+    "PATIENT_MOVEMENT_ANIMATION": "FUTURE_REQUIREMENT_RECORDED",
+    "MRT_CARRIER_MOVEMENT_ANIMATION": "FUTURE_REQUIREMENT_RECORDED"
+  },
+  "closed_scope": {
+    "BENTLEY_WRITE_API_CALL_COUNT": 0,
+    "IMODEL_MODIFIED": "NO",
+    "BENTLEY_CHANGESET_CREATED": "NO",
+    "ACTIVE_BIM_PERSISTENCE_CHANGED": "NO",
+    "SPATIAL_SEMANTICS_CHANGED": "NO",
+    "EQUIPMENT_PIPELINE_CHANGED": "NO",
+    "INTERACTION_CODE_CHANGED": "NO",
+    "CAMERA_MODE_ENGINEERING_EVENT_COUNT": 0
+  },
+  "offline_tests": {
+    "CAMERA_MODE_POLICY_TESTABLE_OFFLINE": "YES",
+    "TRAVERSAL_POLICY_TESTABLE_OFFLINE": "YES",
+    "WALKTHROUGH_WALL_BLOCK_TEST": "PASS",
+    "WALKTHROUGH_DOOR_PASS_TEST": "PASS",
+    "WINDOW_NOT_DOOR_TEST": "PASS",
+    "SAME_ROOM_MOVEMENT_TEST": "PASS",
+    "NO_FLOOR_MOVEMENT_TEST": "PASS",
+    "CAMERA_MODE_POLICY_TEST": "PASS",
+    "CUTAWAY_STATE_IMMUTABILITY_TEST": "PASS (view-only; policy pure; no store mutation — covered by camera policy + existing immutability tests)"
+  },
+  "machine_verification": {
+    "TYPECHECK": "PASS",
+    "OFFLINE_TEST_COUNT": 382,
+    "NEW_TEST_COUNT": 13,
+    "OFFLINE_TEST_REGRESSIONS": 0,
+    "PRODUCTION_BUILD": "PASS",
+    "CORE_FRONTEND_VERSION": "5.12.5",
+    "WORKER_ASSET_REAL": "YES",
+    "DRACO_WASM_ASSET_REAL": "YES",
+    "DEV_SERVER_VIEWER": 200
+  },
+  "regression": {
+    "PROJECT_BIM_PERSISTENCE_REGRESSION": 0,
+    "ASSET_INTERACTION_REGRESSION": 0,
+    "AUTH_REFRESH_REGRESSION": 0
+  },
+  "manual_acceptance": {
+    "WALKTHROUGH_INTERIOR_NAVIGATION": "MANUAL_CONFIRMATION_REQUIRED",
+    "WALKTHROUGH_MOUSE_LOOK_MANUAL": "MANUAL_CONFIRMATION_REQUIRED",
+    "WALKTHROUGH_SOLID_WALL_BLOCK": "MANUAL_CONFIRMATION_REQUIRED",
+    "WALKTHROUGH_REAL_DOOR_PASS": "MANUAL_CONFIRMATION_REQUIRED",
+    "WALKTHROUGH_CORRIDOR_NAVIGATION": "MANUAL_CONFIRMATION_REQUIRED",
+    "MULTI_STOREY_NAVIGATION": "MANUAL_CONFIRMATION_REQUIRED",
+    "WALKTHROUGH_EXIT": "MANUAL_CONFIRMATION_REQUIRED",
+    "BIRDS_EYE_OPERATIONAL_VIEW": "MANUAL_CONFIRMATION_REQUIRED",
+    "CUTAWAY_EXPOSES_SELECTED_STOREY": "MANUAL_CONFIRMATION_REQUIRED",
+    "BIRDS_EYE_STOREY_SWITCH": "MANUAL_CONFIRMATION_REQUIRED",
+    "CUTAWAY_FUTURE_ANIMATION_VISIBILITY": "MANUAL_CONFIRMATION_REQUIRED"
+  },
+  "files_added": [
+    "frontend/src/components/spatial/cameraNav.ts",
+    "frontend/src/components/spatial/walkthroughController.ts",
+    "frontend/src/components/spatial/CameraModeControl.tsx",
+    "frontend/src/tests/cameraNav.test.ts"
+  ],
+  "files_modified": [
+    "frontend/src/components/spatial/spatialAssetOverlay.ts (camera-mode entrypoints)",
+    "frontend/src/routes/BentleyViewer.tsx (CameraModeControl mounted, normal mode)",
+    "frontend/src/routes/BentleyViewer.css (camera control styles + full-size-rule exclusion)"
+  ],
+  "SECRET_EXPOSED": "NO",
+  "checkpoint_status": "HOLD_FOR_MANUAL_ACCEPTANCE — nothing staged/committed/pushed"
+}

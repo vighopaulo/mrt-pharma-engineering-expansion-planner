@@ -128,6 +128,68 @@ export async function discoverBimSpatialInventory(): Promise<BimSpatialInventory
 }
 
 /**
+ * Read-only ARCHITECTURAL geometry inventory + honest visual classification of
+ * the connected iModel. This is DIAGNOSTIC ONLY (Developer Mode / reporting): it
+ * does NOT feed the floor/room association logic and does NOT change any
+ * spatial-semantics behavior. It probes for architectural class candidates
+ * (walls/slabs/floors/doors) and BuildingSpatial:Space, counts them, and returns
+ * the deterministic classification from the pure planningPlan seam.
+ *
+ * Class names are probed defensively (no schema assumed); missing classes count
+ * as 0. Never modifies the iModel.
+ */
+const WALL_CANDIDATE_CLASSES = ['BuildingPhysical:Wall', 'ArchitecturalPhysical:Wall', 'Building:Wall']
+const SLAB_FLOOR_CANDIDATE_CLASSES = ['BuildingPhysical:Slab', 'ArchitecturalPhysical:Slab', 'BuildingPhysical:Floor', 'BuildingSpatial:Story']
+const DOOR_CANDIDATE_CLASSES = ['BuildingPhysical:Door', 'ArchitecturalPhysical:Door', 'Building:Door']
+
+async function sumCandidateCounts(iModel: IModelConnection, classes: string[]): Promise<number> {
+    let total = 0
+    for (const cls of classes) {
+        const c = await safeCount(iModel, cls)
+        if (c > 0) total += c
+    }
+    return total
+}
+
+export interface BimArchitecturalDiagnostic {
+    wallCount: number
+    slabOrFloorCount: number
+    doorCount: number
+    otherGeometricCount: number
+    spaceCount: number
+    /** From the pure classifyBimModel seam. */
+    classification: string
+    /** From the pure resolveNormalModePrimaryContext seam. */
+    normalModePrimaryContext: string
+    summary: string
+}
+
+export async function inspectBimArchitecturalInventory(): Promise<BimArchitecturalDiagnostic> {
+    const empty: BimArchitecturalDiagnostic = {
+        wallCount: 0, slabOrFloorCount: 0, doorCount: 0, otherGeometricCount: 0, spaceCount: 0,
+        classification: 'OTHER', normalModePrimaryContext: 'MODEL_DEFAULT', summary: 'NO_ACTIVE_VIEWPORT',
+    }
+    const iModel = getIModel()
+    if (!iModel) return empty
+
+    const wallCount = await sumCandidateCounts(iModel, WALL_CANDIDATE_CLASSES)
+    const slabOrFloorCount = await sumCandidateCounts(iModel, SLAB_FLOOR_CANDIDATE_CLASSES)
+    const doorCount = await sumCandidateCounts(iModel, DOOR_CANDIDATE_CLASSES)
+    const spaceCount = Math.max(0, await safeCount(iModel, 'BuildingSpatial:Space'))
+    const totalGeom = Math.max(0, await safeCount(iModel, 'BisCore:GeometricElement3d'))
+    const otherGeometricCount = Math.max(0, totalGeom - wallCount - slabOrFloorCount - doorCount)
+
+    // Pure classification (Bentley-free seam).
+    const { classifyBimModel, resolveNormalModePrimaryContext } = await import('./planningPlan')
+    const inv = { wallCount, slabOrFloorCount, doorCount, otherGeometricCount, spaceCount }
+    const classification = classifyBimModel(inv)
+    const normalModePrimaryContext = resolveNormalModePrimaryContext(classification)
+    const summary = `walls=${wallCount} slabs/floors=${slabOrFloorCount} doors=${doorCount} spaces=${spaceCount} otherGeom=${otherGeometricCount} => ${classification}`
+    if (import.meta.env.DEV) console.info('[bentley-spatial] ARCH_INVENTORY %s', summary)
+    return { ...inv, classification, normalModePrimaryContext, summary }
+}
+
+/**
  * Read a spatial element's world bounding range from its placement bbox.
  *
  * NaN ROOT CAUSE (previous defect): selecting the point/struct columns
@@ -143,6 +205,7 @@ export async function discoverBimSpatialInventory(): Promise<BimSpatialInventory
  * objects legitimately return undefined here.
  */
 async function elementRange(iModel: IModelConnection, elementId: string): Promise<WorldRange3 | undefined> {
+    // 1) Placement bbox on GeometricElement3d (local bbox + placement origin).
     try {
         const reader = iModel.createQueryReader(
             `SELECT
@@ -160,13 +223,36 @@ async function elementRange(iModel: IModelConnection, elementId: string): Promis
             // Local bbox offset by placement origin (yaw ignored for a
             // conservative axis-aligned world range — RANGE_ONLY authority).
             // validateWorldRange rejects any non-finite coordinate.
-            return validateWorldRange({
+            const placement = validateWorldRange({
                 low: { x: lx + ox, y: ly + oy, z: lz + oz },
                 high: { x: hx + ox, y: hy + oy, z: hz + oz },
             })
+            if (placement) return placement
+            break // row existed but bbox was null/degenerate — fall through.
         }
     } catch {
-        /* element is not a GeometricElement3d / has no placement — no range. */
+        /* element is not a GeometricElement3d / has no placement — try index. */
+    }
+
+    // 2) Fallback: the persistent spatial R-tree index (bis.SpatialIndex) carries
+    //    a WORLD-aligned min/max for every spatial element that has geometry —
+    //    including BuildingSpatial:Space rows whose direct placement bbox is
+    //    null/degenerate (a common IFC-space case). This is why the clinical
+    //    overlay footprint was not found. Read-only; validated for finiteness.
+    try {
+        const reader = iModel.createQueryReader(
+            `SELECT MinX, MinY, MinZ, MaxX, MaxY, MaxZ FROM bis.SpatialIndex WHERE ECInstanceId=?`,
+            QueryBinder.from([elementId]),
+            { rowFormat: QueryRowFormat.UseECSqlPropertyIndexes },
+        )
+        for await (const row of reader) {
+            return validateWorldRange({
+                low: { x: Number(row[0]), y: Number(row[1]), z: Number(row[2]) },
+                high: { x: Number(row[3]), y: Number(row[4]), z: Number(row[5]) },
+            })
+        }
+    } catch {
+        /* SpatialIndex not queryable in this iModel — no range. */
     }
     return undefined
 }

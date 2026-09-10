@@ -15,7 +15,12 @@
     min-height: 0;
 }
 
-.viewer-stage>* {
+/* The full-size rule targets the primary content children (Viewer / CTA /
+   loading) only. Compact overlays (mode bar, dev drawer, marquee, context menu)
+   are positioned absolutely and MUST NOT be forced to full size — otherwise the
+   mode bar becomes a full-viewport layer that the Viewer canvas covers, making
+   the planning controls NOT_DISCOVERABLE (Correction 2 root cause). */
+.viewer-stage>*:not(.viewer-mode-bar):not(.viewer-projectbim-bar):not(.viewer-camera-bar):not(.viewer-program-bar):not(.viewer-devbar):not(.viewer-panel-backdrop):not(.viewer-dev-drawer):not(.viewer-ingest-drawer):not(.viewer-audit-drawer):not(.viewer-product-panel):not(.mrt-marquee-rect):not(.mrt-context-menu) {
     width: 100%;
     height: 100%;
 }
@@ -555,4 +560,709 @@
     background: rgba(90, 160, 255, 0.12);
     pointer-events: none;
     z-index: 40;
+}
+
+/* Normal-mode Project BIM selector — top center, above the model, clear of the
+   left Asset Library and the top-right mode bar. */
+.viewer-projectbim-bar {
+    position: absolute;
+    top: 0.6rem;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 1250;
+    pointer-events: auto;
+}
+
+.project-bim {
+    position: relative;
+    min-width: 220px;
+}
+
+.project-bim-summary {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.05rem;
+    width: 100%;
+    text-align: left;
+    padding: 0.35rem 0.7rem;
+    background: rgba(13, 17, 23, 0.9);
+    color: #e6edf3;
+    border: 1px solid #30363d;
+    border-radius: 7px;
+    cursor: pointer;
+    backdrop-filter: blur(3px);
+}
+
+.project-bim-caption {
+    font-size: 0.6rem;
+    letter-spacing: 0.09em;
+    color: #8a94a3;
+}
+
+.project-bim-name {
+    font-size: 0.82rem;
+    font-weight: 600;
+}
+
+.project-bim-role {
+    font-size: 0.66rem;
+    color: #9aa4af;
+}
+
+.project-bim-list {
+    position: absolute;
+    top: calc(100% + 0.3rem);
+    left: 0;
+    right: 0;
+    background: rgba(13, 17, 23, 0.96);
+    border: 1px solid #30363d;
+    border-radius: 7px;
+    padding: 0.3rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+}
+
+.project-bim-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    padding: 0.3rem 0.4rem;
+    border-radius: 5px;
+}
+
+.project-bim-item.active {
+    background: rgba(58, 111, 247, 0.16);
+}
+
+.project-bim-item-text {
+    display: flex;
+    flex-direction: column;
+}
+
+.project-bim-item-name {
+    font-size: 0.76rem;
+    color: #e6edf3;
+}
+
+.project-bim-item-role {
+    font-size: 0.64rem;
+    color: #9aa4af;
+}
+
+.project-bim-item button {
+    font-size: 0.68rem;
+    padding: 0.24rem 0.6rem;
+    background: #21262d;
+    color: #e6edf3;
+    border: 1px solid #363b42;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+.project-bim-item button:disabled {
+    opacity: 0.6;
+    cursor: default;
+}
+
+.project-bim-item.active {
+    border: 1px solid rgba(58, 111, 247, 0.5);
+}
+
+.project-bim-pending {
+    font-size: 0.68rem;
+    color: #9aa4af;
+    padding: 0.2rem 0.4rem;
+}
+
+/* Normal-mode camera/view mode control — top-right, below the mode bar. */
+.viewer-camera-bar {
+    position: absolute;
+    top: 3.2rem;
+    right: 0.6rem;
+    z-index: 1250;
+    pointer-events: auto;
+}
+
+.camera-mode {
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+    padding: 0.35rem 0.5rem;
+    background: rgba(13, 17, 23, 0.9);
+    border: 1px solid #30363d;
+    border-radius: 7px;
+    backdrop-filter: blur(3px);
+    min-width: 190px;
+}
+
+.camera-mode-caption,
+.camera-mode-sub {
+    font-size: 0.6rem;
+    letter-spacing: 0.09em;
+    color: #8a94a3;
+}
+
+.camera-mode-actions,
+.camera-mode-storeys {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.3rem;
+}
+
+.camera-mode-btn,
+.camera-mode-storey,
+.camera-mode-exit {
+    font-size: 0.7rem;
+    padding: 0.26rem 0.5rem;
+    background: #21262d;
+    color: #e6edf3;
+    border: 1px solid #363b42;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+.camera-mode-btn.active,
+.camera-mode-storey.active {
+    border-color: #5aa0ff;
+    box-shadow: inset 0 0 0 1px rgba(90, 160, 255, 0.4);
+}
+
+.camera-mode-btn:disabled,
+.camera-mode-storey:disabled,
+.camera-mode-exit:disabled {
+    opacity: 0.6;
+    cursor: default;
+}
+
+.camera-mode-exit {
+    border-color: #b91c1c;
+}
+
+.camera-mode-note {
+    font-size: 0.64rem;
+    color: #9aa4af;
+    max-width: 220px;
+}
+
+.camera-mode-help {
+    font-size: 0.62rem;
+    color: #8a94a3;
+    max-width: 220px;
+    line-height: 1.4;
+}
+
+/* Compact planning control bar — top-right, small, never covers the model. */
+.viewer-mode-bar {
+    position: absolute;
+    top: 0.6rem;
+    right: 0.6rem;
+    /* Above the web-viewer AppUI toolbars/widgets so the planning controls are
+       always discoverable in normal mode (Correction 2: the bar was rendering
+       behind Bentley's own top-right UI and read as NOT_DISCOVERABLE). */
+    z-index: 1200;
+    display: flex;
+    gap: 0.4rem;
+    pointer-events: auto;
+    padding: 0.28rem;
+    background: rgba(13, 17, 23, 0.72);
+    border: 1px solid #30363d;
+    border-radius: 7px;
+    backdrop-filter: blur(3px);
+}
+
+.viewer-mode-btn {
+    font-size: 0.72rem;
+    padding: 0.3rem 0.6rem;
+    background: rgba(22, 27, 34, 0.85);
+    color: #cfd6df;
+    border: 1px solid #363b42;
+    border-radius: 5px;
+    cursor: pointer;
+    backdrop-filter: blur(2px);
+}
+
+.viewer-mode-btn:hover {
+    background: rgba(45, 51, 59, 0.9);
+}
+
+.viewer-mode-btn.active {
+    color: #e6edf3;
+    border-color: #5aa0ff;
+    box-shadow: inset 0 0 0 1px rgba(90, 160, 255, 0.4);
+}
+
+/* Developer drawer — right side, scrollable, only in developer mode; never over
+   the center of the model. */
+.viewer-dev-drawer {
+    position: absolute;
+    top: 3rem;
+    right: 0.6rem;
+    z-index: 1300;
+    width: 210px;
+    max-height: 70%;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+    padding: 0.5rem;
+    background: rgba(16, 20, 26, 0.92);
+    border: 1px solid #2b313a;
+    border-radius: 6px;
+}
+
+.viewer-dev-drawer .viewer-dev-label {
+    font-size: 0.68rem;
+    letter-spacing: 0.08em;
+    color: #8a94a3;
+}
+
+.viewer-dev-drawer button {
+    font-size: 0.7rem;
+    padding: 0.28rem 0.5rem;
+    text-align: left;
+    background: #21262d;
+    color: #e6edf3;
+    border: 1px solid #363b42;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+.viewer-dev-drawer button:hover {
+    background: #2d333b;
+}
+
+/* DEV-only dedicated ingestion drawer — bottom-left, own scroll, high z-index so
+   its controls are always visible and hit-testable (never clipped below the
+   crowded diagnostics drawer's overflow fold). */
+.viewer-ingest-drawer {
+    position: absolute;
+    bottom: 0.6rem;
+    left: 0.6rem;
+    z-index: 1300;
+    width: 320px;
+    max-height: 60%;
+    overflow-y: auto;
+    padding: 0.5rem 0.6rem;
+    background: rgba(16, 20, 26, 0.95);
+    border: 1px solid #2b313a;
+    border-radius: 6px;
+    pointer-events: auto;
+}
+
+.viewer-ingest-drawer button {
+    font-size: 0.72rem;
+    padding: 0.32rem 0.6rem;
+    background: #21262d;
+    color: #e6edf3;
+    border: 1px solid #363b42;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+.viewer-ingest-drawer button:hover {
+    background: #2d333b;
+}
+
+/* DEV-only dedicated BIM audit diagnostics drawer — bottom, offset from the
+   ingestion drawer so they never overlap; own scroll + high z-index so its
+   controls are always hit-testable. */
+.viewer-audit-drawer {
+    position: absolute;
+    bottom: 0.6rem;
+    left: 22rem;
+    z-index: 1300;
+    width: 340px;
+    max-height: 60%;
+    overflow-y: auto;
+    padding: 0.5rem 0.6rem;
+    background: rgba(16, 20, 26, 0.95);
+    border: 1px solid #2b313a;
+    border-radius: 6px;
+    pointer-events: auto;
+}
+
+.audit-diag {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+}
+
+.audit-diag-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+}
+
+.audit-diag-actions button {
+    font-size: 0.72rem;
+    padding: 0.32rem 0.6rem;
+    background: #21262d;
+    color: #e6edf3;
+    border: 1px solid #363b42;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+.audit-diag-actions button:hover {
+    background: #2d333b;
+}
+
+.audit-diag-state {
+    font-size: 0.66rem;
+    color: #9aa4af;
+}
+
+.audit-diag-out {
+    font-size: 0.66rem;
+    line-height: 1.35;
+    color: #cfd6df;
+    background: rgba(13, 17, 23, 0.6);
+    border: 1px solid #30363d;
+    border-radius: 5px;
+    padding: 0.35rem 0.45rem;
+    margin: 0;
+    max-height: 300px;
+    overflow-y: auto;
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
+/* Medical Clinic demo ingestion panel (inner layout). */
+.clinic-ingest {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+    margin-top: 0.5rem;
+    padding-top: 0.5rem;
+    border-top: 1px solid #30363d;
+}
+
+.clinic-ingest input[type="file"] {
+    font-size: 0.68rem;
+    color: #cfd6df;
+}
+
+.clinic-ingest-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+}
+
+.clinic-ingest-start {
+    border-color: #3a6ff7 !important;
+}
+
+.clinic-ingest-state {
+    font-size: 0.66rem;
+    color: #9aa4af;
+}
+
+.clinic-ingest-out {
+    font-size: 0.66rem;
+    line-height: 1.35;
+    color: #cfd6df;
+    background: rgba(13, 17, 23, 0.6);
+    border: 1px solid #30363d;
+    border-radius: 5px;
+    padding: 0.35rem 0.45rem;
+    margin: 0;
+    max-height: 220px;
+    overflow-y: auto;
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
+/* Normal-mode MRT Pharma CLINICAL PROGRAM panel — right side, below the VIEW
+   control, anchored from the bottom so it never fights the (variable-height)
+   camera bar. Own layer; excluded from the .viewer-stage full-size rule. */
+.viewer-program-bar {
+    position: absolute;
+    right: 0.6rem;
+    bottom: 0.6rem;
+    z-index: 1250;
+    pointer-events: auto;
+    max-height: 62vh;
+    overflow-y: auto;
+}
+
+.clinical-program {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+    padding: 0.5rem 0.6rem;
+    width: 248px;
+    background: rgba(13, 17, 23, 0.92);
+    border: 1px solid #30363d;
+    border-radius: 8px;
+    backdrop-filter: blur(3px);
+    color: #d6dde5;
+}
+
+.clinical-program-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.clinical-program-caption {
+    font-size: 0.62rem;
+    letter-spacing: 0.1em;
+    color: #9fb0c2;
+    font-weight: 600;
+}
+
+.clinical-program-toggle {
+    font-size: 0.68rem;
+    padding: 0.18rem 0.6rem;
+    border-radius: 5px;
+    border: 1px solid #30363d;
+    background: #161b22;
+    color: #c9d3dd;
+    cursor: pointer;
+}
+
+.clinical-program-toggle.active {
+    border-color: #4fb08a;
+    color: #d6f2e6;
+    box-shadow: inset 0 0 0 1px rgba(79, 176, 138, 0.4);
+}
+
+.clinical-program-hint,
+.clinical-program-note {
+    font-size: 0.62rem;
+    line-height: 1.35;
+    color: #8a94a3;
+}
+
+.clinical-program-sub {
+    font-size: 0.58rem;
+    letter-spacing: 0.08em;
+    color: #8a94a3;
+    text-transform: uppercase;
+}
+
+.clinical-program-storeys {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.25rem;
+    align-items: center;
+}
+
+.clinical-program-chip {
+    font-size: 0.64rem;
+    padding: 0.16rem 0.42rem;
+    border-radius: 5px;
+    border: 1px solid #30363d;
+    background: #161b22;
+    color: #c9d3dd;
+    cursor: pointer;
+}
+
+.clinical-program-chip.active {
+    border-color: #5aa0ff;
+    color: #dbe9ff;
+    box-shadow: inset 0 0 0 1px rgba(90, 160, 255, 0.4);
+}
+
+.clinical-program-row,
+.clinical-program-editor,
+.clinical-program-summary {
+    display: flex;
+    flex-direction: column;
+    gap: 0.28rem;
+}
+
+.clinical-program-editor {
+    border-top: 1px solid #262d36;
+    padding-top: 0.4rem;
+}
+
+.clinical-program-select,
+.clinical-program-input {
+    font-size: 0.72rem;
+    padding: 0.28rem 0.4rem;
+    border-radius: 5px;
+    border: 1px solid #30363d;
+    background: #0f141a;
+    color: #e2e8ef;
+}
+
+.clinical-program-field {
+    display: flex;
+    justify-content: space-between;
+    gap: 0.5rem;
+    font-size: 0.68rem;
+}
+
+.clinical-program-field span {
+    color: #8a94a3;
+}
+
+.clinical-program-field strong {
+    color: #e2e8ef;
+    text-align: right;
+}
+
+.clinical-program-actions {
+    display: flex;
+    gap: 0.35rem;
+    margin-top: 0.2rem;
+}
+
+.clinical-program-btn {
+    flex: 1;
+    font-size: 0.68rem;
+    padding: 0.28rem 0.4rem;
+    border-radius: 5px;
+    border: 1px solid #30363d;
+    background: #161b22;
+    color: #c9d3dd;
+    cursor: pointer;
+}
+
+.clinical-program-btn.primary {
+    border-color: #4fb08a;
+    color: #d6f2e6;
+}
+
+.clinical-program-btn:disabled {
+    opacity: 0.5;
+    cursor: default;
+}
+
+.clinical-program-summary {
+    border-top: 1px solid #262d36;
+    padding-top: 0.4rem;
+}
+
+.clinical-program-summary-line {
+    font-size: 0.68rem;
+    color: #cdd6df;
+}
+
+.clinical-program-summary-line.muted {
+    color: #8a94a3;
+}
+
+.clinical-program-summary-line.ok {
+    color: #8fd6b6;
+}
+
+.clinical-program-dev {
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+    font-size: 0.58rem;
+    color: #7f8b98;
+    word-break: break-all;
+    border-top: 1px dashed #262d36;
+    padding-top: 0.3rem;
+}
+
+/* Developer panel toggle toolbar — compact, top area, always available in dev
+   mode. Toggling opens exactly one major tool panel at a time. */
+.viewer-devbar {
+    position: absolute;
+    top: 0.6rem;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 1300;
+    display: flex;
+    gap: 0.3rem;
+    align-items: center;
+    padding: 0.28rem 0.5rem;
+    background: rgba(13, 17, 23, 0.92);
+    border: 1px solid #30363d;
+    border-radius: 7px;
+    backdrop-filter: blur(3px);
+    pointer-events: auto;
+}
+
+.viewer-devbar button {
+    font-size: 0.68rem;
+    padding: 0.2rem 0.5rem;
+    border-radius: 5px;
+    border: 1px solid #30363d;
+    background: #161b22;
+    color: #c9d3dd;
+    cursor: pointer;
+}
+
+.viewer-devbar button.active {
+    border-color: #5aa0ff;
+    color: #dbe9ff;
+    box-shadow: inset 0 0 0 1px rgba(90, 160, 255, 0.4);
+}
+
+/* Transparent full-stage backdrop that dismisses the open tool panel on an
+   outside click. Below the panels (which sit at z-index >= 1250) but above the
+   viewport canvas. */
+.viewer-panel-backdrop {
+    position: absolute;
+    inset: 0;
+    z-index: 1200;
+    background: transparent;
+    pointer-events: auto;
+}
+
+/* Restrained panel header with an explicit close control. */
+.viewer-panel-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    margin-bottom: 0.3rem;
+}
+
+.viewer-panel-close {
+    font-size: 0.9rem;
+    line-height: 1;
+    width: 1.4rem;
+    height: 1.4rem;
+    border-radius: 4px;
+    border: 1px solid #30363d;
+    background: #161b22;
+    color: #c9d3dd;
+    cursor: pointer;
+}
+
+.viewer-panel-close:hover {
+    border-color: #b91c1c;
+    color: #f0f3f6;
+}
+
+/* Clinical planning-volume editor (numeric 3D controls). */
+.clinical-program-volume {
+    display: flex;
+    flex-direction: column;
+    gap: 0.28rem;
+    border-top: 1px solid #262d36;
+    padding-top: 0.4rem;
+}
+
+.clinical-program-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.28rem;
+}
+
+.clinical-program-num {
+    display: flex;
+    flex-direction: column;
+    gap: 0.1rem;
+}
+
+.clinical-program-num span {
+    font-size: 0.56rem;
+    letter-spacing: 0.06em;
+    color: #8a94a3;
+    text-transform: uppercase;
+}
+
+.clinical-program-num .clinical-program-input {
+    width: 100%;
+    box-sizing: border-box;
 }

@@ -1,0 +1,117 @@
+{
+  "report": "MRT Pharma Medical Clinic — Bentley Ingestion Access Probe (IFC verified; ingestion BLOCKED on tooling/permissions)",
+  "precheck": {
+    "PRECHECK_HEAD": "b2abe6bf28056d002d140b52fb54e94c9cd417eb",
+    "PRECHECK_ORIGIN_MAIN": "b2abe6bf28056d002d140b52fb54e94c9cd417eb",
+    "PRECHECK_DIVERGENCE": "0 / 0",
+    "EXISTING_UNCOMMITTED_WORK_PRESERVED": "YES",
+    "staged": "none"
+  },
+  "ifc_file": {
+    "CLINIC_ARCHITECTURAL_IFC_STATUS": "FOUND",
+    "CLINIC_ARCHITECTURAL_IFC_PATH": "/Users/paulonaodowan/Downloads/Clinic_Architectural.ifc",
+    "size_on_disk": "12M",
+    "CLINIC_IFC_SCHEMA": "IFC2X3",
+    "step_header": "ISO-10303-21 / FILE_SCHEMA(('IFC2X3')) / Autodesk Revit Architecture 2011 export (Solibri IFC Optimizer)",
+    "CLINIC_IFC_IDENTITY_VERIFIED": "YES",
+    "verified_entity_counts": {
+      "IfcWallStandardCase": 1065,
+      "IfcDoor": 254,
+      "IfcWindow": 58,
+      "IfcSpace": 269,
+      "IfcBuildingStorey": 4,
+      "IfcSlab": 3,
+      "IfcCovering": 250,
+      "IfcPlate": 172,
+      "IfcFurnishingElement": 118,
+      "IfcFlowTerminal": 102
+    },
+    "identity_match_note": "Every representative count matches the stated model exactly."
+  },
+  "source_license": {
+    "CLINIC_IFC_SOURCE": "NIBS Common BIM Files (portal.nibs.org) via BIMData R&D IFC catalog (~/Downloads/IFC_FILES.md), Medical Clinic ARC discipline (MedicalClinic_ARC.ifc), Autodesk Revit Architecture 2011 / IFC2X3",
+    "CLINIC_IFC_LICENSE": "CC_BY_4.0 (per user's independent sample-viewer evidence; the local BIMData catalog lists the NIBS source but does not itself print a license string)",
+    "LOCAL_TECHNICAL_EVALUATION_ALLOWED": "YES",
+    "commercial_public_demo_rights": "not overstated beyond CC BY 4.0 attribution terms"
+  },
+  "engineering_fixture": {
+    "ENGINEERING_FIXTURE_PRESERVED": "YES",
+    "IMODEL_FIXTURE_MODIFIED": "NO"
+  },
+  "bentley_capability_probe": {
+    "BENTLEY_IMODEL_READ_ACCESS": "YES (the SPA viewer opens the existing fixture iModel via PKCE)",
+    "BENTLEY_IMODEL_CREATE_ACCESS": "UNKNOWN (imodels-client-management exposes createEmpty/createFromTemplate for an iModel shell, but create permission/scopes for this account are not confirmed and an empty shell is NOT an IFC ingestion)",
+    "BENTLEY_SYNCHRONIZATION_ACCESS": "UNKNOWN (no synchronization credentials/scopes present; .env holds only browser-safe viewer PKCE config)",
+    "BENTLEY_IFC_CONNECTOR_AVAILABLE": "NO",
+    "BENTLEY_UPLOAD_STORAGE_AVAILABLE": "UNKNOWN",
+    "evidence": [
+      "iTwin Synchronizer desktop app NOT installed (and it is Windows-only; this host is macOS)",
+      "no connector/bridge CLI on PATH (iModelBridge/iModelBridgeFwk/etc. not found)",
+      "no @itwin/imodel-transformer or connector/synchronization packages in the project",
+      "frontend @itwin packages are viewer + imodels-access + imodels-client-management only (read/manage, not IFC conversion)",
+      ".env contains no SYNC/CONNECTOR/SERVICE/CLIENT_SECRET keys (presence-checked, values not read)"
+    ]
+  },
+  "ingestion_path": {
+    "CURRENT_VIEWER_DIRECT_RAW_IFC_SUPPORT": "NO",
+    "SELECTED_IFC_TO_IMODEL_PATH": "NOT_AVAILABLE (supported path is iTwin Synchronizer + IFC connector OR the Synchronization API + IFC connector, but neither is installed/runnable in this environment)"
+  },
+  "readiness_gate": {
+    "ifc_file_found": "YES",
+    "ifc_identity_verified": "YES",
+    "local_technical_use_allowed": "YES",
+    "imodel_create_access": "UNKNOWN",
+    "synchronization_access": "UNKNOWN",
+    "ifc_connector_available": "NO",
+    "upload_storage_available": "UNKNOWN",
+    "DEMO_IMODEL_INGESTION_READINESS": "BLOCKED"
+  },
+  "actions_taken": {
+    "DEMO_IMODEL_CREATED": "NO",
+    "DEMO_IMODEL_NAME": "MRTway Medical Clinic Demo (proposed, not created)",
+    "DEMO_IMODEL_ID": "NOT_CREATED",
+    "IFC_INGESTION_STARTED": "NO",
+    "IFC_INGESTION_COMPLETED": "NO",
+    "IFC_INGESTION_STATUS": "NOT_STARTED (readiness BLOCKED — no IFC connector / unconfirmed create+sync permissions)",
+    "IFC_INGESTION_ERRORS": "NONE (not attempted)",
+    "SOURCE_IFC_MODIFIED": "NO",
+    "DEMO_IMODEL_OPENED_IN_EXISTING_VIEWER": "NO",
+    "DEMO_BIM_CONTENT_AUDIT_COMPLETED": "NO",
+    "FRONTEND_CHANGED_BEFORE_SUCCESSFUL_INGESTION": "NO"
+  },
+  "demo_counts": {
+    "DEMO_GEOMETRIC_ELEMENT3D_COUNT": "NOT_AVAILABLE",
+    "DEMO_PHYSICAL_ELEMENT_COUNT": "NOT_AVAILABLE",
+    "DEMO_ARCHITECTURAL_WALL_COUNT": "NOT_AVAILABLE",
+    "DEMO_ARCHITECTURAL_SLAB_OR_FLOOR_COUNT": "NOT_AVAILABLE",
+    "DEMO_ARCHITECTURAL_DOOR_COUNT": "NOT_AVAILABLE",
+    "DEMO_ARCHITECTURAL_WINDOW_COUNT": "NOT_AVAILABLE",
+    "DEMO_VS_FIXTURE_GEOMETRIC_COMPLEXITY": "NOT_TESTED",
+    "DEMO_ARCHITECTURAL_CONTENT_MATERIALLY_RICHER": "NOT_TESTED (IFC entity counts strongly imply YES, but the Bentley-ingested EC counts are the required evidence and are not yet available)",
+    "DEMO_ROOM_SEMANTICS_MAPPING": "NOT_YET_ESTABLISHED",
+    "DEMO_BIM_VISUAL_REALISM": "NOT_TESTABLE (nothing ingested)",
+    "FIRST_DEMO_VIEW_HAS_MRT_ASSET": "NO"
+  },
+  "how_to_unblock": {
+    "summary": "Ingest the verified IFC into a SEPARATE iModel using a supported Bentley IFC connector, then point the viewer at the new iModel id.",
+    "options": [
+      "OPTION A (desktop): on a Windows machine, install the iTwin Synchronizer desktop app, sign in with a Bentley account that has create+synchronize rights on the MRTway Development Twin (bdf29ecd-...), create a new iModel 'MRTway Medical Clinic Demo', add Clinic_Architectural.ifc, and run synchronization (IFC connector).",
+      "OPTION B (cloud API): use the iTwin Platform Synchronization API (developer.bentley.com/apis/synchronization) with the IFC connector — requires a service/agent client with synchronization scopes, a Storage/file container to upload the IFC, and iModel-creation permission on the iTwin.",
+      "then: capture the new DEMO_IMODEL_ID and provide it so the viewer can open it (config change VITE_BENTLEY_IMODEL_ID for the demo, keeping the fixture id separate)."
+    ],
+    "then_here": "Once the demo iModel id exists, this environment can open it in the existing viewer and run RUN BIM CONTENT AUDIT against it, then stop for manual screenshot acceptance."
+  },
+  "constraints_honored": {
+    "ENGINEERING_FIXTURE_PRESERVED": "YES",
+    "ASSET_INSTANCE_ARCHITECTURE_CHANGED": "NO",
+    "INTERACTION_CODE_CHANGED": "NO",
+    "SPATIAL_SEMANTICS_CHANGED": "NO",
+    "AUTH_FLOW_CHANGED": "NO",
+    "VISUAL_CODE_CHANGED": "NO",
+    "SUBSTITUTE_BIM_IMPROVISED": "NO",
+    "MANUFACTURER_CERTIFIED_GEOMETRY_CLAIM": "NO",
+    "SECRET_EXPOSED": "NO"
+  },
+  "next_equipment_milestone_record_only": "GLTF_GLB_GEOMETRY_REPRESENTATION_FOUNDATION (not implemented)",
+  "checkpoint_status": "NONE — no code changed, nothing staged/committed/pushed"
+}

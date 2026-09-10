@@ -59,6 +59,29 @@ export function resolvePlacementStatus(input: PlacementStatusInput): PlacementSt
     return { phase: 'IDLE', text: '' }
 }
 
+/**
+ * PLACEMENT COPY POLICY (Correction 2): during active placement the live
+ * instruction is shown ONCE, by the dedicated placement card. The status line
+ * must NOT also render the ACTIVE "Placing…" text (that produced duplicate
+ * copy). This pure policy makes the rule testable: given a placement phase, how
+ * many normal-mode guidance blocks should be visible.
+ *
+ *   PLACEMENT_ACTIVE  -> 1 (the card only; status line suppressed)
+ *   others            -> 0 (a terminal status line is a transient toast, not
+ *                           placement guidance)
+ */
+export function normalModePlacementGuidanceCount(phase: PlacementUiPhase): number {
+    return phase === 'PLACEMENT_ACTIVE' ? 1 : 0
+}
+
+/**
+ * Whether the derived status line should render text for a placement phase.
+ * ACTIVE is suppressed (the card owns it); terminal transitions show a toast.
+ */
+export function shouldShowPlacementStatusLine(phase: PlacementUiPhase): boolean {
+    return phase === 'PLACEMENT_SUCCEEDED' || phase === 'PLACEMENT_CANCELLED'
+}
+
 export type MoveUiPhase = 'IDLE' | 'MOVE_ACTIVE' | 'MOVE_SUCCEEDED' | 'MOVE_CANCELLED'
 
 export interface MoveStatusInput {

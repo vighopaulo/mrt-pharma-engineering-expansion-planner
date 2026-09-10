@@ -1,0 +1,284 @@
+{
+  "build": "MRT Pharma Visual Planning Foundation",
+  "precheck": {
+    "HEAD": "b2abe6bf28056d002d140b52fb54e94c9cd417eb",
+    "origin_main": "b2abe6bf28056d002d140b52fb54e94c9cd417eb",
+    "divergence": "0 / 0"
+  },
+  "mode": {
+    "DEFAULT_VIEWER_MODE": "NORMAL_PLANNING",
+    "DEVELOPER_MODE": "PRESERVED",
+    "DEVELOPER_CAPABILITIES_REMOVED": "NO",
+    "DEV_BUTTON_BLOCK_VISIBLE_IN_NORMAL_MODE": "NO",
+    "DEV_CONTROLS_LOCATION": "DEDICATED_RIGHT_SIDE_DRAWER",
+    "VERBOSE_DEV_TEXT_OVER_3D_VIEWPORT": "NO",
+    "DEV_INSPECTOR_REGRESSION": 0,
+    "RAW_ENGINEERING_DUMP_VISIBLE_IN_NORMAL_MODE": "NO",
+    "seams": "planningVisuals.ts resolveDeveloperVisibility / devButtonBlockVisibleInMode; overlay viewerMode UI store"
+  },
+  "scanner": {
+    "PETCT_RECOGNIZABLE_AS_SCANNER": "YES",
+    "parts": [
+      "GANTRY",
+      "BORE",
+      "PATIENT_TABLE",
+      "TABLE_BASE"
+    ],
+    "EQUIPMENT_VISUAL_LANGUAGE": "CLINICAL_ENGINEERING",
+    "SCANNER_GEOMETRY_PROVENANCE": "GENERIC_ENGINEERING_PLACEHOLDER",
+    "MANUFACTURER_CERTIFIED_GEOMETRY_CLAIM": "NO",
+    "CATALOG_DIMENSIONS_STATUS": "NOT_CALIBRATED",
+    "PARAMETRIC_GEOMETRY_CALIBRATION_SEAM": "YES",
+    "GENERIC_GEOMETRY_REUSE": "YES",
+    "VISUAL_UPGRADE_CHANGES_ASSET_IDENTITY": "NO"
+  },
+  "bim_appearance": {
+    "BIM_PLANNING_APPEARANCE_IMPLEMENTED": "YES (default-on, reversible, view-only)",
+    "mechanism": "setPlanningAppearance -> (a) viewFlags.transparency off => opaque surfaces; (b) BuildingSpatial:Space + SpatialComposition:CompositeElement element ids added to viewport setNeverDrawn (per-viewport render state). No iModel write.",
+    "BIM_GLOBAL_GHOST_APPEARANCE": "REDUCED_BY_DEFAULT",
+    "HOSPITAL_CONTEXT_VISIBLE": "YES",
+    "BIM_PRESENTATION_CHANGES": "VIEW_ONLY",
+    "IMODEL_MODIFIED": "NO",
+    "BENTLEY_CHANGESET_CREATED": "NO",
+    "FLOOR_FOCUSED_VIEW": "NOT_IMPLEMENTED_IN_THIS_BUILD",
+    "floor_focused_reason": "BIM floor source is SpatialComposition:CompositeElement without reliable storey membership; not fabricated",
+    "VIEWPORT_BACKGROUND_DECISION": "UNCHANGED (existing dark retained; not changed for novelty)",
+    "onViewOpen_hazard_avoided": "prior onViewOpen ViewFlags mutation blanked the viewport; default-on appearance applied ONLY post-ready via a run-once AUTHENTICATED effect that retries until a viewport exists, never at view-open"
+  },
+  "product_ui": {
+    "SELECTION_VISUAL_CLUTTER": "LOW",
+    "MULTI_SELECTION_VISUAL_LANGUAGE": "RESTRAINED",
+    "ROTATION_HANDLE_ORANGE_YELLOW": "NO",
+    "SELECTION_OUTLINE_COLOR": "blue-grey (was amber)",
+    "PRIMARY_PRODUCT_LAYOUT": "ASSET_LIBRARY | PLANNING_VIEWPORT | PROPERTIES_INSPECTOR",
+    "selected_summary": "Equipment / Floor / Room / Position / Orientation / Status (raw dump dev-only)",
+    "EMPTY_TOOL_SETTINGS_CHROME": "SUPPRESSED (MrtDirectManipulationTool.supplyToolSettingsProperties() returns undefined => Bentley shows no Tool Settings; supported contract, no DOM hack)"
+  },
+  "preserved": {
+    "ENGINEERING_INTERACTION_FOUNDATION_PRESERVED": "YES",
+    "VISUAL_STYLE_MUTATES_ENGINEERING_STATE": "NO",
+    "AUTH_FLOW_CHANGED": "NO",
+    "PKCE_CHANGED": "NO",
+    "VIEWER_LIFECYCLE_CHANGED": "NO",
+    "SPATIAL_SEMANTICS_CHANGED": "NO",
+    "ENGINEERING_EVENT_SEMANTICS_CHANGED": "NO",
+    "CAMERA_BEHAVIOR_CHANGED": "NO",
+    "CLEARANCE_CALIBRATION": "NOT_STARTED",
+    "MANUFACTURER_CLEARANCE_VALUES_INVENTED": "NO"
+  },
+  "machine_verification": {
+    "TYPECHECK": "PASS",
+    "OFFLINE_TEST_COUNT": 318,
+    "baseline": 305,
+    "pre_correction_count": 314,
+    "NEW_TEST_COUNT": 13,
+    "OFFLINE_TEST_REGRESSIONS": 0,
+    "new_test_file": "frontend/src/tests/planningVisuals.test.ts",
+    "updated_test": "assetArchitecture.test.ts (scanner part count 3 -> 4, adds TABLE_BASE)",
+    "PRODUCTION_BUILD": "PASS",
+    "CORE_FRONTEND_VERSION": "5.12.5",
+    "WORKER_ASSET_REAL": "YES",
+    "DRACO_WASM_ASSET_REAL": "YES",
+    "DEV_SERVER_VIEWER": 200
+  },
+  "correction_targeted_bim_legibility_and_chrome": {
+    "first_manual_review": "PARTIAL_PASS",
+    "passes_preserved": {
+      "NORMAL_PLANNING_MODE": "PASS",
+      "DEV_BUTTON_BLOCK_VISIBLE_IN_NORMAL_MODE": "NO",
+      "ASSET_LIBRARY_CLEANUP": "PASS",
+      "VIEWPORT_SPACE_IMPROVED": "YES"
+    },
+    "failures_addressed": {
+      "BIM_PLANNING_LEGIBILITY_BEFORE_CORRECTION": "FAIL",
+      "HOSPITAL_VISUAL_REALISM_BEFORE_CORRECTION": "FAIL",
+      "EMPTY_TOOL_SETTINGS_CHROME_BEFORE_CORRECTION": "STILL_VISIBLE",
+      "MRT_PHARMA_FIRST_IMPRESSION_BEFORE_CORRECTION": "PARTIAL"
+    },
+    "diagnosis": {
+      "TRANSLUCENT_CUBOID_SOURCE_CLASS": "BuildingSpatial:Space + SpatialComposition:CompositeElement (room/space VOLUME semantics rendered as translucent boxes) — planning DATA, not primary architectural surfaces",
+      "CURRENT_BIM_TRANSPARENCY_SOURCE": "viewFlags.transparency (global) plus the space-volume geometry itself; even opaque, the space volumes still read as dominant boxes",
+      "ARCHITECTURAL_GEOMETRY_AVAILABLE": "PARTIAL / NOT_DOMINANT — the visually dominant geometry is the spatial-volume semantics; detailed wall/slab/door surfaces are not the dominant renderable, so honest correction = suppress the dominant space volumes in normal mode (not fabricate architecture)",
+      "ARCHITECTURAL_SOURCE_CLASSES": "BuildingSpatial:Space, SpatialComposition:CompositeElement (spatial volumes); architectural surface classes not relied upon as fabricated context",
+      "TOOL_SETTINGS_OWNER": "Bentley Tool Settings for the active MrtDirectManipulationTool (PrimitiveTool); default supplyToolSettingsProperties produced an empty settings window",
+      "TOOL_SETTINGS_CONTENT": "EMPTY",
+      "STRAY_VIEWPORT_TEXT_SOURCE": "NONE_FOUND_IN_NORMAL_MODE (no debug label emitted in normal mode; DEV diagnostics render in the right-side inspector, not over the viewport)"
+    },
+    "corrections": {
+      "BUILDINGSPATIAL_SPACE_SEMANTICS_PRESERVED": "YES (association + developer inspection unchanged; only presentation)",
+      "BUILDINGSPATIAL_SPACE_NORMAL_MODE_VISUAL_DOMINANCE": "NO",
+      "ROOM_SPACE_VISUAL_STYLE": "SUPPRESSED_IN_NORMAL_MODE (view-only setNeverDrawn); shown FULL in developer mode",
+      "NORMAL_MODE_PRIMARY_BIM_CONTEXT": "ARCHITECTURAL_SURFACES_WITH_SPACE_VOLUMES_SUPPRESSED",
+      "PLANNING_VIEW_CONTROL_EXISTS": "YES",
+      "PLANNING_VIEW_DEFAULT": "ON",
+      "DEFAULT_PLANNING_APPEARANCE_DECISION": "ON — applied post-ready via a run-once AUTHENTICATED effect (bounded retry until a viewport exists), never at view-open; proven-safe application point avoids the historical blank-viewport regression",
+      "PLANNING_APPEARANCE_ACCESSIBLE_IN_NORMAL_MODE": "YES (compact toggle in normal-mode controls, not a hidden developer action)",
+      "EMPTY_TOOL_SETTINGS_CHROME": "HIDDEN (supplyToolSettingsProperties() => undefined)",
+      "PLACEMENT_INSTRUCTION_DUPLICATION": "NO (one concise instruction + one cancel hint)",
+      "ROOM_LABEL_CLUTTER": "LOW (no viewport-wide labels added)"
+    },
+    "new_seams": {
+      "resolveRoomVisualPolicy": "NORMAL_PLANNING => SUBDUED_OR_HIDDEN, DEVELOPER => FULL",
+      "roomVolumesDominateInMode": "false in NORMAL_PLANNING, true in DEVELOPER",
+      "tests_added": [
+        "ROOM_VISUAL_POLICY_TEST",
+        "PLANNING_APPEARANCE_IMMUTABILITY_TEST (version + instance snapshot unchanged across visual toggles)"
+      ]
+    },
+    "manual_confirmation_required": {
+      "BIM_PLANNING_LEGIBILITY": "MANUAL_CONFIRMATION_REQUIRED",
+      "PLANNING_APPEARANCE_VISIBLE_IN_BROWSER": "MANUAL_CONFIRMATION_REQUIRED",
+      "PLANNING_APPEARANCE_BLANKS_VIEWPORT": "EXPECTED_NO — MANUAL_CONFIRMATION_REQUIRED",
+      "PETCT_VISUAL_REALISM": "MANUAL_CONFIRMATION_REQUIRED",
+      "EMPTY_TOOL_SETTINGS_CHROME_VISIBLE": "EXPECTED_NO — MANUAL_CONFIRMATION_REQUIRED",
+      "PLACEMENT_UI_MANUAL_ACCEPTANCE": "MANUAL_CONFIRMATION_REQUIRED"
+    },
+    "files_modified_this_correction": [
+      "frontend/src/components/spatial/MrtDirectManipulationTool.ts",
+      "frontend/src/components/viewer/LiveItwinViewer.tsx",
+      "frontend/src/routes/BentleyViewer.tsx",
+      "frontend/src/components/spatial/planningVisuals.ts",
+      "frontend/src/tests/planningVisuals.test.ts"
+    ]
+  },
+  "manual_acceptance": {
+    "MRT_PHARMA_FIRST_IMPRESSION_IMPROVED": "MANUAL_CONFIRMATION_REQUIRED",
+    "NORMAL_MODE_DEV_CLUTTER": "MANUAL_CONFIRMATION_REQUIRED",
+    "DEVELOPER_MODE_CAPABILITIES": "MANUAL_CONFIRMATION_REQUIRED",
+    "BIM_PLANNING_LEGIBILITY": "MANUAL_CONFIRMATION_REQUIRED",
+    "PETCT_VISUAL_REALISM": "MANUAL_CONFIRMATION_REQUIRED",
+    "INTERACTION_MANUAL_REGRESSION": "MANUAL_CONFIRMATION_REQUIRED",
+    "SPATIAL_SEMANTICS_MANUAL_REGRESSION": "MANUAL_CONFIRMATION_REQUIRED",
+    "PAGE_REFRESH_AUTH_MANUAL_REGRESSION": "MANUAL_CONFIRMATION_REQUIRED"
+  },
+  "correction2_restore_hospital_context": {
+    "second_manual_review": "FAIL",
+    "manual_failure_recorded": {
+      "NORMAL_PLANNING_MODE": "PASS",
+      "DEV_BUTTON_BLOCK_VISIBLE_IN_NORMAL_MODE": "NO",
+      "ASSET_LIBRARY_CLEANUP": "PASS",
+      "BIM_PLANNING_LEGIBILITY": "FAIL",
+      "HOSPITAL_CONTEXT_VISIBLE": "FAIL",
+      "PLANNING_APPEARANCE_OVER_SUPPRESSION": "YES",
+      "NORMAL_MODE_PRIMARY_BIM_CONTEXT": "INSUFFICIENT",
+      "PLANNING_VIEW_CONTROL_VISIBLE_IN_NORMAL_MODE": "NO_OR_NOT_DISCOVERABLE",
+      "EMPTY_TOOL_SETTINGS_CHROME": "FAIL / STILL_VISIBLE",
+      "PLACEMENT_INSTRUCTION_DUPLICATION": "FAIL",
+      "PETCT_VISUAL_REALISM": "NOT_TESTABLE",
+      "MRT_PHARMA_FIRST_IMPRESSION_IMPROVED": "FAIL",
+      "VISUAL_PLANNING_FOUNDATION_MANUAL_ACCEPTANCE": "FAIL"
+    },
+    "root_cause": {
+      "over_suppression": "setNeverDrawn(BuildingSpatial:Space + SpatialComposition:CompositeElement). CompositeElement is the building/story CONTAINER class in this iModel; hiding it removed almost all hospital geometry, leaving isolated blocks.",
+      "tool_settings_runtime_owner": "@itwin/appui-react Tool Settings widget rendered by @itwin/web-viewer-react <Viewer> (NOT the PrimitiveTool). supplyToolSettingsProperties()=>undefined controls CONTENT only, so the prior HIDDEN claim was false.",
+      "planning_control_not_discoverable": ".viewer-stage>* {width/height:100%} forced .viewer-mode-bar to a full-viewport layer that the Viewer canvas covered."
+    },
+    "corrections": {
+      "BLIND_BIM_SUPPRESSION": "NO",
+      "DEFAULT_SPACE_VOLUME_NEVER_DRAWN": "NO",
+      "HOSPITAL_CONTEXT_RESTORED": "YES (setPlanningAppearance toggles ONLY viewFlags.transparency + defensive clearNeverDrawn; hides nothing)",
+      "NORMAL_MODE_PRIMARY_CONTEXT": "DERIVED_BIM_SPATIAL_PLAN (room footprints from BuildingSpatial:Space ranges) over restored model geometry",
+      "ROOM_PLAN_SOURCE": "LIVE_BUILDINGSPATIAL_SPACE_DATA (cached SpatialModelSemantics)",
+      "DERIVED_PLAN_PROVENANCE": "BIM_DERIVED",
+      "DERIVED_PLAN_CLAIMS_ARCHITECTURAL_ACCURACY": "NO",
+      "NORMAL_ROOM_REPRESENTATION": "PLAN_FOOTPRINT (thin outline + very light fill, no tall translucent volume)",
+      "DERIVED_PLAN_VISUAL_STYLE": "CLEAN_2_5D_PLAN_CONTEXT",
+      "ROOM_Z_SEMANTICS_PRESERVED": "YES",
+      "ROOM_Z_VOLUME_DOMINATES_NORMAL_VIEW": "NO",
+      "PLANNING_ELEVATION_PROVENANCE": "SELECTED_ASSET_Z else LOWEST_ROOM_RANGE_LOW_Z else DEFAULT_ZERO (PLANNING_ELEVATION, not AUTHORITATIVE_FLOOR)",
+      "MULTI_LEVEL_PLAN_VISIBILITY_POLICY": "footprints whose vertical range contains the active planning elevation (no blind overlay of all levels)",
+      "EMPTY_PROJECT_HOSPITAL_CONTEXT_VISIBLE": "YES (plan derives with 0 placed assets)",
+      "PLACEMENT_MODE_HOSPITAL_CONTEXT_VISIBLE": "YES",
+      "ROOM_LABEL_PROVENANCE": "BIM_DERIVED (room UserLabel/CodeValue)",
+      "ROOM_LABEL_CLUTTER": "LOW (centroid label per visible footprint)",
+      "DERIVED_PLAN_WRITES_IMODEL": "NO",
+      "ROOM_PLAN_STATE_SOURCE_OF_TRUTH": "SPATIAL_MODEL_SEMANTICS",
+      "DERIVED_PLAN_BECOMES_ASSOCIATION_AUTHORITY": "NO",
+      "DERIVED_PLAN_MANUAL_ALIGNMENT_OFFSET": "NO (same world coordinates)",
+      "PLANNING_VIEW_CONTROL_ACTUAL_LOCATION": "top-right .viewer-mode-bar (was covered by the full-size stage child rule)",
+      "NORMAL_MODE_PLANNING_CONTROL_VISIBLE": "YES (z-index 1200, grouped background, overlays excluded from full-size rule)",
+      "PLANNING_CONTROL_VISIBLE_DURING_PLACEMENT": "YES",
+      "TOOL_SETTINGS_DOM_HACK": "NO",
+      "TOOL_SETTINGS_FIX": "Viewer defaultUiConfig={{ hideToolSettings: true }} (supported @itwin/viewer-react frontstage option)",
+      "EMPTY_TOOL_SETTINGS_CHROME": "MANUAL_CONFIRMATION_REQUIRED (expected removed; verify in browser)",
+      "PLACEMENT_INSTRUCTION_DUPLICATION": "NO",
+      "NORMAL_MODE_PLACEMENT_GUIDANCE_COUNT": 1,
+      "PETCT_GEOMETRY_SECOND_REDESIGN_IN_THIS_CORRECTION": "NO",
+      "ROTATION_HANDLE_ORANGE_YELLOW": "NO"
+    },
+    "new_modules": {
+      "planningPlan.ts": "pure Bentley-free: classifyBimModel, resolveNormalModePrimaryContext, resolveNormalRoomRepresentation, deriveRoomFootprint/deriveRoomPlan, resolvePlanningElevation, roomFootprintVisibleAtElevation/visibleFootprintsAtElevation",
+      "RoomPlanDecorator.ts": "view-only Bentley decorator: draws derived room footprints + restrained labels in NORMAL_PLANNING only",
+      "bentleySpatialAdapter.inspectBimArchitecturalInventory": "read-only diagnostic; does not touch association",
+      "placementStatus.ts": "normalModePlacementGuidanceCount, shouldShowPlacementStatusLine"
+    },
+    "tests_added": [
+      "BIM_VISUAL_CLASSIFICATION_TEST",
+      "NORMAL_ROOM_PLAN_POLICY_TEST",
+      "DEVELOPER_ROOM_SEMANTICS_PRESERVED_TEST",
+      "ROOM_FOOTPRINT_DERIVATION_TEST",
+      "INVALID_ROOM_RANGE_PLAN_REJECTED",
+      "MULTI_LEVEL_PLAN_VISIBILITY_TEST",
+      "EMPTY_PROJECT_PLAN_CONTEXT_TEST",
+      "ROOM_PLAN_ENGINEERING_IMMUTABILITY_TEST",
+      "ROOM_PLAN_SOURCE_IDENTITY_TEST",
+      "PLACEMENT_COPY_TEST"
+    ],
+    "machine_verification": {
+      "TYPECHECK": "PASS",
+      "OFFLINE_TEST_COUNT": 341,
+      "pre_correction2_count": 318,
+      "NEW_TEST_COUNT": 23,
+      "OFFLINE_TEST_REGRESSIONS": 0,
+      "PRODUCTION_BUILD": "PASS",
+      "CORE_FRONTEND_VERSION": "5.12.5",
+      "WORKER_ASSET_REAL": "YES",
+      "DRACO_WASM_ASSET_REAL": "YES",
+      "DEV_SERVER_VIEWER": 200,
+      "WORKER_MIME": "text/javascript",
+      "WASM_MIME": "application/wasm"
+    },
+    "runtime_bim_inventory_note": "wall/slab/door/space counts are produced by inspectBimArchitecturalInventory at runtime (Developer Mode). Prior spatial-semantics work observed ~8 BuildingSpatial:Space with no detailed wall/door classes => expected classification SPATIAL_SEMANTIC_MODEL_WITH_LIMITED_ARCHITECTURE. Exact live counts are MANUAL_CONFIRMATION via the DEV inspector.",
+    "files_modified_this_correction": [
+      "frontend/src/components/viewer/LiveItwinViewer.tsx",
+      "frontend/src/components/spatial/MrtDirectManipulationTool.ts",
+      "frontend/src/components/spatial/ViewerAssetLibrary.tsx",
+      "frontend/src/components/spatial/placementStatus.ts",
+      "frontend/src/components/spatial/spatialAssetOverlay.ts",
+      "frontend/src/components/spatial/bentleySpatialAdapter.ts",
+      "frontend/src/routes/BentleyViewer.css"
+    ],
+    "files_added_this_correction": [
+      "frontend/src/components/spatial/planningPlan.ts",
+      "frontend/src/components/spatial/RoomPlanDecorator.ts",
+      "frontend/src/tests/planningPlan.test.ts"
+    ],
+    "manual_confirmation_required": {
+      "EMPTY_PROJECT_HOSPITAL_CONTEXT_VISIBLE": "MANUAL",
+      "PLACEMENT_MODE_HOSPITAL_CONTEXT_VISIBLE": "MANUAL_BLOCKING",
+      "DERIVED_ROOM_PLAN_VISIBLE_IN_BROWSER": "MANUAL",
+      "BIM_PLANNING_LEGIBILITY": "MANUAL",
+      "NORMAL_MODE_PLANNING_CONTROL_VISIBLE": "MANUAL",
+      "EMPTY_TOOL_SETTINGS_CHROME_VISIBLE": "MANUAL",
+      "PLACEMENT_INSTRUCTION_DUPLICATION": "MANUAL",
+      "PETCT_VISUAL_REALISM": "MANUAL"
+    }
+  },
+  "checkpoint_status": "NOT_STAGED_NOT_COMMITTED_NOT_PUSHED — HOLD_FOR_MANUAL_ACCEPTANCE",
+  "files_added": [
+    "frontend/src/components/spatial/planningVisuals.ts",
+    "frontend/src/tests/planningVisuals.test.ts",
+    "MRT_PHARMA_VISUAL_PLANNING_FOUNDATION_REPORT.md",
+    "mrt_pharma_visual_planning_foundation_data.json"
+  ],
+  "files_modified": [
+    "frontend/src/components/spatial/scannerGeometry.ts",
+    "frontend/src/components/spatial/SpatialAssetDecorator.ts",
+    "frontend/src/components/spatial/spatialAssetOverlay.ts",
+    "frontend/src/components/spatial/ViewerAssetLibrary.tsx",
+    "frontend/src/components/viewer/LiveItwinViewer.tsx",
+    "frontend/src/routes/BentleyViewer.tsx",
+    "frontend/src/routes/BentleyViewer.css",
+    "frontend/src/tests/assetArchitecture.test.ts"
+  ]
+}

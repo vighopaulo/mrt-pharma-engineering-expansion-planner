@@ -9,3 +9,17 @@ __pycache__/
 
 # Bentley local credential file (protected from Git tracking)
 .env.bentley
+# Local environment / secret material (never track new env or credential files).
+# NOTE: frontend/.env is already tracked as browser-safe PUBLIC Vite values only;
+# these patterns prevent NEW untracked env/secret files from being staged.
+.env.local
+.env.*.local
+*.env.local
+.env.production
+.env.development.local
+access_token*
+refresh_token*
+*client_secret*
+*.pem
+*.key
+id_rsa*

@@ -1,0 +1,115 @@
+{
+  "plan": "MRT Pharma Credible Demo BIM Transition (preparation only — no ingestion performed)",
+  "precheck": {
+    "HEAD": "b2abe6bf28056d002d140b52fb54e94c9cd417eb",
+    "origin_main": "b2abe6bf28056d002d140b52fb54e94c9cd417eb",
+    "divergence": "0 / 0"
+  },
+  "closed_audit_summary": {
+    "CONNECTED_IMODEL_CLASSIFICATION": "PARTIAL_ARCHITECTURAL_BIM",
+    "CONNECTED_IMODEL_CLASSIFICATION_CONFIDENCE": "HIGH",
+    "IMODEL_MODEL_COUNT": 5,
+    "GEOMETRIC_3D_MODEL_COUNT": 1,
+    "GEOMETRIC_ELEMENT3D_COUNT": 12,
+    "PHYSICAL_ELEMENT_COUNT": 3,
+    "SPATIAL_LOCATION_ELEMENT_COUNT": 9,
+    "BUILDINGSPATIAL_SPACE_COUNT": 8,
+    "BUILDINGSPATIAL_STORY_COUNT": 0,
+    "SPATIALCOMPOSITION_COMPOSITE_COUNT": 12,
+    "ARCHITECTURAL_WALL_COUNT": 12,
+    "ARCHITECTURAL_SLAB_OR_FLOOR_COUNT": 0,
+    "ARCHITECTURAL_DOOR_COUNT": 0,
+    "CURRENT_IMODEL_RECOMMENDATION": "RETAIN_AS_ENGINEERING_TEST_FIXTURE",
+    "CURRENT_IMODEL_ROLE": "ENGINEERING_REGRESSION_FIXTURE",
+    "CURRENT_VISUAL_LIMITATION_ROOT_CAUSE": "SOURCE_MODEL_GEOMETRY_LIMITATION",
+    "CREDIBLE_HOSPITAL_DEMO_BIM_REQUIRED": "YES",
+    "local_fixture_confirmation": "bim_test_assets/mrt_pharma_hospital_bim_proof.ifc + manifest declare mrtway_model_class = SYNTHETIC_TEST_BIM with 8 IFCSPACE rooms — corroborates the classification."
+  },
+  "ifc_candidate": {
+    "PRIMARY_DEMO_BIM_CANDIDATE": "MedicalClinic_ARC.ifc",
+    "approx_size": "~15.5 MB",
+    "secondary_candidate": "NBU_MedicalClinic_ARC.ifc (~18.1 MB)",
+    "rationale": "architectural discipline only, medical-facility context, small enough for a controlled first ingestion, avoids federating large MEP/HVAC/electrical datasets first",
+    "MEDICALCLINIC_ARC_LOCAL_FILE_STATUS": "NOT_FOUND",
+    "local_search_note": "find . -iname '*.ifc' returned only bim_test_assets/mrt_pharma_hospital_bim_proof.ifc. No MedicalClinic_ARC.ifc and no BIMData catalog file are present in the repository/filesystem.",
+    "MEDICALCLINIC_ARC_SOURCE": "NOT_ESTABLISHED_FROM_LOCAL_EVIDENCE (referenced conversationally as the BIMData R&D IFC catalog; no catalog metadata file is present locally to confirm source)",
+    "MEDICALCLINIC_ARC_LICENSE": "NOT_ESTABLISHED",
+    "COMMERCIAL_DEMO_USE_LICENSE_CONFIRMED": "NO"
+  },
+  "ingestion_path": {
+    "IFC_TO_IMODEL_SUPPORTED_PATH": "Bentley iTwin Synchronization (Connectors). Two supported options: (1) iTwin Synchronizer desktop app -> synchronize the IFC into a new iModel on iModelHub; (2) iTwin Platform Synchronization API (developer.bentley.com/apis/synchronization) with the IFC connector -> create/populate the iModel in the cloud. Content rephrased for licensing compliance.",
+    "source_refs": [
+      "https://developer.bentley.com/apis/synchronization/",
+      "https://developer.bentley.com/get-started/"
+    ],
+    "CURRENT_VIEWER_DIRECT_RAW_IFC_SUPPORT": "NO",
+    "why_no_direct_ifc": "The frontend uses @itwin/web-viewer-react <Viewer authClient iTwinId iModelId>. Installed @itwin packages are frontend/viewer + imodels-access + imodels-client-management ONLY. There is NO IFC connector, iModel transformer, or backend authoring tool in this repo. The viewer opens an EXISTING iModel by id; it cannot convert IFC.",
+    "post_ingestion_viewer_wiring": "Once the demo iModel exists, the viewer opens it by pointing VITE_BENTLEY_IMODEL_ID (and VITE_BENTLEY_ITWIN_ID if a different iTwin) at the new demo iModel — a config change, NOT a code change. The engineering fixture id is retained separately."
+  },
+  "proposed_demo_imodel": {
+    "PROPOSED_DEMO_IMODEL_NAME": "MRTway Medical Clinic Demo",
+    "ENGINEERING_FIXTURE_IMODEL": "MRTway Hospital Campus Development (current, retained)",
+    "DEMO_ARCHITECTURAL_IMODEL": "SEPARATE MODEL (do not overwrite the fixture)",
+    "created_yet": "NO (preparation only)"
+  },
+  "required_inputs": {
+    "IFC_INGESTION_REQUIRED_INPUTS": [
+      "MedicalClinic_ARC.ifc local file (NOT_AVAILABLE — not in repo)",
+      "an iTwin id to host the demo iModel (AVAILABLE: MRTway Development Twin bdf29ecd-... or a new demo iTwin)",
+      "Bentley authentication with iModel/synchronization permissions (UNKNOWN — the SPA PKCE client is a viewer client; connector/synchronization requires appropriate scopes/roles)",
+      "iModel creation permission on the target iTwin (UNKNOWN)",
+      "the IFC connector / Synchronization API access or the iTwin Synchronizer desktop app (NOT_AVAILABLE in this repo; external tooling)",
+      "storage/upload of the IFC to a Bentley file container for the connector (NOT_AVAILABLE yet)"
+    ],
+    "readiness_by_input": {
+      "ifc_local_file": "NOT_AVAILABLE",
+      "itwin_id": "AVAILABLE",
+      "auth_with_sync_permissions": "UNKNOWN",
+      "imodel_creation_permission": "UNKNOWN",
+      "connector_or_synchronizer_tooling": "NOT_AVAILABLE",
+      "file_upload_container": "NOT_AVAILABLE"
+    },
+    "IFC_INGESTION_READINESS": "BLOCKED",
+    "blocking_reasons": [
+      "MedicalClinic_ARC.ifc is not present locally",
+      "no IFC connector / synchronization tooling or confirmed permissions available in this environment",
+      "licensing for commercial demo use is NOT_ESTABLISHED"
+    ]
+  },
+  "first_experiment_success_criteria": {
+    "separate_demo_imodel_exists": true,
+    "medicalclinic_arc_geometry_present": true,
+    "viewer_can_open_it": true,
+    "walls_floors_doors_or_equivalent_visible": true,
+    "camera_navigation_works": true,
+    "NOT_required_yet": ["PET/CT placement", "room association", "MRT guideway", "clearance", "simulation"]
+  },
+  "post_ingestion_first_operation": {
+    "action": "run the SAME RUN BIM CONTENT AUDIT against the demo iModel and compare to the engineering fixture",
+    "compare": ["GeometricElement3d", "PhysicalElement", "wall", "door", "floor/slab", "story", "space", "model count", "schema inventory"],
+    "DEMO_BIM_VISUAL_REALISM": "MANUAL_CONFIRMATION_REQUIRED",
+    "DEMO_BIM_ROOM_SEMANTICS": "AUDIT_AFTER_INGESTION",
+    "caution": "Do not assume conversion succeeded merely because the viewer opens; verify with the content audit."
+  },
+  "equipment_next_step_record_only": {
+    "current_petct": "GENERIC_ENGINEERING_PLACEHOLDER (retained for engineering regression)",
+    "NEXT_EQUIPMENT_VISUAL_MILESTONE": "GLTF_GLB_GEOMETRY_REPRESENTATION_FOUNDATION",
+    "future_architecture": "AssetDefinition -> AssetInstance -> GeometryRepresentation { PARAMETRIC_GENERIC | GLTF_GLB | MANUFACTURER_MODEL }",
+    "MANUFACTURER_CERTIFIED_GEOMETRY_CLAIM": "NO",
+    "implement_now": "NO"
+  },
+  "constraints_honored": {
+    "ASSET_INSTANCE_ARCHITECTURE_CHANGED": "NO",
+    "VISUAL_CODE_CHANGED": "NO",
+    "AUTH_FLOW_CHANGED": "NO",
+    "PKCE_CHANGED": "NO",
+    "VIEWER_LIFECYCLE_CHANGED": "NO",
+    "INTERACTION_CODE_CHANGED": "NO",
+    "SPATIAL_SEMANTICS_CHANGED": "NO",
+    "CURRENT_FIXTURE_VISUAL_BEAUTIFICATION_CONTINUED": "NO",
+    "SECRET_EXPOSED": "NO",
+    "IFC_IMPORTED": "NO",
+    "DEMO_IMODEL_CREATED": "NO"
+  },
+  "checkpoint_status": "NONE — preparation/diagnosis only; not staged/committed/pushed"
+}

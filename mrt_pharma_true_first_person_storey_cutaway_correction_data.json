@@ -1,0 +1,105 @@
+{
+  "build": "MRT Pharma True First-Person Walkthrough + Storey Cutaway Correction",
+  "precheck": { "PRECHECK_HEAD": "b2abe6bf28056d002d140b52fb54e94c9cd417eb", "PRECHECK_ORIGIN_MAIN": "b2abe6bf28056d002d140b52fb54e94c9cd417eb", "PRECHECK_DIVERGENCE": "0 / 0", "EXISTING_UNCOMMITTED_WORK_PRESERVED": "YES" },
+  "manual_failure": { "PREVIOUS_WALKTHROUGH_ACCEPTANCE": "FAIL", "PREVIOUS_BIRDS_EYE_ACCEPTANCE": "FAIL" },
+  "walkthrough_diagnosis": {
+    "WALKTHROUGH_CAMERA_ROOT_CAUSE": "The camera used ViewState3d.lookAt with targetPoint = eye + unit-direction (~1 m ahead). A ~1 m eye->target distance triggered Bentley 'Too close to target' and made turning feel like orbiting a near pivot; additionally the pointer-lock mouse handler did not suspend Bentley's own orbit tool, so both processed the gesture.",
+    "fix": "Rewrote to EYE_POSITION + YAW + PITCH first-person state (pure firstPerson.ts). Target is placed 10 m ahead along the look direction with explicit frontDistance=0.1 / backDistance=5000, eliminating 'Too close to target'. Eye Z pinned to floor + eye height each frame (no drift)."
+  },
+  "walkthrough": {
+    "WALKTHROUGH_NAV_STATE": "EYE_POSITION_YAW_PITCH",
+    "FIRST_PERSON_REMOTE_ORBIT_TARGET": "NO",
+    "WALKTHROUGH_TOO_CLOSE_TO_TARGET_ERROR": "ELIMINATED (far target + explicit front/back distances)",
+    "WALKTHROUGH_TRANSLATES_EYE_POSITION": "YES",
+    "BENTLEY_ORBIT_INPUT_ACTIVE_DURING_WALKTHROUGH": "NO (pointer-lock owns look; per-frame lookAt drives the camera; movement gestures are consumed by the controller)",
+    "WALKTHROUGH_POINTER_INPUT_OWNER": "FIRST_PERSON_CONTROLLER",
+    "WALKTHROUGH_INPUT_CONFLICT": "RESOLVED (resolveCameraModePolicy: WALKTHROUGH assetManipulation=false; pointer lock)",
+    "PLANNING_INPUT_REGRESSION": 0,
+    "WALK_NAV_MODEL": "BIM_DERIVED_PER_STOREY (storey elevations from active iModel; collision from live geometry probe)",
+    "WALK_NAV_SOURCE": "ACTIVE_BENTLEY_IMODEL",
+    "WALKING_SURFACE_SOURCE": "storey elevation (BuildingSpatial:Story count banded across the model Z extent); eye pinned to floor+eyeHeight",
+    "WALL_COLLISION_SOURCE": "ACTIVE_BIM_WALL_PARTITION_GEOMETRY (Viewport.pickNearestVisibleGeometry proximity probe)",
+    "DOOR_PORTAL_SOURCE": "ACTIVE_BIM_DOOR_GEOMETRY (open doorway gaps pass; solid geometry blocks)",
+    "WINDOW_TRAVERSAL": "BLOCKED",
+    "UNKNOWN_OPENING_DEFAULT": "NON_TRAVERSABLE",
+    "COLLISION_BODY": "GENERIC_HUMAN_NAVIGATION_BODY (radius + eye height + floor support)",
+    "MOVEMENT_VALIDATED_BEFORE_CAMERA_COMMIT": "YES (resolveWalkMovement before eye commit)",
+    "WALL_GHOSTING": "NO",
+    "DOOR_CONSTRAINED_TRAVERSAL": "YES",
+    "WALL_SLIDING": "DEFERRED_WITH_REASON (blocked step is rejected wholesale; tangential sliding deferred to keep the collision step stable)",
+    "EYE_HEIGHT_TRACKS_WALKING_SURFACE": "YES",
+    "WALKTHROUGH_FREE_VERTICAL_FLIGHT": "NO",
+    "WALKTHROUGH_ENTRY_VALIDATED": "YES (starts at model-center on the selected/lowest storey at eye height)",
+    "WALKTHROUGH_RECOVERY": "YES (RESET WALKTHROUGH returns eye to validated entry)",
+    "STAIR_TRAVERSAL": "DEFERRED_WITH_REASON (not robustly verifiable; explicit storey selector provided)",
+    "WALKTHROUGH_STOREY_SELECTOR_SOURCE": "BUILDINGSPATIAL_STORY"
+  },
+  "birds_eye_diagnosis": {
+    "BIRDS_EYE_ROOM_BUTTON_ROOT_CAUSE": "loadStoreys fell back to SpatialComposition:CompositeElement JOIN GeometricElement3d when BuildingSpatial:Story had no placement bbox, producing ~269 composite/space rows rendered as storey buttons. Fixed: storeys derived from BuildingSpatial:Story ONLY (count), banded across the model Z extent; no composite/space fallback.",
+    "BIRDS_EYE_TOP_LEVEL_SELECTOR": "STOREYS_ONLY",
+    "ROOM_BUTTON_COUNT_IN_BIRDS_EYE_TOP_LEVEL": 0,
+    "BIRDS_EYE_ALL_BUILDING": "YES (default 'All Building' entry fits the clinic elevated three-quarter; no clip)",
+    "STOREY_CUTAWAY": "VIEW_ONLY (ViewState.setViewClip horizontal slab)",
+    "CUTAWAY_CAMERA_FRAMES_SELECTED_STOREY": "YES (elevated oblique frame + storey clip)"
+  },
+  "storey_discovery": {
+    "DEMO_STOREY_COUNT": "runtime (expected ~4 from BuildingSpatial:Story); derived at load from the active iModel — not fabricated",
+    "note": "Storey labels use real UserLabel/CodeValue when present; only elevations are banded when Story elements lack a placement bbox."
+  },
+  "closed_scope": {
+    "CLINICAL_PROGRAM_OVERLAY_STARTED": "NO",
+    "ROOM_OVERLAY_ARCHITECTURE_PRESERVED": "YES",
+    "ANIMATION_IMPLEMENTED": "NO",
+    "PLANNING_MODE_PRESERVED": "YES",
+    "CAMERA_MODE_SWITCH_SIDE_EFFECTS": "NONE",
+    "ACTIVE_BIM_PERSISTENCE_CHANGED": "NO",
+    "BENTLEY_WRITE_API_CALL_COUNT": 0,
+    "IMODEL_MODIFIED": "NO",
+    "BENTLEY_CHANGESET_CREATED": "NO",
+    "EQUIPMENT_PIPELINE_CHANGED": "NO",
+    "SPATIAL_SEMANTICS_CHANGED": "NO",
+    "AUTH_FLOW_CHANGED": "NO"
+  },
+  "offline_tests": {
+    "FIRST_PERSON_ORIENTATION_TESTABLE_OFFLINE": "YES",
+    "YAW_DOES_NOT_ORBIT_EYE_TEST": "PASS",
+    "FIRST_PERSON_PITCH_CLAMP_TEST": "PASS",
+    "FIRST_PERSON_FORWARD_TEST": "PASS",
+    "FIRST_PERSON_STRAFE_TEST": "PASS",
+    "REAL_WALL_BLOCK_POLICY_TEST": "PASS",
+    "REAL_DOOR_PASS_POLICY_TEST": "PASS",
+    "REAL_WINDOW_BLOCK_POLICY_TEST": "PASS",
+    "FLOOR_SUPPORT_TEST": "PASS",
+    "NO_FLOOR_POLICY_TEST": "PASS",
+    "EYE_HEIGHT_SUPPORT_TEST": "PASS",
+    "UNKNOWN_OPENING_CONSERVATIVE_TEST": "PASS",
+    "STOREY_SELECTOR_SOURCE_TEST": "PASS",
+    "ROOMS_EXCLUDED_FROM_LEVEL_SELECTOR_TEST": "PASS",
+    "CUTAWAY_IMMUTABILITY_TEST": "PASS (view-only; no store mutation)",
+    "CAMERA_INPUT_OWNERSHIP_TEST": "PASS (resolveCameraModePolicy)"
+  },
+  "machine_verification": {
+    "TYPECHECK": "PASS",
+    "OFFLINE_TEST_COUNT": 394,
+    "NEW_TEST_COUNT": 12,
+    "OFFLINE_TEST_REGRESSIONS": 0,
+    "PRODUCTION_BUILD": "PASS",
+    "CORE_FRONTEND_VERSION": "5.12.5",
+    "WORKER_ASSET_REAL": "YES",
+    "DRACO_WASM_ASSET_REAL": "YES",
+    "DEV_SERVER_VIEWER": 200
+  },
+  "regression": { "PROJECT_BIM_REGRESSION": 0, "EQUIPMENT_INTERACTION_REGRESSION": 0 },
+  "manual_acceptance": "ALL MANUAL_* = MANUAL_CONFIRMATION_REQUIRED",
+  "files_added": [
+    "frontend/src/components/spatial/firstPerson.ts",
+    "frontend/src/tests/firstPerson.test.ts"
+  ],
+  "files_modified": [
+    "frontend/src/components/spatial/walkthroughController.ts (true first-person camera; storeys-only; reset)",
+    "frontend/src/components/spatial/CameraModeControl.tsx (All Building + storey-only selectors; walkthrough storey entry + reset)",
+    "frontend/src/components/spatial/spatialAssetOverlay.ts (startStoreyId + resetWalkthroughMode entrypoints)"
+  ],
+  "SECRET_EXPOSED": "NO",
+  "checkpoint_status": "HOLD_FOR_MANUAL_ACCEPTANCE — nothing staged/committed/pushed"
+}

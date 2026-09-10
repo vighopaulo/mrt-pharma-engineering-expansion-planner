@@ -22,6 +22,25 @@
  */
 import { IModelApp } from '@itwin/core-frontend'
 import { SpatialAssetDecorator } from './SpatialAssetDecorator'
+import { RoomPlanDecorator } from './RoomPlanDecorator'
+import { ClinicalProgramDecorator } from './ClinicalProgramDecorator'
+import { deriveRoomFootprint, resolveRoomStoreyId, type StoreyZRange } from './planningPlan'
+import { resolveDecoratorRegistrationAction } from './decoratorRegistration'
+import { resolveClinicalProgramFacilityAnchor, describeGeometryQuality } from './clinicalProgramAnchor'
+import { resolveViewportSource, type ViewportSource } from './viewportResolution'
+import type { ScreenViewport } from '@itwin/core-frontend'
+import {
+    assignClinicalFunction as pureAssignClinicalFunction,
+    resetAssignment as pureResetAssignment,
+    assignmentForSpace as pureAssignmentForSpace,
+    summarizeProgram as pureSummarizeProgram,
+    checkProgramCompleteness as pureCheckProgramCompleteness,
+    loadProgramAssignments,
+    saveProgramAssignments,
+    type ClinicalProgramAssignment,
+    type ClinicalFunction,
+    type BimSpaceRef,
+} from './clinicalProgram'
 import { resolveDecorationRedrawPolicy } from './assetPicking'
 import {
     buildGeDiscoveryMiCatalogTestAsset,
@@ -50,6 +69,35 @@ const DEV_SCENARIO: ScenarioProvenance = { scenarioId: 'MRT_DEV_SCENARIO', scena
  * viewer/decorator remount never resets it.
  */
 export const spatialAssetStore = new SpatialAssetStore({ projectId: TEST_PROJECT_ID, scenario: DEV_SCENARIO })
+
+/**
+ * UI-only viewer mode (NORMAL_PLANNING default vs DEVELOPER). Presentation only:
+ * gates developer controls and the raw engineering dump. Never affects
+ * engineering/interaction state. Shared via subscription so both BentleyViewer
+ * and the lazy product panels observe the same mode.
+ */
+import type { ViewerMode } from './planningVisuals'
+import { DEFAULT_VIEWER_MODE } from './planningVisuals'
+let viewerMode: ViewerMode = DEFAULT_VIEWER_MODE
+const viewerModeListeners = new Set<() => void>()
+export function subscribeViewerMode(listener: () => void): () => void {
+    viewerModeListeners.add(listener)
+    return () => { viewerModeListeners.delete(listener) }
+}
+export function getViewerMode(): ViewerMode {
+    return viewerMode
+}
+export function setViewerMode(mode: ViewerMode): void {
+    if (viewerMode === mode) return
+    viewerMode = mode
+    for (const l of viewerModeListeners) l()
+    // Redraw so the derived room-plan appears/disappears with the mode.
+    const vp = IModelApp.viewManager?.selectedView
+    vp?.invalidateDecorations()
+}
+export function toggleViewerMode(): void {
+    setViewerMode(viewerMode === 'DEVELOPER' ? 'NORMAL_PLANNING' : 'DEVELOPER')
+}
 
 /**
  * UI-only rotation-handle hover flag. The manipulation tool sets this when the
@@ -168,8 +216,45 @@ export function replaceSelection(assetInstanceIds: readonly string[]): void {
     spatialAssetStore.replaceSelection(assetInstanceIds)
 }
 
+// The product viewport the viewer component explicitly registers. This is the
+// authoritative source for "the live clinic viewport" — selectedView can be null
+// while this is present (the proven NO_ACTIVE_VIEWPORT root cause).
+let explicitProductViewport: ScreenViewport | undefined
+
+/** The viewer registers its live ScreenViewport here on view-open. */
+export function setActiveProductViewport(vp: ScreenViewport | undefined): void {
+    explicitProductViewport = vp
+}
+
+/** Resolve the active product viewport with explicit precedence (pure policy). */
+export function resolveActiveProductViewport(): { viewport?: ScreenViewport; source: ViewportSource } {
+    const selected = IModelApp.viewManager?.selectedView ?? undefined
+    // Count viewports the viewManager owns (bounded iteration).
+    let registeredCount = 0
+    let onlyRegistered: ScreenViewport | undefined
+    try {
+        for (const vp of IModelApp.viewManager) { registeredCount += 1; onlyRegistered = vp }
+    } catch { /* viewManager not iterable / not initialized */ }
+
+    const source = resolveViewportSource({
+        explicitProductViewportAvailable: !!explicitProductViewport,
+        selectedViewAvailable: !!selected,
+        registeredViewportCount: registeredCount,
+    })
+    switch (source) {
+        case 'EXPLICIT_PRODUCT_VIEWPORT': return { viewport: explicitProductViewport, source }
+        case 'SELECTED_VIEW': return { viewport: selected, source }
+        case 'SINGLE_REGISTERED_VIEWPORT': return { viewport: onlyRegistered, source }
+        default: return { viewport: undefined, source }
+    }
+}
+
 let decorator: SpatialAssetDecorator | undefined
 let removeDecorator: (() => void) | undefined
+let roomPlanDecorator: RoomPlanDecorator | undefined
+let removeRoomPlanDecorator: (() => void) | undefined
+let clinicalProgramDecorator: ClinicalProgramDecorator | undefined
+let removeClinicalProgramDecorator: (() => void) | undefined
 
 /** Subscribe to store changes (product UI observability). */
 export function subscribeSpatialAssets(listener: StoreListener): () => void {
@@ -178,6 +263,11 @@ export function subscribeSpatialAssets(listener: StoreListener): () => void {
 
 /** Register the decorator once. Safe to call repeatedly (idempotent). */
 export function ensureDecoratorRegistered(): void {
+    // The CLINICAL PROGRAM decorator has its own idempotent registration and
+    // MUST run before the SpatialAssetDecorator early-return below — otherwise a
+    // remount where the asset decorator is already attached skips it entirely
+    // (the proven DECORATOR_NOT_REGISTERED failure).
+    ensureClinicalProgramDecoratorRegistered()
     if (decorator && removeDecorator) return
     if (!decorator) {
         decorator = new SpatialAssetDecorator(
@@ -200,7 +290,44 @@ export function ensureDecoratorRegistered(): void {
         )
     }
     removeDecorator = IModelApp.viewManager.addDecorator(decorator)
+
+    // Derived BIM-backed room-plan context (view-only decorations). Normal mode
+    // only; developer mode keeps the raw BIM volumes. Source of truth is the
+    // cached SpatialModelSemantics room ranges — never a second identity.
+    if (!roomPlanDecorator) {
+        roomPlanDecorator = new RoomPlanDecorator({
+            getMode: () => viewerMode,
+            getRooms: () => cachedModelSemantics.rooms,
+            // Honest planning elevation: the selected asset's Z if one is
+            // selected/placed; otherwise the plan defaults to the lowest room.
+            getSelectedAssetZ: () => {
+                const sel = spatialAssetStore.getSnapshot().selectedAssetInstanceId
+                if (!sel) return undefined
+                const inst = spatialAssetStore.getEffectiveProjectInstances().find((i) => i.assetInstanceId === sel)
+                return inst?.transform.position.z
+            },
+            getShowLabels: () => true,
+        })
+    }
+    removeRoomPlanDecorator = IModelApp.viewManager.addDecorator(roomPlanDecorator)
+
+    // (CLINICAL PROGRAM decorator already ensured at the top of this function,
+    // before the early-return, via ensureClinicalProgramDecoratorRegistered.)
+
+    // One-shot: load the authoritative room semantics so the derived room-plan
+    // has ranges to draw in normal mode (read-only; also used by association).
+    // Bounded and idempotent (refreshModelSemantics is safe to call; the guard
+    // avoids repeated queries). After it lands, redraw the decorations.
+    if (!semanticsLoaded && !roomPlanSemanticsRequested) {
+        roomPlanSemanticsRequested = true
+        void refreshModelSemantics().then(() => {
+            const vp = IModelApp.viewManager?.selectedView
+            vp?.invalidateDecorations()
+        }).catch(() => { roomPlanSemanticsRequested = false })
+    }
 }
+
+let roomPlanSemanticsRequested = false
 
 /** Resolve a Bentley BODY pick id (HitDetail.sourceId) to an asset id. */
 export function assetIdForPickId(pickId: string): string | undefined {
@@ -210,6 +337,61 @@ export function assetIdForPickId(pickId: string): string | undefined {
 /** Resolve a Bentley ROTATION HANDLE pick id to its asset id. */
 export function handleAssetIdForPickId(pickId: string): string | undefined {
     return decorator?.handleAssetIdForPickId(pickId)
+}
+
+/**
+ * Register the CLINICAL PROGRAM decorator with the Bentley ViewManager — its OWN
+ * idempotent, runtime-gated lifecycle (proven addDecorator pattern). Independent
+ * of Developer mode, room selection, and assignment state: the decorator itself
+ * decides per-frame whether to draw (getEnabled). Registering it here, before the
+ * SpatialAssetDecorator early-return in ensureDecoratorRegistered, is the fix for
+ * the proven DECORATOR_NOT_REGISTERED failure. Invalidates decorations once after
+ * a fresh registration so the existing persisted assignment renders immediately.
+ */
+export function ensureClinicalProgramDecoratorRegistered(): void {
+    const runtimeReady = !!IModelApp?.viewManager
+    const action = resolveDecoratorRegistrationAction({
+        runtimeReady,
+        alreadyRegistered: !!removeClinicalProgramDecorator,
+        featureEnabled: true,
+    })
+    if (action === 'WAIT' || action === 'KEEP') return
+    if (action === 'UNREGISTER') {
+        if (removeClinicalProgramDecorator) removeClinicalProgramDecorator()
+        removeClinicalProgramDecorator = undefined
+        return
+    }
+    // action === 'REGISTER'
+    if (!clinicalProgramDecorator) {
+        clinicalProgramDecorator = new ClinicalProgramDecorator({
+            getEnabled: () => programState.enabled,
+            getMode: () => viewerMode,
+            getRooms: () => cachedModelSemantics.rooms,
+            getAssignments: () => programState.assignments,
+            getActiveStoreyId: () => programState.activeStoreyId,
+            getSelectedSpaceId: () => programState.selectedSpaceId,
+            getStoreyRanges: () => programStoreyRanges,
+            getAuthoritativeFootprint: (bimSpaceId: string) => {
+                const e = authoritativeFootprints.get(bimSpaceId)
+                if (!e || !e.ok) return undefined
+                return { outerLoop: e.outerLoop, holes: e.holes, floorZ: e.floorZ, interiorAnchor: e.interiorAnchor }
+            },
+            getShowRoomVolume: () => programState.showRoomVolume,
+            getRoomVolumeMesh: (bimSpaceId: string) => {
+                const e = authoritativeFootprints.get(bimSpaceId)
+                return e?.ok ? e.mesh : undefined
+            },
+            getShowClinicalVolume: () => showClinicalVolume,
+            getPlanningVolumeForSpace: (bimSpaceId: string) => {
+                const v = planningVolumes.find((x) => x.parentBimSpaceId === bimSpaceId)
+                if (!v || v.hidden) return undefined // per-volume visibility
+                return { params: v.params, lifecycleState: v.lifecycleState, displayName: v.displayName, selected: programState.selectedSpaceId === bimSpaceId }
+            },
+        })
+    }
+    removeClinicalProgramDecorator = IModelApp.viewManager.addDecorator(clinicalProgramDecorator)
+    // Immediate refresh so an already-persisted assignment draws without a camera nudge.
+    IModelApp.viewManager?.selectedView?.invalidateDecorations()
 }
 
 /** The registered decorator (for the direct-manipulation tool's redraw hook). */
@@ -228,7 +410,12 @@ export function getSpatialDecorator(): SpatialAssetDecorator | undefined {
 export function disposeOverlay(): void {
     if (removeDecorator) removeDecorator()
     removeDecorator = undefined
-    // Keep `decorator` and the store so re-registration restores the overlay.
+    if (removeRoomPlanDecorator) removeRoomPlanDecorator()
+    removeRoomPlanDecorator = undefined
+    if (removeClinicalProgramDecorator) removeClinicalProgramDecorator()
+    removeClinicalProgramDecorator = undefined
+    // Keep the decorator instances and the store so re-registration restores the
+    // overlay (the domain state is authoritative and survives a transient detach).
 }
 
 function invalidateDecorations(): void {
@@ -809,7 +996,7 @@ export function rotateAssetYaw(assetInstanceId: string, deltaDegrees: number): R
 // explicitly (e.g. by a DEV inspector) — there is no per-frame BIM query and no
 // authoritative room/floor change during a drag preview.
 
-import type { SpatialAssociationResult, SpatialModelSemantics } from '../../domain/assets'
+import type { SpatialAssociationResult, SpatialModelSemantics, SpatialRoomReference } from '../../domain/assets'
 import { EMPTY_MODEL_SEMANTICS, computeSpatialAssociation, summarizeAssociation } from '../../domain/assets'
 
 /** Cached model semantics (Bentley-free). Refreshed explicitly, never per-frame. */
@@ -895,6 +1082,76 @@ export async function inspectBimSpatialStructure(): Promise<string> {
 }
 
 /**
+ * DEV / AUDIT: run the READ-ONLY BIM content audit (schemas, class counts,
+ * architectural-class search, room inventory) and return a bounded, formatted
+ * report for the Developer Inspector. Modifies nothing. Diagnostic only.
+ */
+export async function inspectBimContentAudit(): Promise<string> {
+    try {
+        const { runBimContentAudit, formatBimContentAudit } = await import('./bimContentAudit')
+        const audit = await runBimContentAudit()
+        return formatBimContentAudit(audit)
+    } catch (e) {
+        return 'BIM_CONTENT_AUDIT_ERROR: ' + (e instanceof Error ? e.message : String(e))
+    }
+}
+
+/**
+ * Camera navigation (view-only). Applies a product camera mode to the active
+ * viewport via the walkthrough controller. Never writes the iModel / emits
+ * engineering events. Returns storey list for the cutaway UI.
+ */
+export async function applyCameraMode(mode: import('./cameraNav').CameraMode, opts?: { storeyId?: string; fovPreset?: import('./walkNav').FovPreset }): Promise<boolean> {
+    const ctl = await import('./walkthroughController')
+    let storey: import('./walkthroughController').StoreyInfo | undefined
+    if (opts?.storeyId) {
+        const storeys = await ctl.loadStoreys()
+        storey = storeys.find((s) => s.id === opts.storeyId)
+    }
+    return ctl.applyCameraMode(mode, { storey, startStoreyId: opts?.storeyId, fovPreset: opts?.fovPreset })
+}
+
+export async function setWalkthroughFov(preset: import('./walkNav').FovPreset): Promise<void> {
+    const ctl = await import('./walkthroughController')
+    ctl.setWalkthroughFov(preset)
+}
+
+export async function turnAroundWalkthrough(): Promise<void> {
+    const ctl = await import('./walkthroughController')
+    ctl.turnAround()
+}
+
+export async function loadCameraStoreys(): Promise<import('./walkthroughController').StoreyInfo[]> {
+    const ctl = await import('./walkthroughController')
+    return ctl.loadStoreys()
+}
+
+export async function exitWalkthroughMode(): Promise<void> {
+    const ctl = await import('./walkthroughController')
+    ctl.exitWalkthrough()
+}
+
+export async function resetWalkthroughMode(): Promise<void> {
+    const ctl = await import('./walkthroughController')
+    ctl.resetWalkthrough()
+}
+
+/**
+ * DEV / PROBE: read-only, GET-only Bentley cloud permission probe using the
+ * existing runtime auth token. Returns a sanitized report for the Developer
+ * Inspector. Creates/uploads/runs nothing; never logs the token.
+ */
+export async function probeBentleyCloudPermissions(): Promise<string> {
+    try {
+        const { runBentleyPermissionProbe, formatPermissionProbe } = await import('./bentleyPermissionProbe')
+        const report = await runBentleyPermissionProbe()
+        return formatPermissionProbe(report)
+    } catch (e) {
+        return 'BENTLEY_PERMISSION_PROBE_ERROR: ' + (e instanceof Error ? e.message : String(e))
+    }
+}
+
+/**
  * DEV: inspect the spatial association of the currently selected asset. Refreshes
  * the semantics cache first (if never loaded) so the result reflects the live
  * BIM. Read-only.
@@ -909,4 +1166,950 @@ export async function inspectSpatialAssociation(): Promise<string> {
     const summary = `${summarizeAssociation(result)} | semanticsGeneration=${semanticsGeneration}`
     if (import.meta.env.DEV) console.info('[spatial-assoc] %s', summary)
     return summary
+}
+
+// ===========================================================================
+// MRT PHARMA CLINICAL PROGRAM OVERLAY — application-owned planning state
+// ===========================================================================
+//
+// Non-destructive planning layer over the existing Bentley BIM. All state lives
+// here (never in Bentley). Assignments are iModel-scoped, persisted safely, and
+// drive the view-only ClinicalProgramDecorator + the normal-mode UI panel. No
+// Bentley write API is ever called from this seam.
+
+interface ProgramState {
+    enabled: boolean
+    activeStoreyId?: string
+    selectedSpaceId?: string
+    iModelId: string
+    assignments: ClinicalProgramAssignment[]
+    /** View-only: render the authoritative IfcSpace volume shell. */
+    showRoomVolume: boolean
+}
+
+const programState: ProgramState = {
+    enabled: false,
+    activeStoreyId: undefined,
+    selectedSpaceId: undefined,
+    iModelId: '',
+    assignments: [],
+    showRoomVolume: false,
+}
+
+const programListeners = new Set<() => void>()
+
+function notifyProgram(): void {
+    for (const l of programListeners) l()
+    IModelApp.viewManager?.selectedView?.invalidateDecorations()
+}
+
+/** Subscribe to clinical-program state changes (UI observability). */
+export function subscribeClinicalProgram(listener: () => void): () => void {
+    programListeners.add(listener)
+    return () => { programListeners.delete(listener) }
+}
+
+/**
+ * Bind the clinical-program layer to a specific iModel id and load its persisted
+ * assignments. Switching id loads that id's scoped set (so a clinic's program
+ * never appears on the fixture, §21/§67). Idempotent when the id is unchanged.
+ */
+export function loadClinicalProgramForIModel(iModelId: string): void {
+    if (!iModelId) return
+    if (programState.iModelId === iModelId) {
+        notifyProgram()
+        return
+    }
+    programState.iModelId = iModelId
+    programState.assignments = loadProgramAssignments(iModelId)
+    programState.selectedSpaceId = undefined
+    // Switching iModel invalidates any cached authoritative footprints + volumes.
+    authoritativeFootprints.clear()
+    authoritativeInFlight.clear()
+    planningVolumes = []
+    loadPlanningVolumesForIModel(iModelId)
+    // Ensure the decorator is attached once the runtime is ready (idempotent;
+    // no-op if runtime not ready — ensureDecoratorRegistered will attach later).
+    ensureClinicalProgramDecoratorRegistered()
+    requestAuthoritativeFootprintsForAssignments()
+    notifyProgram()
+}
+
+/** Persist the current assignments under the active iModel id (safe subset). */
+function persistProgram(): void {
+    if (programState.iModelId) saveProgramAssignments(programState.iModelId, programState.assignments)
+}
+
+/** Current snapshot for the UI (read-only copies). */
+export function getClinicalProgramSnapshot(): {
+    enabled: boolean
+    activeStoreyId?: string
+    selectedSpaceId?: string
+    iModelId: string
+    assignments: readonly ClinicalProgramAssignment[]
+    showRoomVolume: boolean
+} {
+    return {
+        enabled: programState.enabled,
+        activeStoreyId: programState.activeStoreyId,
+        selectedSpaceId: programState.selectedSpaceId,
+        iModelId: programState.iModelId,
+        assignments: programState.assignments,
+        showRoomVolume: programState.showRoomVolume,
+    }
+}
+
+/** View-only: toggle the authoritative room-volume shell rendering. */
+export function setClinicalProgramShowRoomVolume(show: boolean): void {
+    if (programState.showRoomVolume === show) return
+    programState.showRoomVolume = show
+    notifyProgram()
+}
+
+/** The retained authoritative mesh for a space (view-only volume rendering). */
+export function getAuthoritativeRoomMesh(bimSpaceId: string): { vertices: readonly { x: number; y: number; z: number }[]; triangles: readonly number[] } | undefined {
+    const e = authoritativeFootprints.get(bimSpaceId)
+    return e?.ok ? e.mesh : undefined
+}
+
+// ===========================================================================
+// MRT PHARMA CLINICAL PLANNING VOLUME — true 3D world-space planning objects
+// ===========================================================================
+//
+// A ClinicalPlanningVolume is an app-owned oriented 3D prism (WORLD_GEOMETRY)
+// that is a CHILD of an authoritative parent IfcSpace. Physical authority is in
+// BIM/world coordinates; the camera never defines it. LOCK freezes the app object
+// only (no Bentley write). One volume per build (Uptake 01).
+
+let planningVolumes: import('./clinicalPlanningVolume').ClinicalPlanningVolume[] = []
+/** True once the active iModel's volumes have been loaded (writes gated until then). */
+let planningVolumesHydrated = false
+let showClinicalVolume = true
+
+/** Load planning volumes for the active iModel (scoped; cleared on switch). */
+function loadPlanningVolumesForIModel(iModelId: string): void {
+    planningVolumesHydrated = false
+    void import('./clinicalPlanningVolume').then((m) => {
+        // Only bind if the active iModel has not changed while loading (LOAD →
+        // BIND → then allow writes). Prevents saving an empty/previous collection
+        // into the new iModel's key.
+        if (programState.iModelId !== iModelId) return
+        planningVolumes = iModelId ? m.loadClinicalVolumes(iModelId) : []
+        planningVolumesHydrated = true
+        notifyProgram()
+    })
+}
+
+function persistPlanningVolumes(): void {
+    // HYDRATION GUARD: never write the (transiently empty) collection back to the
+    // active iModel's key until the async load has completed. This closed the
+    // empty-overwrite race where load→[]→save could clobber persisted volumes.
+    if (!programState.iModelId || !planningVolumesHydrated) return
+    void import('./clinicalPlanningVolume').then((m) => m.saveClinicalVolumes(programState.iModelId, planningVolumes))
+}
+
+/** The planning volume for a parent space (or undefined). */
+export function getClinicalPlanningVolume(parentBimSpaceId: string): import('./clinicalPlanningVolume').ClinicalPlanningVolume | undefined {
+    return planningVolumes.find((v) => v.parentBimSpaceId === parentBimSpaceId)
+}
+
+/** Snapshot of all planning volumes (read-only). */
+export function getClinicalPlanningVolumes(): readonly import('./clinicalPlanningVolume').ClinicalPlanningVolume[] {
+    return planningVolumes
+}
+
+export function getShowClinicalVolume(): boolean { return showClinicalVolume }
+export function setShowClinicalVolume(show: boolean): void {
+    if (showClinicalVolume === show) return
+    showClinicalVolume = show
+    notifyProgram()
+}
+
+/** Per-volume visibility (view-only; never mutates geometry or lifecycle). */
+export async function setPlanningVolumeVisibility(parentBimSpaceId: string, visible: boolean): Promise<void> {
+    const c = await import('./clinicalVolumeCollection')
+    planningVolumes = c.setPlanningVolumeVisibility(planningVolumes, parentBimSpaceId, visible)
+    persistPlanningVolumes()
+    notifyProgram()
+}
+
+/**
+ * Delete a DRAFT planning volume (app-owned only). LOCKED volumes are rejected
+ * (unlock first). Never touches the assignment, Bentley space, or parent geometry.
+ */
+export async function deleteClinicalVolume(parentBimSpaceId: string): Promise<{ ok: boolean; reason?: string }> {
+    const c = await import('./clinicalVolumeCollection')
+    const r = c.deletePlanningVolume(planningVolumes, parentBimSpaceId)
+    if (!r.deleted) return { ok: false, reason: r.reason }
+    planningVolumes = r.volumes
+    persistPlanningVolumes()
+    notifyProgram()
+    return { ok: true }
+}
+
+/** Per-collection volume summary (counts by lifecycle + visibility). */
+export async function getClinicalVolumeSummary(): Promise<import('./clinicalVolumeCollection').VolumeSummary> {
+    const c = await import('./clinicalVolumeCollection')
+    return c.summarizePlanningVolumes(planningVolumes)
+}
+
+/**
+ * Create or update the DRAFT planning volume for a parent space + clinical
+ * function. Deterministic, no Bentley write. Returns the volume.
+ */
+export async function defineClinicalVolume(input: {
+    parentBimSpaceId: string
+    clinicalFunction: string
+    displayName: string
+    storeyId?: string
+    params: import('./clinicalPlanningVolume').PrismParams
+}): Promise<import('./clinicalPlanningVolume').ClinicalPlanningVolume> {
+    const m = await import('./clinicalPlanningVolume')
+    const existing = planningVolumes.find((v) => v.parentBimSpaceId === input.parentBimSpaceId)
+    const slug = input.displayName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'volume'
+    const id = existing?.id ?? m.makeClinicalVolumeId(programState.iModelId || 'unknown', input.parentBimSpaceId, slug)
+    const vol: import('./clinicalPlanningVolume').ClinicalPlanningVolume = {
+        id,
+        iModelId: programState.iModelId,
+        parentBimSpaceId: input.parentBimSpaceId,
+        storeyId: input.storeyId,
+        clinicalFunction: input.clinicalFunction,
+        displayName: input.displayName,
+        geometryType: 'ORIENTED_RECTANGULAR_PRISM',
+        params: input.params,
+        lifecycleState: existing?.lifecycleState === 'LOCKED' ? 'LOCKED' : 'DRAFT',
+        geometrySource: 'MRT_PLANNING_SUBVOLUME',
+    }
+    planningVolumes = [...planningVolumes.filter((v) => v.parentBimSpaceId !== input.parentBimSpaceId), vol]
+    persistPlanningVolumes()
+    notifyProgram()
+    return vol
+}
+
+/**
+ * Derive a DRAFT seed for a NEW planning volume from the SELECTED parent's own
+ * authoritative BIM geometry (never Uptake coords / world origin). Extracts the
+ * parent mesh (read-only), uses its footprint centroid + Z range. Falls back to a
+ * bounded default only if geometry is unavailable.
+ */
+export async function suggestPlanningVolumeSeedForParent(parentBimSpaceId: string): Promise<import('./clinicalPlanningVolume').PrismParams> {
+    const m = await import('./clinicalPlanningVolume')
+    await ensureAuthoritativeRoomFootprint(parentBimSpaceId)
+    const parent = authoritativeFootprints.get(parentBimSpaceId)
+    if (parent?.ok && parent.outerLoop && parent.outerLoop.length >= 3) {
+        return m.seedPrismParamsFromParent({
+            footprint: parent.outerLoop,
+            zLow: parent.volume?.zLow ?? parent.floorZ,
+            zHigh: parent.volume?.zHigh ?? (parent.floorZ + 3),
+        })
+    }
+    // Bounded default (no geometry yet) — still not another room's coords.
+    return { centerX: 0, centerY: 0, zLow: 0, zHigh: 3, width: 4, depth: 3, yaw: 0 }
+}
+
+/** Update the DRAFT volume's params (rejected if LOCKED). */
+export function updateClinicalVolumeParams(parentBimSpaceId: string, params: import('./clinicalPlanningVolume').PrismParams): void {
+    const v = planningVolumes.find((x) => x.parentBimSpaceId === parentBimSpaceId)
+    if (!v || v.lifecycleState === 'LOCKED') return
+    v.params = params
+    planningVolumes = [...planningVolumes]
+    persistPlanningVolumes()
+    notifyProgram()
+}
+
+/** Live containment status of a volume against its authoritative parent mesh. */
+export async function getClinicalVolumeContainment(parentBimSpaceId: string): Promise<{ status: 'PASS' | 'FAIL' | 'NOT_EVALUATED'; failedSamples: number; totalSamples: number; parentMeshAvailable: boolean; reason?: string }> {
+    const v = planningVolumes.find((x) => x.parentBimSpaceId === parentBimSpaceId)
+    if (!v) return { status: 'NOT_EVALUATED', failedSamples: 0, totalSamples: 0, parentMeshAvailable: false, reason: 'NO_VOLUME' }
+    // Await extraction to completion (in-flight-aware) so a fresh volume is not
+    // mis-reported before its parent mesh has loaded.
+    await ensureAuthoritativeRoomFootprint(parentBimSpaceId)
+    const m = await import('./clinicalPlanningVolume')
+    const parent = authoritativeFootprints.get(parentBimSpaceId)
+    const parentMeshAvailable = !!(parent?.ok && parent.mesh && parent.mesh.triangles.length >= 3)
+    if (!parentMeshAvailable) {
+        return { status: m.resolveContainmentStatus({ parentMeshAvailable: false, sampleCount: 0, failedSampleCount: 0 }), failedSamples: 0, totalSamples: 0, parentMeshAvailable: false, reason: parent?.reason ?? 'PARENT_MESH_NOT_LOADED' }
+    }
+    const r = m.validatePlanningVolumeContainment({ params: v.params, parentMesh: parent!.mesh! })
+    const status = m.resolveContainmentStatus({ parentMeshAvailable: true, sampleCount: r.totalSamples, failedSampleCount: r.failedSamples })
+    return { status, failedSamples: r.failedSamples, totalSamples: r.totalSamples, parentMeshAvailable: true, reason: r.reason }
+}
+
+/** Lock the volume (only when containment PASS + valid). No Bentley write. */
+export async function lockClinicalVolume(parentBimSpaceId: string): Promise<{ ok: boolean; reason?: string }> {
+    const v = planningVolumes.find((x) => x.parentBimSpaceId === parentBimSpaceId)
+    if (!v) return { ok: false, reason: 'NO_VOLUME' }
+    await ensureAuthoritativeRoomFootprint(parentBimSpaceId)
+    const parent = authoritativeFootprints.get(parentBimSpaceId)
+    if (!parent?.ok || !parent.mesh || parent.mesh.triangles.length < 3) return { ok: false, reason: 'PARENT_MESH_NOT_LOADED' }
+    const m = await import('./clinicalPlanningVolume')
+    const gate = m.canLockVolume(v, parent.mesh)
+    if (!gate.ok) return gate
+    v.lifecycleState = 'LOCKED'
+    planningVolumes = [...planningVolumes]
+    persistPlanningVolumes()
+    notifyProgram()
+    return { ok: true }
+}
+
+/** Unlock for editing (planning-object freeze only — NOT simulation Lockdown). */
+export function unlockClinicalVolume(parentBimSpaceId: string): void {
+    const v = planningVolumes.find((x) => x.parentBimSpaceId === parentBimSpaceId)
+    if (!v || v.lifecycleState !== 'LOCKED') return
+    v.lifecycleState = 'DRAFT'
+    planningVolumes = [...planningVolumes]
+    persistPlanningVolumes()
+    notifyProgram()
+}
+
+/** DEV diagnostic: bounded report of the Uptake 01 planning volume. */
+export async function diagnoseClinicalPlanningVolume(): Promise<string> {
+    const target = programState.assignments.find((a) => a.clinicalFunction !== 'UNASSIGNED_EXISTING')
+    const L: string[] = ['=== UPTAKE 01 PLANNING VOLUME ===']
+    if (!target) { L.push('NO_ACTIVE_ASSIGNMENT'); return L.join('\n') }
+    const v = planningVolumes.find((x) => x.parentBimSpaceId === target.bimSpaceId)
+    L.push(`PARENT_BIM_SPACE_ID = ${target.bimSpaceId}`)
+    L.push(`IMODEL_ID = ${programState.iModelId || '(none)'}`)
+    if (!v) { L.push('PLANNING_VOLUME = NONE (use Define Volume)'); return L.join('\n') }
+    const m = await import('./clinicalPlanningVolume')
+    const g = m.buildOrientedPlanningPrism(v.params)
+    const contain = await getClinicalVolumeContainment(target.bimSpaceId)
+    const parent = authoritativeFootprints.get(target.bimSpaceId)
+    L.push(`PLANNING_VOLUME_ID = ${v.id}`)
+    L.push(`LIFECYCLE_STATE = ${v.lifecycleState}`)
+    L.push(`GEOMETRY_TYPE = ${v.geometryType}`)
+    L.push(`CENTER = (${v.params.centerX.toFixed(2)},${v.params.centerY.toFixed(2)},${((v.params.zLow + v.params.zHigh) / 2).toFixed(2)})`)
+    L.push(`WIDTH = ${v.params.width.toFixed(2)} DEPTH = ${v.params.depth.toFixed(2)}`)
+    L.push(`Z_LOW = ${v.params.zLow.toFixed(2)} Z_HIGH = ${v.params.zHigh.toFixed(2)} HEIGHT = ${(v.params.zHigh - v.params.zLow).toFixed(2)}`)
+    L.push(`YAW_DEG = ${((v.params.yaw * 180) / Math.PI).toFixed(1)}`)
+    L.push(`PRISM_VERTEX_COUNT = ${g.vertices.length} PRISM_TRIANGLE_COUNT = ${g.triangles.length / 3}`)
+    L.push(`INTERIOR_ANCHOR = (${g.interiorAnchor.x.toFixed(2)},${g.interiorAnchor.y.toFixed(2)},${g.interiorAnchor.z.toFixed(2)})`)
+    L.push('--- containment ---')
+    L.push(`PARENT_MESH_AVAILABLE = ${contain.parentMeshAvailable ? 'YES' : 'NO'}`)
+    L.push(`PARENT_GEOMETRY_SOURCE = ${parent?.ok ? 'AUTHORITATIVE_IFCSPACE_GEOMETRY' : 'NONE'}`)
+    L.push(`PARENT_VERTEX_COUNT = ${parent?.volume?.vertexCount ?? 0} PARENT_TRIANGLE_COUNT = ${parent?.volume?.triangleCount ?? 0}`)
+    L.push(`PARENT_CLOSED_MESH = ${parent?.volume?.closedMesh ? 'YES' : 'NO'}`)
+    L.push(`CONTAINMENT_SAMPLE_COUNT = ${contain.totalSamples}`)
+    L.push(`CONTAINMENT_FAILED_SAMPLE_COUNT = ${contain.failedSamples}`)
+    L.push(`CONTAINMENT_RESULT = ${contain.status}`)
+    L.push(`LOCK_ALLOWED = ${contain.status === 'PASS' ? 'YES' : 'NO'}`)
+    L.push(`RANGE_FALLBACK_USED = NO`)
+    L.push(`WORLD_GEOMETRY = YES`)
+    L.push(`SCREEN_SPACE_AUTHORITY = NO`)
+    return L.join('\n')
+}
+
+/**
+ * DEV diagnostic: READ-ONLY inspection of the MRT Pharma clinical-program /
+ * planning-volume localStorage keys + runtime, classifying the persistence
+ * regression. Inspects ONLY the mrtpharma.clinical* namespaces; never dumps
+ * unrelated storage, tokens, or full payloads.
+ */
+export async function diagnoseClinicalProgramPersistence(): Promise<string> {
+    const TARGET_SPACE = '0x200000001f1'
+    const ASSIGN_PREFIX = 'mrtpharma.clinicalProgram.'
+    const VOLUME_PREFIX = 'mrtpharma.clinicalVolume.'
+    const iModelId = programState.iModelId || ''
+    const L: string[] = ['=== CLINICAL PROGRAM PERSISTENCE ===']
+    L.push(`ACTIVE_IMODEL_ID = ${iModelId || '(none)'}`)
+    L.push(`RUNTIME_ASSIGNMENT_COUNT = ${programState.assignments.filter((a) => a.clinicalFunction !== 'UNASSIGNED_EXISTING').length}`)
+    L.push(`RUNTIME_PLANNING_VOLUME_COUNT = ${planningVolumes.length}`)
+
+    const store = typeof window !== 'undefined' ? window.localStorage : undefined
+    if (!store) { L.push('NO_LOCALSTORAGE'); return L.join('\n') }
+
+    // Bounded namespace scan (never other keys).
+    const assignKeys: string[] = []
+    const volumeKeys: string[] = []
+    for (let i = 0; i < store.length; i++) {
+        const k = store.key(i)
+        if (!k) continue
+        if (k.startsWith(ASSIGN_PREFIX)) assignKeys.push(k)
+        else if (k.startsWith(VOLUME_PREFIX)) volumeKeys.push(k)
+    }
+
+    const currentAssignKey = `mrtpharma.clinicalProgram.v1.${iModelId}`
+    const currentVolumeKey = `mrtpharma.clinicalVolume.v1.${iModelId}`
+
+    // Bounded inventory helper (counts only; parse status; no payload dump).
+    const inspect = (key: string): { present: boolean; chars: number; parseOk: boolean; count: number; hasTarget: boolean } => {
+        const raw = store.getItem(key)
+        if (raw == null) return { present: false, chars: 0, parseOk: true, count: 0, hasTarget: false }
+        try {
+            const parsed = JSON.parse(raw) as unknown
+            const arr = Array.isArray(parsed) ? parsed as Record<string, unknown>[] : []
+            const hasTarget = arr.some((r) => r && (r.bimSpaceId === TARGET_SPACE || r.parentBimSpaceId === TARGET_SPACE))
+            return { present: true, chars: raw.length, parseOk: true, count: arr.length, hasTarget }
+        } catch {
+            return { present: true, chars: raw.length, parseOk: false, count: 0, hasTarget: false }
+        }
+    }
+
+    const ca = inspect(currentAssignKey)
+    const cv = inspect(currentVolumeKey)
+    L.push('--- current keys ---')
+    L.push(`CURRENT_ASSIGNMENT_STORAGE_KEY = ${currentAssignKey}`)
+    L.push(`CURRENT_ASSIGNMENT_STORAGE_PRESENT = ${ca.present ? 'YES' : 'NO'} chars=${ca.chars} parseOk=${ca.parseOk ? 'YES' : 'NO'} recordCount=${ca.count}`)
+    L.push(`CURRENT_VOLUME_STORAGE_KEY = ${currentVolumeKey}`)
+    L.push(`CURRENT_VOLUME_STORAGE_PRESENT = ${cv.present ? 'YES' : 'NO'} chars=${cv.chars} parseOk=${cv.parseOk ? 'YES' : 'NO'} recordCount=${cv.count}`)
+    L.push(`UPTAKE_ASSIGNMENT_FOUND_CURRENT = ${ca.hasTarget ? 'YES' : 'NO'}`)
+    L.push(`UPTAKE_VOLUME_FOUND_CURRENT = ${cv.hasTarget ? 'YES' : 'NO'}`)
+
+    // Legacy = any namespace key that is NOT the current-version key.
+    const legacyAssign = assignKeys.filter((k) => k !== currentAssignKey)
+    const legacyVolume = volumeKeys.filter((k) => k !== currentVolumeKey)
+    let legacyAssignCount = 0, legacyVolumeCount = 0, legacyAssignTarget = false, legacyVolumeTarget = false
+    for (const k of legacyAssign) { const r = inspect(k); legacyAssignCount += r.count; legacyAssignTarget = legacyAssignTarget || r.hasTarget }
+    for (const k of legacyVolume) { const r = inspect(k); legacyVolumeCount += r.count; legacyVolumeTarget = legacyVolumeTarget || r.hasTarget }
+    L.push('--- legacy / other-scope keys ---')
+    L.push(`ASSIGNMENT_NAMESPACE_KEYS = ${assignKeys.length} (legacy/other=${legacyAssign.length})`)
+    L.push(`VOLUME_NAMESPACE_KEYS = ${volumeKeys.length} (legacy/other=${legacyVolume.length})`)
+    L.push(`LEGACY_MATCHING_KEY_COUNT = ${legacyAssign.length + legacyVolume.length}`)
+    L.push(`UPTAKE_ASSIGNMENT_FOUND_LEGACY = ${legacyAssignTarget ? 'YES' : 'NO'}`)
+    L.push(`UPTAKE_VOLUME_FOUND_LEGACY = ${legacyVolumeTarget ? 'YES' : 'NO'}`)
+    // Note: other-scope keys may simply be a different iModel's data (not a defect).
+
+    const { classifyClinicalPersistenceRegression, recoveryActionForClass } = await import('./clinicalPersistenceDiagnostic')
+    const cls = classifyClinicalPersistenceRegression({
+        currentAssignmentRecordCount: ca.count,
+        currentVolumeRecordCount: cv.count,
+        legacyAssignmentRecordCount: legacyAssignTarget ? legacyAssignCount : 0,
+        legacyVolumeRecordCount: legacyVolumeTarget ? legacyVolumeCount : 0,
+        runtimeAssignmentCount: programState.assignments.filter((a) => a.clinicalFunction !== 'UNASSIGNED_EXISTING').length,
+        runtimeVolumeCount: planningVolumes.length,
+        currentAssignmentParseFailed: ca.present && !ca.parseOk,
+        currentVolumeParseFailed: cv.present && !cv.parseOk,
+    })
+    L.push('--- classification ---')
+    L.push(`PERSISTENCE_REGRESSION_CLASS = ${cls}`)
+    L.push(`RECOVERY_ACTION = ${recoveryActionForClass(cls)}`)
+    L.push('SECRET_SAFE = YES (namespace-scoped, counts only, no payload/token dump)')
+    return L.join('\n')
+}
+
+/**
+ * AUTHORIZED, one-time reconstruction of the accepted Uptake 01 baseline
+ * (assignment + DRAFT planning volume) — used only because the persistence
+ * diagnostic proved PERSISTED_STATE_GENUINELY_ABSENT. Duplicate-guarded +
+ * idempotent: never creates a second Uptake 01, never auto-runs on startup, never
+ * auto-locks. Persists via the accepted assignment + volume paths.
+ */
+export async function reconstructUptake01Baseline(): Promise<{ ok: boolean; alreadyPresent: boolean; assignmentId?: string; planningVolumeId?: string; reason?: string }> {
+    if (!programState.iModelId) return { ok: false, alreadyPresent: false, reason: 'NO_ACTIVE_IMODEL' }
+    const { reconstructUptake01Baseline: reconstruct, UPTAKE_01_BASELINE } = await import('./uptake01Reconstruction')
+    // Ensure volumes are hydrated before reconstructing (avoid clobbering).
+    if (!planningVolumesHydrated) { try { await new Promise((r) => setTimeout(r, 0)) } catch { /* noop */ } }
+    const storeyId = resolveRoomStoreyIdCached(UPTAKE_01_BASELINE.bimSpaceId)
+    const result = reconstruct({
+        iModelId: programState.iModelId,
+        storeyId,
+        existingAssignments: programState.assignments,
+        existingVolumes: planningVolumes,
+    })
+    if (result.alreadyPresent) {
+        return { ok: true, alreadyPresent: true, assignmentId: result.assignment.assignmentId, planningVolumeId: result.volume.id, reason: 'ALREADY_PRESENT' }
+    }
+    // Commit through the accepted persistence paths.
+    programState.assignments = result.assignments
+    persistProgram()
+    planningVolumes = result.volumes
+    planningVolumesHydrated = true // permit persistence now that a real record exists
+    persistPlanningVolumes()
+    // Extract parent geometry so containment recomputes.
+    void ensureAuthoritativeRoomFootprint(UPTAKE_01_BASELINE.bimSpaceId)
+    ensureClinicalProgramDecoratorRegistered()
+    notifyProgram()
+    return { ok: true, alreadyPresent: false, assignmentId: result.assignment.assignmentId, planningVolumeId: result.volume.id }
+}
+
+/** DEV diagnostic: bounded per-volume report across ALL planning volumes. */
+export async function diagnoseClinicalPlanningVolumes(): Promise<string> {
+    const c = await import('./clinicalVolumeCollection')
+    const summary = c.summarizePlanningVolumes(planningVolumes)
+    const L: string[] = ['=== CLINICAL PLANNING VOLUMES ===']
+    L.push(`IMODEL_ID = ${programState.iModelId || '(none)'}`)
+    L.push(`ASSIGNMENT_COUNT = ${programState.assignments.filter((a) => a.clinicalFunction !== 'UNASSIGNED_EXISTING').length}`)
+    L.push(`PLANNING_VOLUME_COUNT = ${summary.planningVolumes} (draft=${summary.draft} locked=${summary.locked} visible=${summary.visible} hidden=${summary.hidden})`)
+    L.push(`SELECTED_VOLUME_SPACE_ID = ${programState.selectedSpaceId ?? 'none'}`)
+    for (const v of planningVolumes) {
+        const contain = await getClinicalVolumeContainment(v.parentBimSpaceId)
+        L.push('---')
+        L.push(`displayName = ${v.displayName}`)
+        L.push(`planningVolumeId = ${v.id}`)
+        L.push(`parentBimSpaceId = ${v.parentBimSpaceId}`)
+        L.push(`lifecycle = ${v.lifecycleState} visible = ${v.hidden ? 'NO' : 'YES'}`)
+        L.push(`center = (${v.params.centerX.toFixed(2)},${v.params.centerY.toFixed(2)},${((v.params.zLow + v.params.zHigh) / 2).toFixed(2)}) w=${v.params.width.toFixed(2)} d=${v.params.depth.toFixed(2)} z=${v.params.zLow.toFixed(2)}..${v.params.zHigh.toFixed(2)} yaw=${((v.params.yaw * 180) / Math.PI).toFixed(1)}`)
+        L.push(`containment = ${contain.status} (${contain.failedSamples}/${contain.totalSamples})`)
+    }
+    if (planningVolumes.length === 0) L.push('(no planning volumes defined)')
+    return L.join('\n')
+}
+
+/** Enable/disable the clinical-program overlay + editing affordance. */
+export function setClinicalProgramEnabled(enabled: boolean): void {
+    if (programState.enabled === enabled) return
+    programState.enabled = enabled
+    // Defensive: guarantee the decorator is attached whenever the overlay is
+    // turned on (independent of the asset-decorator lifecycle). Idempotent.
+    if (enabled) { ensureClinicalProgramDecoratorRegistered(); requestAuthoritativeFootprintsForAssignments() }
+    notifyProgram()
+}
+
+/** Set the active storey used for overlay storey-filtering. */
+export function setClinicalProgramActiveStorey(storeyId: string | undefined): void {
+    if (programState.activeStoreyId === storeyId) return
+    programState.activeStoreyId = storeyId
+    notifyProgram()
+}
+
+/** Select a BIM space for program editing (BIM_SPACE_ID; §12). */
+export function setClinicalProgramSelectedSpace(bimSpaceId: string | undefined): void {
+    if (programState.selectedSpaceId === bimSpaceId) return
+    programState.selectedSpaceId = bimSpaceId
+    notifyProgram()
+}
+
+/** The rooms the UI can select from (authoritative cached BIM spaces). */
+export function getClinicalProgramRooms(): readonly SpatialRoomReference[] {
+    return cachedModelSemantics.rooms
+}
+
+/**
+ * Assign (or update) the single primary clinical function for a BIM space, then
+ * persist. Returns the resolved assignment or a bounded failure reason. Never
+ * touches Bentley identity (§4/§53/§77).
+ */
+export function assignClinicalProgram(input: {
+    bimSpace: BimSpaceRef
+    clinicalFunction: ClinicalFunction
+    requestedDisplayName?: string
+}): { ok: true; assignment: ClinicalProgramAssignment } | { ok: false; reason: string } {
+    const result = pureAssignClinicalFunction({
+        bimSpace: input.bimSpace,
+        clinicalFunction: input.clinicalFunction,
+        requestedDisplayName: input.requestedDisplayName,
+        existingAssignments: programState.assignments,
+    })
+    if (!result.ok) return result
+    programState.assignments = result.assignments
+    persistProgram()
+    // Extract the true room geometry for the newly-assigned space (read-only).
+    if (result.assignment.clinicalFunction !== 'UNASSIGNED_EXISTING') void ensureAuthoritativeRoomFootprint(result.assignment.bimSpaceId)
+    notifyProgram()
+    return { ok: true, assignment: result.assignment }
+}
+
+/** Reset a BIM space back to UNASSIGNED_EXISTING (remove override), then persist. */
+export function resetClinicalProgram(bimSpaceId: string): void {
+    programState.assignments = pureResetAssignment(bimSpaceId, programState.assignments)
+    persistProgram()
+    // No orphans: a reset assignment removes its DRAFT child volume. A LOCKED
+    // volume is retained (the UI requires an explicit unlock before reset can
+    // clear it) — so we never silently discard locked planning geometry.
+    const child = planningVolumes.find((v) => v.parentBimSpaceId === bimSpaceId)
+    if (child && child.lifecycleState !== 'LOCKED') {
+        planningVolumes = planningVolumes.filter((v) => v.parentBimSpaceId !== bimSpaceId)
+        persistPlanningVolumes()
+    }
+    notifyProgram()
+}
+
+/** The active (non-UNASSIGNED) assignment for a space, if any. */
+export function getClinicalProgramAssignment(bimSpaceId: string): ClinicalProgramAssignment | undefined {
+    return pureAssignmentForSpace(bimSpaceId, programState.assignments)
+}
+
+/** Compact program summary (assigned count + count by function). */
+export function getClinicalProgramSummary(): ReturnType<typeof pureSummarizeProgram> {
+    return pureSummarizeProgram(programState.assignments)
+}
+
+/** Informational PET-demo completeness (never auto-creates rooms; §37/§75). */
+export function getClinicalProgramCompleteness(): ReturnType<typeof pureCheckProgramCompleteness> {
+    return pureCheckProgramCompleteness(programState.assignments)
+}
+
+// --- Storey binning for the program overlay's storey filter ---------------
+// The room semantics carry a floorId that is not guaranteed to equal the
+// storey-selector ids (they come from different queries). To make the storey
+// filter reliable we Z-bin each room footprint into the loaded storey ranges.
+
+let programStoreyRanges: StoreyZRange[] = []
+const roomStoreyIdCache = new Map<string, string | undefined>()
+
+/** Provide the storey Z-ranges used to bin rooms for storey-filtering. */
+export function setClinicalProgramStoreyRanges(ranges: readonly StoreyZRange[]): void {
+    programStoreyRanges = ranges.slice()
+    roomStoreyIdCache.clear()
+    notifyProgram()
+}
+
+function resolveRoomStoreyIdCached(roomId: string): string | undefined {
+    if (roomStoreyIdCache.has(roomId)) return roomStoreyIdCache.get(roomId)
+    const room = cachedModelSemantics.rooms.find((r) => r.roomId === roomId)
+    let storeyId: string | undefined
+    if (room) {
+        const fp = deriveRoomFootprint(room)
+        if (fp) storeyId = resolveRoomStoreyId(fp, programStoreyRanges)
+    }
+    roomStoreyIdCache.set(roomId, storeyId)
+    return storeyId
+}
+
+/** Room storey id for the UI (same Z-binning the decorator uses). */
+export function getClinicalProgramRoomStoreyId(roomId: string): string | undefined {
+    return resolveRoomStoreyIdCached(roomId)
+}
+
+// --- Authoritative IfcSpace geometry (true room footprint) ------------------
+// When an assigned space has EXACT_SPACE_GEOMETRY, we replace the range
+// rectangle with the true footprint extracted (read-only) from the geometry
+// stream. Extraction is async + cached per bimSpaceId; the decorator reads the
+// cached world footprint. Never a silent range fallback.
+
+interface AuthoritativeFootprintEntry {
+    outerLoop: { x: number; y: number }[]
+    holes: { x: number; y: number }[][]
+    floorZ: number
+    interiorAnchor: { x: number; y: number; z: number }
+    outerLoopPointCount: number
+    holeCount: number
+    area: number
+    ok: boolean
+    reason?: string
+    // 3D volume characterization + retained mesh (view-only volume rendering).
+    volume?: {
+        zLow: number; zHigh: number; height: number; vertexCount: number; triangleCount: number
+        componentCount: number; closedMesh: boolean; horizontalFaceCount: number; verticalFaceCount: number
+        worldRangeLow: { x: number; y: number; z: number }; worldRangeHigh: { x: number; y: number; z: number }
+    }
+    mesh?: { vertices: readonly { x: number; y: number; z: number }[]; triangles: readonly number[] }
+    resultBytes?: number
+    polyfaceCount?: number
+}
+
+const authoritativeFootprints = new Map<string, AuthoritativeFootprintEntry>()
+/** In-flight extraction promises, keyed by bimSpaceId (await-to-completion dedupe). */
+const authoritativeInFlight = new Map<string, Promise<void>>()
+
+/** The cached authoritative footprint for a space (undefined if not extracted). */
+export function getAuthoritativeRoomFootprint(bimSpaceId: string): AuthoritativeFootprintEntry | undefined {
+    return authoritativeFootprints.get(bimSpaceId)
+}
+
+/**
+ * Ensure the authoritative geometry for an assigned space has been extracted
+ * (read-only, once per space). On success caches the true footprint + interior
+ * anchor and redraws. Never falls back to the range rectangle here.
+ */
+export async function ensureAuthoritativeRoomFootprint(bimSpaceId: string): Promise<void> {
+    if (!bimSpaceId) return
+    // Already extracted successfully -> nothing to do.
+    if (authoritativeFootprints.get(bimSpaceId)?.ok) return
+    // De-dupe by an IN-FLIGHT PROMISE (not a boolean): awaiting this call always
+    // resolves AFTER extraction completes, so live containment sees the mesh
+    // (fixes the (0/0) race where the boolean guard returned before the mesh
+    // was cached).
+    const existing = authoritativeInFlight.get(bimSpaceId)
+    if (existing) { await existing; return }
+    const run = (async () => {
+        try {
+            const { extractAuthoritativeRoomGeometry } = await import('./authoritativeRoomGeometryProbe')
+            const { viewport } = resolveActiveProductViewport()
+            const geom = await extractAuthoritativeRoomGeometry(bimSpaceId, viewport?.iModel)
+            authoritativeFootprints.set(bimSpaceId, {
+                outerLoop: geom.footprint.outerLoop,
+                holes: geom.footprint.holes,
+                floorZ: geom.footprint.floorZ,
+                interiorAnchor: geom.interiorAnchor,
+                outerLoopPointCount: geom.outerLoopPointCount,
+                holeCount: geom.holeCount,
+                area: geom.footprintArea,
+                ok: geom.ok,
+                reason: geom.reason,
+                volume: geom.volume,
+                mesh: geom.mesh,
+                resultBytes: geom.resultBytes,
+                polyfaceCount: geom.polyfaceCount,
+            })
+                ; (viewport ?? IModelApp.viewManager?.selectedView)?.invalidateDecorations()
+            // Parent mesh now available -> tell observers so containment recomputes.
+            notifyProgram()
+        } catch { /* leave uncached; a later call retries */ }
+        finally { authoritativeInFlight.delete(bimSpaceId) }
+    })()
+    authoritativeInFlight.set(bimSpaceId, run)
+    await run
+}
+
+/** Kick off authoritative extraction for every currently assigned space. */
+function requestAuthoritativeFootprintsForAssignments(): void {
+    for (const a of programState.assignments) {
+        if (a.clinicalFunction !== 'UNASSIGNED_EXISTING' && a.bimSpaceId) void ensureAuthoritativeRoomFootprint(a.bimSpaceId)
+    }
+}
+
+/**
+ * The honest geometry-quality of a room's overlay (for restrained UI disclosure).
+ * Returns e.g. { quality: 'BIM_RANGE_APPROXIMATION', description: 'BIM range approximation' }.
+ */
+export function getClinicalProgramRoomGeometryQuality(roomId: string): { quality: string; description: string } | undefined {
+    const room = cachedModelSemantics.rooms.find((r) => r.roomId === roomId)
+    if (!room) return undefined
+    const anchor = resolveClinicalProgramFacilityAnchor({ room, storeys: programStoreyRanges })
+    return { quality: anchor.geometryQuality, description: describeGeometryQuality(anchor.geometryQuality) }
+}
+
+/**
+ * DEV: run the READ-ONLY spatial-authority probe against the persisted target
+ * assignment (identity authority = its bimSpaceId; never a name/nearest search).
+ * Diagnostic-only — never changes the overlay.
+ */
+export async function diagnoseRoomSpatialAuthority(): Promise<string> {
+    const { probeRoomSpatialAuthority } = await import('./roomSpatialAuthorityProbe')
+    // Ensure semantics are loaded so the original label is available (read-only).
+    if (!semanticsLoaded || cachedModelSemantics.rooms.length === 0) {
+        try { await refreshModelSemantics() } catch { /* offline */ }
+    }
+    const target = programState.assignments.find((a) => a.clinicalFunction !== 'UNASSIGNED_EXISTING')
+    if (!target) return 'NO_ACTIVE_ASSIGNMENT: assign a clinical function first (target defaults to the persisted Uptake 01).'
+    return probeRoomSpatialAuthority({ bimSpaceId: target.bimSpaceId, originalBimLabel: target.originalBimLabel })
+}
+
+/**
+ * DEV: bounded diagnostic of the AUTHORITATIVE IfcSpace geometry extracted for
+ * the persisted target (counts + footprint area + anchor — never a raw dump).
+ */
+export async function diagnoseAuthoritativeRoomGeometry(): Promise<string> {
+    const EXPECTED_CLINIC_IMODEL_ID = '36381ef4-b5f5-4d6d-b64b-2dbd69ba26a4'
+    const target = programState.assignments.find((a) => a.clinicalFunction !== 'UNASSIGNED_EXISTING')
+    const L: string[] = []
+    L.push('=== UPTAKE 01 AUTHORITATIVE GEOMETRY ===')
+    // §40 viewport-resolution entry diagnostic (bounded).
+    const { viewport, source } = resolveActiveProductViewport()
+    const activeIModelId = viewport?.iModel?.iModelId ?? '(none)'
+    L.push(`VIEWPORT_RESOLUTION_SOURCE = ${source}`)
+    L.push(`ACTIVE_VIEWPORT_FOUND = ${viewport ? 'YES' : 'NO'}`)
+    L.push(`ACTIVE_EXTRACTION_IMODEL_ID = ${activeIModelId}`)
+    L.push(`EXPECTED_CLINIC_IMODEL_ID = ${EXPECTED_CLINIC_IMODEL_ID}`)
+    L.push(`IMODEL_MATCH = ${activeIModelId === EXPECTED_CLINIC_IMODEL_ID ? 'YES' : 'NO'}`)
+    if (!target) { L.push('NO_ACTIVE_ASSIGNMENT'); return L.join('\n') }
+    L.push(`TARGET = ${target.originalBimLabel}`)
+    L.push(`BIM_SPACE_ID = ${target.bimSpaceId}`)
+    // Re-run extraction fresh so GENERATE_ELEMENT_MESHES fields reflect this call.
+    authoritativeInFlight.delete(target.bimSpaceId)
+    authoritativeFootprints.delete(target.bimSpaceId)
+    await ensureAuthoritativeRoomFootprint(target.bimSpaceId)
+    const e = authoritativeFootprints.get(target.bimSpaceId)
+    L.push(`GENERATE_ELEMENT_MESHES_CALLED = ${viewport ? 'YES' : 'NO'}`)
+    if (!e) { L.push('extraction pending / unavailable'); return L.join('\n') }
+    if (!e.ok) {
+        L.push(`geometrySource = AUTHORITATIVE_IFCSPACE_GEOMETRY`)
+        L.push(`geometryQuality = NOT_AVAILABLE (extraction failed: ${e.reason ?? 'unknown'})`)
+        L.push(`SILENT_RANGE_RECTANGLE_FALLBACK = NO (failure is disclosed, not hidden)`)
+        return L.join('\n')
+    }
+    L.push(`GENERATE_ELEMENT_MESHES_RESULT_BYTES = ${e.resultBytes ?? 0}`)
+    L.push(`POLYFACE_COUNT = ${e.polyfaceCount ?? 0}`)
+    L.push(`geometrySource = AUTHORITATIVE_IFCSPACE_GEOMETRY`)
+    L.push(`geometryQuality = EXACT_ROOM_BOUNDARY`)
+    L.push(`outerLoopPointCount = ${e.outerLoopPointCount}`)
+    L.push(`holeCount = ${e.holeCount}`)
+    L.push(`footprintArea = ${e.area.toFixed(2)} m^2`)
+    L.push(`facilityAnchor = (${e.interiorAnchor.x.toFixed(2)},${e.interiorAnchor.y.toFixed(2)},${e.interiorAnchor.z.toFixed(2)})`)
+    L.push(`rangeFallbackUsed = NO`)
+    // §9 3D characterization.
+    if (e.volume) {
+        const v = e.volume
+        L.push('--- 3D characterization ---')
+        L.push(`VERTEX_COUNT = ${v.vertexCount} TRIANGLE_COUNT = ${v.triangleCount}`)
+        L.push(`WORLD_RANGE_LOW = (${v.worldRangeLow.x.toFixed(2)},${v.worldRangeLow.y.toFixed(2)},${v.worldRangeLow.z.toFixed(2)})`)
+        L.push(`WORLD_RANGE_HIGH = (${v.worldRangeHigh.x.toFixed(2)},${v.worldRangeHigh.y.toFixed(2)},${v.worldRangeHigh.z.toFixed(2)})`)
+        L.push(`zLow = ${v.zLow.toFixed(2)} zHigh = ${v.zHigh.toFixed(2)} height = ${v.height.toFixed(2)}`)
+        L.push(`closedMesh = ${v.closedMesh ? 'YES' : 'NO'} components = ${v.componentCount}`)
+        L.push(`horizontalFaces = ${v.horizontalFaceCount} verticalFaces = ${v.verticalFaceCount}`)
+    }
+    return L.join('\n')
+}
+
+/**
+ * DEV: instrument the LIVE clinical-program overlay rendering chain for the
+ * current assigned room(s) — primarily the persisted Uptake 01 — and classify
+ * the single primary failure (why it is / isn't visible on the building).
+ *
+ * Read-only, view-only, no Bentley writes, no token logging, no persistence
+ * mutation. Refreshes semantics once if empty so the trace reflects live rooms.
+ */
+export async function diagnoseClinicalProgramOverlay(): Promise<string> {
+    const { deriveRoomFootprint: deriveFp, resolveRoomStoreyId: resolveStorey } = await import('./planningPlan')
+    const { deriveClinicalProgramOverlay } = await import('./clinicalProgramOverlay')
+    const { classifyClinicalOverlayFailure, summarizeClinicalOverlayObservation } = await import('./clinicalOverlayDiagnostics')
+
+    // Ensure rooms are loaded (read-only).
+    if (!semanticsLoaded || cachedModelSemantics.rooms.length === 0) {
+        try { await refreshModelSemantics() } catch { /* offline / no iModel */ }
+    }
+
+    const assignments = programState.assignments
+    // Target = the first active (non-UNASSIGNED) assignment (the persisted Uptake 01).
+    const target = assignments.find((a) => a.clinicalFunction !== 'UNASSIGNED_EXISTING')
+    const lines: string[] = []
+    lines.push('=== CLINICAL PROGRAM OVERLAY DIAGNOSTIC ===')
+    lines.push(`iModel=${programState.iModelId || '(unbound)'}`)
+    lines.push(`programEnabled=${programState.enabled} activeStorey=${programState.activeStoreyId ?? 'ALL'} selected=${programState.selectedSpaceId ?? 'none'}`)
+    lines.push(`assignments=${assignments.length} storeyRanges=${programStoreyRanges.length} rooms=${cachedModelSemantics.rooms.length}`)
+
+    if (!target) {
+        lines.push('assignmentFound=NO — no active clinical-program assignment to trace.')
+        return lines.join('\n')
+    }
+
+    // §8 assignment record (sanitized).
+    lines.push('--- assignment ---')
+    lines.push(`mrtDisplayName=${target.mrtDisplayName} clinicalFunction=${target.clinicalFunction}`)
+    lines.push(`bimSpaceId present=${target.bimSpaceId ? 'YES' : 'NO'} bimStoreyId present=${target.bimStoreyId ? 'YES' : 'NO'}`)
+    lines.push(`originalBimLabel=${target.originalBimLabel}`)
+
+    // §9 BIM space match (exact bimSpaceId).
+    const matches = cachedModelSemantics.rooms.filter((r) => r.roomId === target.bimSpaceId)
+    lines.push('--- bim space match ---')
+    lines.push(`matchCount=${matches.length}`)
+
+    const room = matches[0]
+    // §12 room identity.
+    if (room) {
+        lines.push('--- room identity ---')
+        lines.push(`displayName=${room.displayName} floorId present=${room.floorId ? 'YES' : 'NO'} range present=${room.range ? 'YES' : 'NO'} geometryType=${room.geometryType} confidence=${room.confidence}`)
+        // §13 range.
+        if (room.range) {
+            const { low, high } = room.range
+            lines.push(`range low=(${low.x.toFixed(1)},${low.y.toFixed(1)},${low.z.toFixed(1)}) high=(${high.x.toFixed(1)},${high.y.toFixed(1)},${high.z.toFixed(1)}) w=${(high.x - low.x).toFixed(1)} d=${(high.y - low.y).toFixed(1)} h=${(high.z - low.z).toFixed(1)}`)
+        } else {
+            lines.push('range=NOT_AVAILABLE')
+        }
+    }
+
+    // §14 footprint.
+    const footprint = room ? deriveFp(room) : undefined
+    lines.push('--- footprint ---')
+    if (footprint) {
+        const cx = footprint.ring.reduce((s, p) => s + p.x, 0) / footprint.ring.length
+        const cy = footprint.ring.reduce((s, p) => s + p.y, 0) / footprint.ring.length
+        lines.push(`found=YES points=${footprint.ring.length} elevation=${footprint.elevation.toFixed(2)} centroid=(${cx.toFixed(1)},${cy.toFixed(1)}) rangeDerived=YES`)
+    } else {
+        lines.push('found=NO')
+    }
+
+    // §16 storey mapping.
+    const roomStoreyId = footprint ? resolveStorey(footprint, programStoreyRanges) : undefined
+    const roomStorey = programStoreyRanges.find((s) => s.id === roomStoreyId)
+    lines.push('--- storey mapping ---')
+    if (footprint) {
+        const midZ = (footprint.zLow + footprint.zHigh) / 2
+        lines.push(`midZ=${midZ.toFixed(2)} storeys=${programStoreyRanges.length} resolvedStoreyId=${roomStoreyId ?? 'none'} resolvedStoreyLabel=${roomStorey?.label ?? 'none'}`)
+    }
+    const activeStorey = programState.activeStoreyId
+    const storeyMatch = activeStorey === undefined ? true : (roomStoreyId !== undefined && roomStoreyId === activeStorey)
+    lines.push(`activeFilter=${activeStorey ?? 'ALL'} storeyMatch=${storeyMatch ? 'YES' : 'NO'}`)
+
+    // §18 pure overlay model.
+    const overlay = deriveClinicalProgramOverlay({
+        rooms: cachedModelSemantics.rooms,
+        assignments,
+        activeStoreyId: programState.activeStoreyId,
+        selectedRoomId: programState.selectedSpaceId,
+        storeys: programStoreyRanges,
+    })
+    const targetRecord = overlay.find((o) => o.bimSpaceId === target.bimSpaceId)
+    lines.push('--- overlay model ---')
+    lines.push(`records=${overlay.length} targetFound=${targetRecord ? 'YES' : 'NO'}`)
+    if (targetRecord) lines.push(`priority=${targetRecord.priority} assigned=${targetRecord.assigned} selected=${targetRecord.selected} anchor=(${targetRecord.anchor.x.toFixed(1)},${targetRecord.anchor.y.toFixed(1)},${targetRecord.anchor.z.toFixed(2)})`)
+
+    // §38 FIXED PHYSICAL LOCATION: facility anchor vs display anchor + honesty.
+    if (targetRecord) {
+        const fa = targetRecord.facilityAnchor
+        const da = targetRecord.displayAnchor
+        lines.push('--- fixed physical location ---')
+        lines.push(`geometrySource=${targetRecord.geometrySource} geometryQuality=${targetRecord.geometryQuality}`)
+        lines.push(`facilityAnchor=(${fa.x.toFixed(2)},${fa.y.toFixed(2)},${fa.z.toFixed(2)})`)
+        lines.push(`displayAnchor=(${da.x.toFixed(2)},${da.y.toFixed(2)},${da.z.toFixed(2)}) zLift=${(da.z - fa.z).toFixed(2)}`)
+        lines.push(`boundaryPointCount=${targetRecord.boundary?.length ?? 0} rangeFallbackUsed=${targetRecord.geometrySource === 'BIM_SPATIAL_RANGE' ? 'YES' : 'NO'}`)
+        lines.push(`facilityAnchorCameraDependence=NONE (world coordinates; worldToView only transforms the screen position)`)
+        // Authoritative IfcSpace geometry, if extracted.
+        const auth = authoritativeFootprints.get(target.bimSpaceId)
+        if (auth) {
+            lines.push('--- authoritative geometry ---')
+            if (auth.ok) {
+                lines.push(`geometrySource=AUTHORITATIVE_IFCSPACE_GEOMETRY geometryQuality=EXACT_ROOM_BOUNDARY`)
+                lines.push(`outerLoopPointCount=${auth.outerLoopPointCount} holeCount=${auth.holeCount} area=${auth.area.toFixed(2)} rangeFallbackUsed=NO`)
+                lines.push(`interiorAnchor=(${auth.interiorAnchor.x.toFixed(2)},${auth.interiorAnchor.y.toFixed(2)},${auth.interiorAnchor.z.toFixed(2)})`)
+            } else {
+                lines.push(`geometryQuality=NOT_AVAILABLE (extraction failed: ${auth.reason ?? 'unknown'}) — no silent range fallback`)
+            }
+        } else {
+            lines.push('--- authoritative geometry --- (extraction pending; will render true footprint when ready)')
+        }
+    }
+
+    // §20/§22 decorator state.
+    const dec = clinicalProgramDecorator
+    const registered = !!(dec && removeClinicalProgramDecorator)
+    lines.push('--- decorator ---')
+    lines.push(`registered=${registered ? 'YES' : 'NO'} enabled=${programState.enabled ? 'YES' : 'NO'} decorateCount=${dec?.diag.decorateCount ?? 0} lastDecorateAt=${dec?.diag.lastDecorateAt ?? 'none'}`)
+    if (dec) lines.push(`lastSeen: assignments=${dec.diag.assignmentCountSeen} rooms=${dec.diag.roomCountSeen} storeyRanges=${dec.diag.storeyRangeCountSeen} activeStorey=${dec.diag.activeStoreySeen ?? 'ALL'} overlay=${dec.diag.overlayCountSeen} enabled=${dec.diag.lastEnabled} mode=${dec.diag.lastMode}`)
+
+    // §23 draw attempt for target.
+    const spaceId = target.bimSpaceId
+    const footprintDrawn = !!dec?.diag.footprintDrawnFor.has(spaceId)
+    const labelDrawn = !!dec?.diag.labelDrawnFor.has(spaceId)
+    const graphicCreated = !!dec?.diag.footprintGraphicCreatedFor.has(spaceId)
+    const htmlAttached = !!dec?.diag.htmlLabelAttachedFor.has(spaceId)
+    lines.push('--- draw attempt (target) ---')
+    lines.push(`footprintDrawAttempted=${footprintDrawn ? 'YES' : 'NO'} labelDrawAttempted=${labelDrawn ? 'YES' : 'NO'} graphicType=${dec?.diag.graphicType ?? '?'} zLift=${dec?.diag.zLift ?? '?'}`)
+
+    // §25 world-to-view for the target anchor.
+    let anchorInside = false
+    const vp = IModelApp.viewManager?.selectedView
+    if (vp && targetRecord) {
+        try {
+            const world = { x: targetRecord.anchor.x, y: targetRecord.anchor.y, z: targetRecord.anchor.z }
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const view = (vp as any).worldToView(world)
+            const w = vp.viewRect?.width ?? 0
+            const h = vp.viewRect?.height ?? 0
+            anchorInside = Number.isFinite(view?.x) && Number.isFinite(view?.y) && view.x >= 0 && view.y >= 0 && view.x <= w && view.y <= h
+            lines.push('--- world to view ---')
+            lines.push(`world=(${world.x.toFixed(1)},${world.y.toFixed(1)},${world.z.toFixed(2)}) view=(${Number(view?.x).toFixed(0)},${Number(view?.y).toFixed(0)}) vp=${w}x${h} inside=${anchorInside ? 'YES' : 'NO'}`)
+        } catch { lines.push('--- world to view --- (unavailable)') }
+    } else {
+        lines.push('--- world to view --- (no viewport or no target record)')
+    }
+
+    // Build the observation and classify.
+    const observation = {
+        assignmentFound: true,
+        roomMatchCount: matches.length,
+        footprintFound: !!footprint,
+        activeStoreyId: programState.activeStoreyId,
+        roomStoreyId,
+        overlayRecordCount: overlay.length,
+        targetOverlayRecordFound: !!targetRecord,
+        decoratorRegistered: registered,
+        decoratorEnabled: programState.enabled,
+        // If the decorator has drawn since program state changed, invalidation works.
+        decoratorInvalidatedAfterChange: (dec?.diag.decorateCount ?? 0) > 0,
+        drawAttempted: footprintDrawn || labelDrawn,
+        anchorInsideViewport: anchorInside,
+        htmlLabelAttached: htmlAttached,
+        footprintGraphicCreated: graphicCreated,
+        overlayHiddenByLayout: false,
+    }
+    const cls = classifyClinicalOverlayFailure(observation)
+    lines.push('--- classification ---')
+    lines.push(`PROGRAM_OVERLAY_FAILURE_CLASS = ${cls}`)
+    lines.push(summarizeClinicalOverlayObservation(observation, cls))
+
+    const out = lines.join('\n')
+    if (import.meta.env.DEV) console.info('[clinical-overlay-diag]\n%s', out)
+    return out
 }

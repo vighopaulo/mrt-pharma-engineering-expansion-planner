@@ -259,14 +259,15 @@ describe('command service immutability', () => {
 
 // scanner geometry plan (Bentley-free) — proves geometry mapping
 describe('scanner geometry parts', () => {
-    it('produces gantry + bore + patient table parts', () => {
+    it('produces gantry + bore + patient table + table base parts', () => {
         const inst = buildGenericPetCtTestInstance(NEIGH)
         const parts = buildScannerParts(inst)
         const kinds = parts.map((p) => `${p.part}:${p.kind}`)
         expect(kinds).toContain('GANTRY:BOX')
         expect(kinds).toContain('BORE:CYLINDER')
         expect(kinds).toContain('PATIENT_TABLE:BOX')
-        expect(parts).toHaveLength(3)
+        expect(kinds).toContain('TABLE_BASE:BOX')
+        expect(parts).toHaveLength(4)
     })
 
     it('all part coordinates are finite', () => {

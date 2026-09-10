@@ -1,0 +1,112 @@
+{
+  "audit": "MRT Pharma Connected iModel Content Audit (diagnosis only)",
+  "precheck": {
+    "HEAD": "b2abe6bf28056d002d140b52fb54e94c9cd417eb",
+    "origin_main": "b2abe6bf28056d002d140b52fb54e94c9cd417eb",
+    "divergence": "0 / 0",
+    "visual_planning_foundation": "UNCOMMITTED"
+  },
+  "manual_evidence_established": {
+    "PRIMARY_PRODUCT_LAYOUT": "PASS",
+    "ASSET_LIBRARY_OVERLAPS_VIEWPORT": "NO",
+    "PLANNING_VIEWPORT_REMAINS_USABLE": "PASS",
+    "RIGHT_INSPECTOR_OVERLAPS_VIEWPORT": "NO",
+    "NORMAL_MODE_CONTROL_BAR_VISIBLE": "PASS",
+    "DEVELOPER_DRAWER_VISIBLE_WHEN_ENABLED": "PASS",
+    "LAYOUT_RECOVERY_MANUAL_ACCEPTANCE": "PASS"
+  },
+  "current_browser_observation": {
+    "CURRENT_BROWSER_MODEL_APPEARANCE": "SIMPLIFIED_RECTANGULAR_MASSES"
+  },
+  "audited_imodel_identity": {
+    "iTwin_name": "MRTway Development Twin",
+    "iTwin_id": "bdf29ecd-b4a4-404d-861a-ac3061c7b12f",
+    "iModel_name": "MRTway Hospital Campus Development",
+    "iModel_id": "REDACTED (browser-safe VITE_BENTLEY_IMODEL_ID; not printed / .env not read)",
+    "SECRET_EXPOSED": "NO"
+  },
+  "data_provenance_note": "Live ECSQL counts, schema inventory, class counts, and room ranges require an AUTHENTICATED browser IModelConnection (Bentley IMS + PKCE). They cannot be queried from the terminal. A bounded READ-ONLY audit helper (frontend/src/components/spatial/bimContentAudit.ts) was added and wired to a single DEV-drawer button 'RUN BIM CONTENT AUDIT'. Fields marked PENDING_LIVE_RUN are produced by clicking that button in the running /viewer session; they were NOT fabricated.",
+  "live_data_fields_RESOLVED": {
+    "provenance": "Values below were produced by manually running RUN BIM CONTENT AUDIT in the authenticated Bentley viewer. NOT fabricated.",
+    "IMODEL_MODEL_COUNT": 5,
+    "GEOMETRIC_3D_MODEL_COUNT": 1,
+    "GEOMETRIC_ELEMENT3D_COUNT": 12,
+    "PHYSICAL_ELEMENT_COUNT": 3,
+    "SPATIAL_LOCATION_ELEMENT_COUNT": 9,
+    "BUILDINGSPATIAL_SPACE_COUNT": 8,
+    "BUILDINGSPATIAL_STORY_COUNT": 0,
+    "SPATIALCOMPOSITION_COMPOSITE_COUNT": 12,
+    "ARCHITECTURAL_WALL_COUNT": 12,
+    "ARCHITECTURAL_SLAB_OR_FLOOR_COUNT": 0,
+    "ARCHITECTURAL_DOOR_COUNT": 0,
+    "note_on_wall_count": "12 wall-like matches were reported by the live class-metadata search; combined with 0 slabs/floors, 0 doors, 0 stories, and only 12 GeometricElement3d total, this is a PARTIAL architectural BIM, not a detailed one.",
+    "RELEVANT_SCHEMA_INVENTORY": "captured in live Developer Inspector output (BisCore, BuildingSpatial, SpatialComposition among them); paste full list here if a permanent record is needed",
+    "VISIBLE_MASSES_MATCH_ROOM_RANGES": "PARTIAL (the visible rectangular masses correspond largely to the 8 BuildingSpatial:Space ranges + the small physical/wall set)"
+  },
+  "prior_evidence_from_spatial_semantics_work": {
+    "buildingSpatial_space_objects": "~8 with finite ranges",
+    "floor_source_class": "SpatialComposition:CompositeElement (no reliable Story membership)",
+    "known_room_labels_observed": [
+      "Floor 1 Main Corridor",
+      "Radiopharmacy",
+      "Cyclotron Room",
+      "Vertical Circulation Core",
+      "Patient Room",
+      "Injection/Uptake Room",
+      "Scanner Room",
+      "Floor 2 Main Corridor"
+    ],
+    "wall_door_window_classes_probed_previously": "none matched the guessed BuildingPhysical/ArchitecturalPhysical candidates",
+    "note": "This is prior evidence, NOT a substitute for the live audit run."
+  },
+  "final_assessment": {
+    "TEST_FIXTURE_EVIDENCE": "STRONG: only 12 GeometricElement3d, 3 PhysicalElement, 8 Space, 0 Story, 0 slabs/floors, 0 doors; browser shows simple rectangular masses",
+    "PRODUCTION_BIM_EVIDENCE": "PARTIAL: 12 wall-like elements present but no floors/doors/stories and a very small geometric population — not a detailed hospital BIM",
+    "CONNECTED_IMODEL_CLASSIFICATION": "PARTIAL_ARCHITECTURAL_BIM",
+    "CONNECTED_IMODEL_CLASSIFICATION_CONFIDENCE": "HIGH (live browser audit executed)",
+    "CURRENT_VISUAL_LIMITATION_ROOT_CAUSE": "SOURCE_MODEL_GEOMETRY_LIMITATION (not CSS / transparency / renderer failure)"
+  },
+  "recommendation": {
+    "CURRENT_IMODEL_RECOMMENDATION": "RETAIN_AS_ENGINEERING_TEST_FIXTURE (confirmed by live audit)",
+    "CURRENT_IMODEL_ROLE": "ENGINEERING_REGRESSION_FIXTURE",
+    "preserve_for": [
+      "placement regression",
+      "selection",
+      "single drag",
+      "rotation",
+      "right-click menu",
+      "selection-box multi-select",
+      "group translation",
+      "delete",
+      "spatial-semantics tests",
+      "room-association tests"
+    ],
+    "CREDIBLE_HOSPITAL_DEMO_BIM_REQUIRED": "YES",
+    "reason": "Live audit confirmed 12 walls but 0 floors/doors/stories and only 12 GeometricElement3d — no visual polish can make this read as a detailed medical facility. Retain as the engineering/interaction regression fixture; acquire a credible demo BIM (MedicalClinic_ARC.ifc) as a SEPARATE iModel.",
+    "audit_status": "CLOSED — live browser evidence recorded"
+  },
+  "constraints_honored": {
+    "IMODEL_MODIFIED": "NO",
+    "BENTLEY_CHANGESET_CREATED": "NO",
+    "VISUAL_PLANNING_CODE_CHANGED": "NO",
+    "EQUIPMENT_PIPELINE_CHANGED": "NO",
+    "INTERACTION_CODE_CHANGED": "NO",
+    "SPATIAL_SEMANTICS_CHANGED": "NO",
+    "AUTH_FLOW_CHANGED": "NO",
+    "PKCE_CHANGED": "NO",
+    "VIEWER_LIFECYCLE_CHANGED": "NO",
+    "SECRET_EXPOSED": "NO",
+    "audit_code_added": "frontend/src/components/spatial/bimContentAudit.ts (diagnostic-only) + one DEV button + one overlay entrypoint; not integrated into product behavior"
+  },
+  "machine_verification": {
+    "TYPECHECK": "PASS",
+    "OFFLINE_TEST_COUNT": 341,
+    "OFFLINE_TEST_REGRESSIONS": 0,
+    "PRODUCTION_BUILD": "PASS",
+    "CORE_FRONTEND_VERSION": "5.12.5",
+    "WORKER_ASSET_REAL": "YES",
+    "DRACO_WASM_ASSET_REAL": "YES",
+    "DEV_SERVER_VIEWER": 200
+  },
+  "checkpoint_status": "NOT_STAGED_NOT_COMMITTED_NOT_PUSHED — DIAGNOSIS_ONLY"
+}

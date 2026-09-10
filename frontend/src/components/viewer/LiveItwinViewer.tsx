@@ -19,6 +19,16 @@ import type { ViewerConfig } from '../../lib/viewerConfig'
 import { browserAuthClientOptions } from '../../lib/viewerAuth'
 import type { RawBentleySelection } from '../../lib/viewerSelection'
 
+/**
+ * Default AppUI frontstage config for the web-viewer `<Viewer>`. The MRT tools
+ * expose no user-facing tool settings, and the empty AppUI Tool Settings widget
+ * (owned by @itwin/appui-react via @itwin/viewer-react, NOT by our PrimitiveTool)
+ * otherwise shows as empty chrome over the lower-left viewport. `hideToolSettings`
+ * is the SUPPORTED frontstage option to remove it — no DOM hacking. Stable
+ * module-scope identity so it never re-triggers Viewer reconfiguration.
+ */
+const DEFAULT_UI_CONFIG = { hideToolSettings: true } as const
+
 interface Props {
     config: ViewerConfig
     onSelect: (raw: RawBentleySelection, properties: Record<string, unknown>) => void | Promise<void>
@@ -99,7 +109,7 @@ export default function LiveItwinViewer({ config, onSelect, onAuthSuccess, onAut
         })
         return () => {
             disposed = true
-            void import('../spatial/spatialAssetOverlay').then((mod) => mod.disposeOverlay())
+            void import('../spatial/spatialAssetOverlay').then((mod) => { mod.setActiveProductViewport(undefined); mod.disposeOverlay() })
         }
     }, [])
 
@@ -187,6 +197,7 @@ export default function LiveItwinViewer({ config, onSelect, onAuthSuccess, onAut
             enablePerformanceMonitors={false}
             viewportOptions={viewportOptions}
             viewCreatorOptions={viewCreatorOptions}
+            defaultUiConfig={DEFAULT_UI_CONFIG}
             onIModelConnected={onIModelConnected}
         />
     )
@@ -246,6 +257,10 @@ const FORCE_INITIAL_FIT = false
  */
 function inspectAndMaybeFitViewport(viewport: ScreenViewport): void {
     try {
+        // Register the live product ScreenViewport so runtime consumers (e.g.
+        // authoritative geometry extraction) resolve the ACTUAL clinic viewport
+        // even when IModelApp.viewManager.selectedView is transiently null.
+        void import('../spatial/spatialAssetOverlay').then((mod) => mod.setActiveProductViewport(viewport))
         if (import.meta.env.DEV) {
             devCounters.viewportConfigurerRun += 1
             console.info('[bentley-life] VIEWPORT_CONFIGURER_RUN_COUNT=%d', devCounters.viewportConfigurerRun)
@@ -479,6 +494,57 @@ export async function inspectFeatureAppearance(): Promise<FeatureAppearanceResul
         const msg = e instanceof Error ? e.message : String(e)
         if (import.meta.env.DEV) console.error('[bentley-appearance] INSPECT_ERROR', msg)
         return { summary: 'INSPECT_ERROR: ' + msg }
+    }
+}
+
+export interface PlanningAppearanceResult {
+    ok: boolean
+    enabled: boolean
+    reason: string
+}
+
+/**
+ * Opt-in, REVERSIBLE, VIEW-ONLY planning appearance. Toggles the live viewport's
+ * `viewFlags.transparency` render flag: OFF renders surfaces opaque so the
+ * hospital reads as walls/rooms/corridors instead of overlapping translucent
+ * grey; ON restores the model's stored translucency. This is a per-viewport
+ * render flag (NOT an iModel write, NO changeset, NO DisplayStyle persistence)
+ * and is applied ONLY when the user triggers it — never at view-open — so it
+ * cannot blank the viewport on load (unlike the previously reverted onViewOpen
+ * attempt). Idempotent; returns the resulting state.
+ */
+/**
+ * REVERSIBLE, VIEW-ONLY planning appearance.
+ *
+ * CORRECTION 2: the previous implementation added BuildingSpatial:Space +
+ * SpatialComposition:CompositeElement element ids to the viewport never-drawn
+ * set. That was too broad for THIS iModel — CompositeElement is the
+ * building/story CONTAINER class, so hiding it (and everything the viewer
+ * resolved under it) removed almost the entire hospital, leaving only a few
+ * isolated blocks. That over-suppression is REVERSED here.
+ *
+ * This now toggles ONLY viewFlags.transparency (enabled => opaque surfaces), a
+ * single per-viewport render flag. It NEVER calls setNeverDrawn / category /
+ * model / subcategory hiding, so it cannot remove hospital context. It clears
+ * any stale never-drawn set (defensive: undo a prior session's suppression).
+ * NO iModel write, NO changeset. Applied only when a viewport is ready.
+ */
+export async function setPlanningAppearance(enabled: boolean): Promise<PlanningAppearanceResult> {
+    const vp = IModelApp.viewManager?.selectedView
+    if (!vp) return { ok: false, enabled: false, reason: 'NO_ACTIVE_VIEWPORT' }
+    try {
+        const vf = vp.viewFlags
+        vp.viewFlags = vf.copy({ transparency: !enabled }) // enabled => opaque
+        // Defensive: ensure NO elements are suppressed. Never hides context.
+        vp.clearNeverDrawn()
+        vp.invalidateRenderPlan()
+        if (import.meta.env.DEV) {
+            console.info('[bentley-appearance] PLANNING_APPEARANCE enabled=%s viewFlags.transparency=%s (no element suppression)',
+                String(enabled), String(!enabled))
+        }
+        return { ok: true, enabled, reason: enabled ? 'PLANNING_OPAQUE_NO_SUPPRESSION' : 'MODEL_DEFAULT' }
+    } catch (e) {
+        return { ok: false, enabled: false, reason: e instanceof Error ? e.message : String(e) }
     }
 }
 

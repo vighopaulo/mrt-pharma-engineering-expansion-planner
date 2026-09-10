@@ -16,6 +16,7 @@ import { ColorDef } from '@itwin/core-common'
 import type { AssetInstance } from '../../domain/assets'
 import { applyYaw, buildScannerParts, type ScannerPart, type WorldBox } from './scannerGeometry'
 import { resolveRotationHandleVisualState, type RotationHandleVisualState } from './assetPicking'
+import { resolveEquipmentVisualState, resolveSelectionVisualState, type EquipmentVisualState } from './planningVisuals'
 
 /** Sanitized, serializable snapshot of what the decorator would draw (for tests). */
 export interface DecorationPlan {
@@ -24,15 +25,19 @@ export interface DecorationPlan {
     parts: { part: ScannerPart; kind: 'BOX' | 'CYLINDER' }[]
 }
 
+/** Clinical / engineering equipment palette — a light equipment body, a darker
+ * recessed bore, a neutral couch, and a subdued base. Restrained (no toy/neon
+ * colors); distinct from the grey architecture. */
 const PART_COLOR: Record<ScannerPart, [number, number, number]> = {
-    GANTRY: [180, 190, 205], // light steel
-    BORE: [90, 110, 140], // darker inset
-    PATIENT_TABLE: [210, 210, 215], // pale table
+    GANTRY: [226, 230, 236], // light clinical body (off-white steel)
+    BORE: [56, 66, 84], // dark recessed bore
+    PATIENT_TABLE: [200, 206, 214], // neutral couch
+    TABLE_BASE: [150, 158, 170], // subdued support base
 }
 
 /** Highlight color for the directly-selected asset (application-owned render
  * state only — NOT a geometry-identity change and NOT transparency). */
-const SELECTION_COLOR: [number, number, number] = [255, 196, 0] // amber outline
+const SELECTION_COLOR: [number, number, number] = [90, 160, 255] // restrained blue-grey selection outline (not amber/orange)
 /** Object-attached rotation handle color (grey — NOT orange/yellow). Prominence
  * is controlled by the visual state (faint idle hint vs clear active). */
 const HANDLE_COLOR: [number, number, number] = [150, 155, 160] // neutral grey ring
@@ -208,8 +213,14 @@ export class SpatialAssetDecorator implements Decorator {
         for (const inst of instances) {
             try {
                 const selected = selectedIds.has(inst.assetInstanceId)
+                const visualState = resolveEquipmentVisualState({
+                    isSelected: selected,
+                    selectedCount: selectedIds.size,
+                    isHovered: false, // per-asset hover not tracked here (low clutter)
+                    isRotating: this.getRotationActive() && inst.assetInstanceId === handleOwnerId,
+                })
                 const pickId = this.pickIdFor(inst, iModel)
-                this.decorateInstance(context, inst, pickId, selected)
+                this.decorateInstance(context, inst, pickId, visualState)
                 if (inst.assetInstanceId === handleOwnerId && handleState !== 'HIDDEN') {
                     // Grey object-attached rotation handle for the SOLE selected
                     // asset only, prominence per visual state. Pick id stays
@@ -275,7 +286,7 @@ export class SpatialAssetDecorator implements Decorator {
         context.addDecorationFromBuilder(builder)
     }
 
-    private decorateInstance(context: DecorateContext, inst: AssetInstance, pickId: string | undefined, selected: boolean): void {
+    private decorateInstance(context: DecorateContext, inst: AssetInstance, pickId: string | undefined, visualState: EquipmentVisualState): void {
         const parts = buildScannerParts(inst)
         for (const part of parts) {
             // Pickable graphics carry the transient id so a click resolves back
@@ -285,11 +296,12 @@ export class SpatialAssetDecorator implements Decorator {
                 : context.createGraphicBuilder(GraphicType.WorldDecoration)
             const [r, g, b] = PART_COLOR[part.part]
             const fill = ColorDef.from(r, g, b)
-            // Selected assets get an amber outline (line color) + heavier weight.
-            // This is render state only; geometry identity is unchanged and no
-            // transparency is introduced.
-            const line = selected ? ColorDef.from(...SELECTION_COLOR) : fill
-            builder.setSymbology(line, fill, selected ? 4 : 1)
+            // Restrained selection emphasis: a subtle outline + slightly heavier
+            // weight (no bright ring, no opaque overlay). Render state only;
+            // geometry identity is unchanged and no transparency is introduced.
+            const sel = resolveSelectionVisualState(visualState)
+            const line = sel.outline ? ColorDef.from(...SELECTION_COLOR) : fill
+            builder.setSymbology(line, fill, sel.lineWeight)
 
             if (part.kind === 'BOX') {
                 const box = this.buildBox(part)

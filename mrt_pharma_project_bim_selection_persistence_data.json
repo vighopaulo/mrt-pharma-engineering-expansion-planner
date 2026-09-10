@@ -1,0 +1,107 @@
+{
+  "build": "MRT Pharma Project BIM Selection + Persistent Active iModel",
+  "precheck": {
+    "PRECHECK_HEAD": "b2abe6bf28056d002d140b52fb54e94c9cd417eb",
+    "PRECHECK_ORIGIN_MAIN": "b2abe6bf28056d002d140b52fb54e94c9cd417eb",
+    "PRECHECK_DIVERGENCE": "0 / 0",
+    "EXISTING_UNCOMMITTED_WORK_PRESERVED": "YES"
+  },
+  "concepts": {
+    "INGESTION_AND_OPENING_SEPARATED": "YES",
+    "ACTIVE_PROJECT_BIM_MODEL": "IMPLEMENTED (frontend/src/lib/projectBim.ts: RegisteredBim, PersistedActiveBim, resolveActiveProjectBim)",
+    "DEMO_BIM_FIRST_CLASS_PROJECT_MODEL": "YES",
+    "REGISTERED_BIM_COUNT": 2
+  },
+  "registry": {
+    "product_demo": { "displayName": "MRTway Medical Clinic Demo", "iModelId": "36381ef4-b5f5-4d6d-b64b-2dbd69ba26a4", "role": "PRODUCT_DEMO_BIM", "classification": "DETAILED_ARCHITECTURAL_BIM" },
+    "engineering_fixture": { "displayName": "MRTway Hospital Campus Development", "iModelId": "FROM_ENV_VITE_BENTLEY_IMODEL_ID (not duplicated)", "role": "ENGINEERING_REGRESSION_FIXTURE" },
+    "DEMO_IMODEL_REGISTERED": "YES",
+    "ENGINEERING_FIXTURE_PRESERVED": "YES"
+  },
+  "resolution": {
+    "IMODEL_RESOLUTION_PRECEDENCE": "URL_OVERRIDE > PERSISTED_ACTIVE_BIM > PRODUCT_DEFAULT > LEGACY_FALLBACK",
+    "NORMAL_PRODUCT_DEFAULT_BIM": "MRTway Medical Clinic Demo",
+    "ENGINEERING_FIXTURE_DEFAULT_IN_NORMAL_MODE": "NO",
+    "URL_OVERRIDE_AUTOMATICALLY_PERSISTS": "NO",
+    "wired_into": "frontend/src/lib/viewerConfig.ts getViewerConfig() now resolves iModelId/iTwinId via resolveActiveProjectBim()"
+  },
+  "persistence": {
+    "ACTIVE_BIM_SELECTION_PERSISTED": "YES (localStorage key mrtpharma.activeProjectBim.v1)",
+    "SECRET_PERSISTED_WITH_BIM_SELECTION": "NO (isSafePersistedPayload rejects token/Authorization/refresh/secret/pkce fields; only iModelId/iTwinId/displayName/role/lastOpenedAt allowed)",
+    "ACTIVE_BIM_RESTORED_AFTER_LOGIN": "YES (getViewerConfig resolves persisted selection on load; the Viewer opens that iModel)",
+    "REUPLOAD_REQUIRED_AFTER_LOGIN": "NO",
+    "SPECIAL_URL_REQUIRED_AFTER_LOGIN": "NO"
+  },
+  "ui": {
+    "BIM_SELECTOR_VISIBLE_IN_NORMAL_MODE": "YES (ProjectBimSelector, top-center; PROJECT BIM + active name + role + Ready; expandable list to switch)",
+    "ENGINEERING_FIXTURE_ROLE_VISIBLE": "YES (labeled 'Engineering Regression Fixture')",
+    "NORMAL_MODE_RAW_IMODEL_ID_VISIBLE": "NO (names + roles only)",
+    "RAW_INGESTION_CONTROLS_VISIBLE_IN_NORMAL_MODE": "NO (ingestion + audit panels remain devMode-only)",
+    "switch_mechanism": "persist safe selection -> reload /viewer (no ?imodel=); resolver picks the persisted model. No Bentley write.",
+    "ACTIVE_BIM_OPEN_FAILURE_SILENT_FALLBACK": "NO (resolver only opens registered ids; failures surface via the existing viewer error path, selection preserved)"
+  },
+  "already_ingested_policy": {
+    "ALREADY_INGESTED_BIM_OFFERS_OPEN": "YES (selector OPEN/ACTIVE)",
+    "ALREADY_INGESTED_BIM_OFFERS_START_INGESTION": "NO_IN_NORMAL_PRODUCT_FLOW (START INGESTION lives only in the devMode ingestion panel)"
+  },
+  "future_upload_contract": {
+    "FUTURE_UPLOAD_AUTO_REGISTERS_RESULT": "YES (documented contract; ingestion result -> registry -> active -> open -> persist)",
+    "FUTURE_UPLOAD_AUTO_OPENS_RESULT": "YES (documented; not implemented this build)",
+    "OPEN_BIM_TRIGGERS_RESYNC": "NO"
+  },
+  "no_writes": {
+    "BENTLEY_WRITE_API_CALL_COUNT": 0,
+    "MODEL_SWITCH_WRITES_IMODEL": "NO",
+    "DEMO_IMODEL_MODIFIED": "NO",
+    "ENGINEERING_FIXTURE_MODIFIED": "NO",
+    "BENTLEY_REINGEST_CLINIC": "NO"
+  },
+  "closed_scope": {
+    "SPATIAL_SEMANTICS_CHANGED": "NO",
+    "EQUIPMENT_PIPELINE_CHANGED": "NO",
+    "INTERACTION_CODE_CHANGED": "NO",
+    "BIM_VISUAL_PRESENTATION_CHANGED": "NO",
+    "AUTH_FLOW_CHANGED": "NO"
+  },
+  "offline_tests": {
+    "ACTIVE_BIM_RESOLVER_TESTABLE_OFFLINE": "YES (frontend/src/tests/projectBim.test.ts)",
+    "URL_OVERRIDE_PRECEDENCE_TEST": "PASS",
+    "PERSISTED_CLINIC_RESTORE_TEST": "PASS",
+    "PRODUCT_DEFAULT_CLINIC_TEST": "PASS",
+    "LEGACY_FALLBACK_TEST": "PASS",
+    "INVALID_PERSISTED_MODEL_TEST": "PASS",
+    "BIM_PERSISTENCE_SECRET_TEST": "PASS",
+    "ACTIVE_BIM_SWITCH_TEST": "PASS",
+    "INGESTED_BIM_ACTION_POLICY_TEST": "PASS (selector shows OPEN/ACTIVE for READY registered models; START INGESTION not offered in normal flow)"
+  },
+  "machine_verification": {
+    "TYPECHECK": "PASS",
+    "OFFLINE_TEST_COUNT": 364,
+    "NEW_TEST_COUNT": 12,
+    "OFFLINE_TEST_REGRESSIONS": 0,
+    "updated_test": "bentleyViewer.test.tsx #1 (config now resolves to product default clinic; env id is legacy fallback)",
+    "PRODUCTION_BUILD": "PASS",
+    "CORE_FRONTEND_VERSION": "5.12.5",
+    "WORKER_ASSET_REAL": "YES",
+    "DRACO_WASM_ASSET_REAL": "YES",
+    "DEV_SERVER_VIEWER": 200
+  },
+  "manual_acceptance": {
+    "RETURN_TO_VIEWER_OPENS_PERSISTED_CLINIC": "MANUAL_CONFIRMATION_REQUIRED",
+    "MANUAL_BIM_SWITCH": "MANUAL_CONFIRMATION_REQUIRED",
+    "MANUAL_RETURN_REQUIRES_IFC_UPLOAD": "NO"
+  },
+  "files_added": [
+    "frontend/src/lib/projectBim.ts",
+    "frontend/src/components/spatial/ProjectBimSelector.tsx",
+    "frontend/src/tests/projectBim.test.ts"
+  ],
+  "files_modified": [
+    "frontend/src/lib/viewerConfig.ts (resolveActiveProjectBim wiring)",
+    "frontend/src/routes/BentleyViewer.tsx (ProjectBimSelector mounted; audit/ingestion stay devMode)",
+    "frontend/src/routes/BentleyViewer.css (selector styles + full-size-rule exclusion)",
+    "frontend/src/tests/bentleyViewer.test.tsx (config resolution assertion updated)"
+  ],
+  "SECRET_EXPOSED": "NO",
+  "checkpoint_status": "HOLD_FOR_MANUAL_ACCEPTANCE — nothing staged/committed/pushed"
+}

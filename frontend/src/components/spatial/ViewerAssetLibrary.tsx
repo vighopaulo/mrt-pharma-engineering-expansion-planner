@@ -29,12 +29,15 @@ import {
     deleteAsset,
     ensureDirectManipulationReady,
     getAssociationForInstance,
+    getViewerMode,
     isSemanticsLoaded,
     refreshModelSemantics,
     rotateAssetYaw,
     selectAsset,
+    subscribeViewerMode,
 } from './spatialAssetOverlay'
-import { resolveMoveStatus, resolvePlacementStatus } from './placementStatus'
+import { resolveDeveloperVisibility } from './planningVisuals'
+import { resolveMoveStatus, resolvePlacementStatus, shouldShowPlacementStatusLine } from './placementStatus'
 
 /**
  * Render a floor/room association slot. Delegates to the SINGLE shared domain
@@ -51,8 +54,14 @@ function useSpatialSnapshot(): SpatialAssetSnapshot {
     return useSyncExternalStore(subscribeSpatialAssets, () => spatialAssetStore.getSnapshot())
 }
 
+function useViewerMode() {
+    return useSyncExternalStore(subscribeViewerMode, getViewerMode)
+}
+
 export function ViewerAssetLibrary() {
     const snapshot = useSpatialSnapshot()
+    const viewerMode = useViewerMode()
+    const devVisibility = resolveDeveloperVisibility(viewerMode)
     const library = useMemo(() => getAssetLibrary(), [])
     const [selectedEntry, setSelectedEntry] = useState<AssetLibraryEntry | null>(null)
     // `enterError` only surfaces a failure to ENTER placement/move mode (e.g.
@@ -131,7 +140,13 @@ export function ViewerAssetLibrary() {
             displayLabel: activeIntent?.displayLabel ?? prev.placementLabel,
             lastPlacedInstanceId: lastPlaced,
         })
-        if (pStatus.phase !== 'IDLE') setDerivedStatus(pStatus.text)
+        // The live "Placing: …" instruction is shown ONCE by the dedicated
+        // placement card below (mrt-placement-status). To avoid DUPLICATE
+        // placement copy, the status line only renders terminal transitions
+        // (succeeded/cancelled) — never the ACTIVE instruction (single source of
+        // truth: shouldShowPlacementStatusLine).
+        if (shouldShowPlacementStatusLine(pStatus.phase)) setDerivedStatus(pStatus.text)
+        else if (pStatus.phase === 'PLACEMENT_ACTIVE') setDerivedStatus('')
 
         // Move status. On a move-mode end transition, decide success vs cancel by
         // whether the bound instance's position actually changed.
@@ -153,8 +168,9 @@ export function ViewerAssetLibrary() {
             })
             if (mStatus.phase !== 'IDLE') setDerivedStatus(mStatus.text)
         } else if (moveActive) {
-            const mStatus = resolveMoveStatus({ active: true, wasActive: prev.moveActive, displayLabel: moveIntent?.displayLabel })
-            setDerivedStatus(mStatus.text)
+            // The live "Moving: …" instruction is shown by the dedicated move
+            // card; keep the status line clear during active move (no duplicate).
+            setDerivedStatus('')
         }
 
         prevRef.current = {
@@ -401,17 +417,27 @@ export function ViewerAssetLibrary() {
                             </button>
                         )}
                     </div>
-                    {/* BIM spatial association (observational; from committed
-                        position). Distinguishes honest statuses — a missing room
-                        because the BIM lacks room semantics is NOT the same as a
-                        room that simply doesn't contain the point. */}
+                    {/* Clean planning summary (normal + developer mode). BIM
+                        spatial association is observational (committed position);
+                        honest statuses are distinguished (not-available vs
+                        not-found). */}
                     <div className="mrt-spatial-assoc">
+                        <div className="mrt-lib-detail-row"><span>Equipment</span><strong>{selectedInstance.displayLabel}</strong></div>
                         <div className="mrt-lib-detail-row"><span>Floor</span><span>{formatAssociationSlot(association, 'floor')}</span></div>
                         <div className="mrt-lib-detail-row"><span>Room</span><span>{formatAssociationSlot(association, 'room')}</span></div>
-                        <div className="mrt-lib-detail-row"><span>Source</span><span>{association ? association.provenance.source : '—'}</span></div>
-                        <div className="mrt-lib-detail-row"><span>Method</span><span>{association ? association.provenance.method : '—'}</span></div>
+                        <div className="mrt-lib-detail-row"><span>Position</span><span>{`(${selectedInstance.transform.position.x.toFixed(1)}, ${selectedInstance.transform.position.y.toFixed(1)}, ${selectedInstance.transform.position.z.toFixed(1)})`}</span></div>
+                        <div className="mrt-lib-detail-row"><span>Orientation</span><span>{`${Math.round(selectedInstance.transform.rotation.yaw)}° yaw`}</span></div>
+                        <div className="mrt-lib-detail-row"><span>Status</span><span>{selectedInstance.installationState}</span></div>
                     </div>
-                    <pre className="mrt-placed-inspect">{inspectPlacedAsset(selectedInstance.assetInstanceId)}</pre>
+                    {/* Raw engineering identity dump — DEVELOPER MODE ONLY. */}
+                    {devVisibility.rawEngineeringDumpVisible && (
+                        <>
+                            <div className="mrt-lib-detail-row"><span>Instance</span><code>{selectedInstance.assetInstanceId}</code></div>
+                            <div className="mrt-lib-detail-row"><span>Assoc. source</span><span>{association ? association.provenance.source : '—'}</span></div>
+                            <div className="mrt-lib-detail-row"><span>Assoc. method</span><span>{association ? association.provenance.method : '—'}</span></div>
+                            <pre className="mrt-placed-inspect">{inspectPlacedAsset(selectedInstance.assetInstanceId)}</pre>
+                        </>
+                    )}
                 </div>
             )}
         </div>

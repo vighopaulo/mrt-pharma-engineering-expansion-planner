@@ -46,7 +46,11 @@ describe('viewer configuration', () => {
     it('1. builds a config from browser-safe VITE values', () => {
         const c = getViewerConfig()
         expect(c.clientId).toBe('mrtway-dev-viewer-spa')
-        expect(c.iModelId).toBe('imodel-abc-123')
+        // PROJECT BIM SELECTION: with no persisted selection and no ?imodel=
+        // override, the viewer now resolves to the PRODUCT DEFAULT (the Medical
+        // Clinic demo). The env VITE_BENTLEY_IMODEL_ID is retained as the LEGACY
+        // FALLBACK (used only when no product default / persisted selection).
+        expect(c.iModelId).toBe('36381ef4-b5f5-4d6d-b64b-2dbd69ba26a4')
     })
 
     it('2. defaults iTwin id to the known live MRTway Development Twin', () => {

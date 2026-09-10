@@ -37,7 +37,19 @@ export interface WorldCylinder {
 }
 
 export type ScannerPartGeometry = WorldBox | WorldCylinder
-export type ScannerPart = 'GANTRY' | 'BORE' | 'PATIENT_TABLE'
+/**
+ * Parts of the generic parametric PET/CT representation. GANTRY = main body;
+ * BORE = the circular patient bore (recessed, darker); PATIENT_TABLE = the
+ * couch slab; TABLE_BASE = the pedestal/base under the couch (gives the couch a
+ * believable support + clearer orientation).
+ *
+ * This is a GENERIC_ENGINEERING_PLACEHOLDER representation — recognizably a
+ * PET/CT scanner, NOT manufacturer-certified CAD. All proportions derive
+ * parametrically from the instance dimensions so future calibrated length/
+ * width/height/gantry/bore/table values can be applied without changing the
+ * interaction architecture.
+ */
+export type ScannerPart = 'GANTRY' | 'BORE' | 'PATIENT_TABLE' | 'TABLE_BASE'
 
 const DEG2RAD = Math.PI / 180
 
@@ -79,20 +91,37 @@ export function buildScannerParts(inst: AssetInstance): ScannerPartGeometry[] {
         part: 'BORE',
     }
 
-    // Patient table: a narrow longitudinal slab extending forward (−Y) from the
-    // bore, at bore height, narrower than the gantry.
-    const tableWidth = Math.min(W * 0.35, boreRadius * 1.4)
+    // Patient table (couch): a narrow longitudinal slab extending forward (−Y)
+    // from the bore, at bore height, clearly narrower than the gantry.
+    const tableWidth = Math.min(W * 0.32, boreRadius * 1.3)
+    const tableThickness = Math.max(H * 0.05, 0.06)
     const tableTopZ = boreZ - boreRadius * 0.15
+    const tableFrontY = p.y - D / 2            // couch extends to the front edge
+    const tableRearY = p.y + D / 2 - gantryDepth // meets the gantry face
     const table: WorldBox = {
         kind: 'BOX',
-        low: [p.x - tableWidth / 2, p.y - D / 2, tableTopZ - 0.08],
-        high: [p.x + tableWidth / 2, p.y + D / 2 - gantryDepth, tableTopZ],
+        low: [p.x - tableWidth / 2, tableFrontY, tableTopZ - tableThickness],
+        high: [p.x + tableWidth / 2, tableRearY, tableTopZ],
         yawRadians: yaw,
         center,
         part: 'PATIENT_TABLE',
     }
 
-    return [gantry, bore, table]
+    // Table base / pedestal: a support column from the floor up to the couch,
+    // under the couch's mid/front. Gives a believable support + orientation cue.
+    const baseWidth = tableWidth * 1.15
+    const baseDepth = Math.max((tableRearY - tableFrontY) * 0.35, 0.3)
+    const baseFrontY = tableFrontY + (tableRearY - tableFrontY) * 0.15
+    const base: WorldBox = {
+        kind: 'BOX',
+        low: [p.x - baseWidth / 2, baseFrontY, p.z],
+        high: [p.x + baseWidth / 2, baseFrontY + baseDepth, tableTopZ - tableThickness],
+        yawRadians: yaw,
+        center,
+        part: 'TABLE_BASE',
+    }
+
+    return [gantry, bore, table, base]
 }
 
 /** Rotate a world point about `center` by `yawRadians` around Z. */

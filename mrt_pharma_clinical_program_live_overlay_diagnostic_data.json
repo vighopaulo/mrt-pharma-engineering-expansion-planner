@@ -1,0 +1,87 @@
+{
+  "build": "CLINICAL_PROGRAM_LIVE_OVERLAY_DIAGNOSTIC_AND_EXACT_FAILURE_CORRECTION",
+  "precheck": {
+    "head": "b2abe6bf28056d002d140b52fb54e94c9cd417eb",
+    "originMain": "b2abe6bf28056d002d140b52fb54e94c9cd417eb",
+    "divergence": "0 0",
+    "existingUncommittedWorkPreserved": true,
+    "envUntouched": true,
+    "seamReportUntouched": true
+  },
+  "provenManualState": {
+    "CLINICAL_PROGRAM_ON": "YES",
+    "ACTIVE_BIM": "MRTway Medical Clinic Demo",
+    "ACTIVE_PROGRAM_STOREY_FILTER": "First Floor",
+    "ASSIGNED_ROOM_COUNT": 1,
+    "UPTAKE_ROOM_COUNT": 1,
+    "PROGRAM_ASSIGNMENT_PERSISTENCE": "PASS",
+    "PROGRAM_SUMMARY": "PASS",
+    "PROGRAM_LABEL_PHYSICALLY_VISIBLE_ON_BUILDING_BEFORE": "FAIL",
+    "ASSIGNED_ROOM_FOOTPRINT_VISIBLE_BEFORE": "FAIL",
+    "PROGRAM_ASSIGNED_ROOM_PHYSICALLY_IDENTIFIABLE_BEFORE": "FAIL"
+  },
+  "diagnostic": {
+    "CLINICAL_OVERLAY_DIAGNOSTIC": "IMPLEMENTED",
+    "DIAGNOSTIC_TARGET": "CURRENT_UPTAKE_01_ASSIGNMENT",
+    "pureClassifier": "frontend/src/components/spatial/clinicalOverlayDiagnostics.ts",
+    "liveTrace": "frontend/src/components/spatial/spatialAssetOverlay.ts:diagnoseClinicalProgramOverlay",
+    "devButton": "DIAGNOSE CLINICAL PROGRAM OVERLAY (Developer drawer -> Developer Inspector)",
+    "DIAGNOSTIC_OUTPUT": "BOUNDED",
+    "DIAGNOSTIC_SECRET_EXPOSURE": "NO",
+    "VISUAL_CHANGE_BEFORE_DIAGNOSTIC": "NO"
+  },
+  "rootCause": "ROOM_FOOTPRINT_NOT_FOUND",
+  "rootCauseDetail": "BuildingSpatial:Space placement bbox (bis.GeometricElement3d) null/degenerate for IFC-derived spaces -> range undefined -> geometryType METADATA_ONLY -> deriveRoomFootprint undefined -> zero overlay records -> nothing drawn. Upstream of rendering; prior WorldOverlay/Z-offset change could not help.",
+  "fix": {
+    "file": "frontend/src/components/spatial/bentleySpatialAdapter.ts",
+    "change": "elementRange(): read-only fallback to bis.SpatialIndex (MinX/MinY/MinZ/MaxX/MaxY/MaxZ by ECInstanceId) when the placement bbox is absent/degenerate; validated by validateWorldRange (no fabricated/NaN range).",
+    "scope": "PROVEN_FAILURE_ONLY",
+    "domainChanged": false,
+    "persistenceChanged": false,
+    "reassignmentRequired": false
+  },
+  "flags": {
+    "UPTAKE_01_ASSIGNMENT_PRESERVED": "YES",
+    "ADDITIONAL_DEMO_ROOM_ASSIGNMENTS": 0,
+    "PROGRAM_OVERLAY_FAILURE_CLASS": "ROOM_FOOTPRINT_NOT_FOUND",
+    "CORRECTION_SCOPE": "PROVEN_FAILURE_ONLY",
+    "CLINICAL_PROGRAM_DOMAIN_ARCHITECTURE_CHANGED": "NO",
+    "UPTAKE_01_REASSIGNMENT_REQUIRED": "NO",
+    "UPTAKE_01_PHYSICALLY_IDENTIFIABLE": "MANUAL_CONFIRMATION_REQUIRED",
+    "UPTAKE_01_FOOTPRINT_VISIBLE": "MANUAL_CONFIRMATION_REQUIRED",
+    "BENTLEY_ROOM_RENAMED": "NO",
+    "BENTLEY_WRITE_API_CALL_COUNT": 0,
+    "IMODEL_MODIFIED": "NO",
+    "BENTLEY_CHANGESET_CREATED": "NO",
+    "NAVIGATION_ARCHITECTURE_CHANGED": "NO",
+    "EQUIPMENT_PIPELINE_CHANGED": "NO",
+    "ACTIVE_BIM_PERSISTENCE_CHANGED": "NO",
+    "PROJECT_BIM_SELECTOR_REGRESSION": 0,
+    "TRANSPORT_MODE_IMPLEMENTATION_STARTED": "NO",
+    "PATIENT_ANIMATION_IMPLEMENTED": "NO",
+    "MRT_CARRIER_ANIMATION_IMPLEMENTED": "NO",
+    "PROGRAM_OVERLAY_INVALIDATION_WIRED": "YES",
+    "CLINICAL_OVERLAY_FAILURE_CLASSIFIER_TESTABLE_OFFLINE": "YES"
+  },
+  "offlineTests": {
+    "CLINICAL_OVERLAY_ID_MISMATCH_TEST": "PASS",
+    "CLINICAL_OVERLAY_STOREY_MISMATCH_TEST": "PASS",
+    "CLINICAL_OVERLAY_NO_FOOTPRINT_TEST": "PASS",
+    "CLINICAL_OVERLAY_MODEL_FILTER_TEST": "PASS",
+    "CLINICAL_OVERLAY_DECORATOR_TEST": "PASS",
+    "CLINICAL_OVERLAY_OFFSCREEN_TEST": "PASS",
+    "CLINICAL_OVERLAY_SUCCESS_CLASSIFIER_TEST": "PASS"
+  },
+  "verification": {
+    "TYPECHECK": "PASS",
+    "OFFLINE_TEST_COUNT": 495,
+    "NEW_TEST_COUNT": 19,
+    "OFFLINE_TEST_REGRESSIONS": 0,
+    "PRODUCTION_BUILD": "PASS",
+    "CORE_FRONTEND_VERSION": "5.12.5",
+    "WORKER_ASSET_REAL": "YES",
+    "DRACO_WASM_ASSET_REAL": "YES",
+    "DEV_SERVER_VIEWER_HTTP": 200
+  },
+  "checkpoint": "HOLD_FOR_MANUAL_ACCEPTANCE"
+}
