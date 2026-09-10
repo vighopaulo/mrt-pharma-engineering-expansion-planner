@@ -1,0 +1,121 @@
+{
+  "build": "BUILD_1A3_STOREY_FILTER_SYNCHRONIZATION",
+  "continues": ["BUILD_1A", "BUILD_1A1", "BUILD_1A2"],
+  "precheck": {
+    "PRECHECK_HEAD": "344d0289723e873c7a2974d0d8d295b38f44a6a3",
+    "PRECHECK_ORIGIN_MAIN": "344d0289723e873c7a2974d0d8d295b38f44a6a3",
+    "PRECHECK_DIVERGENCE": "0 0",
+    "BUILD_1A_1A1_1A2_WORK_PRESERVED": "YES",
+    "FRONTEND_ENV_STAGED": "NO"
+  },
+  "provenance": {
+    "STOREY_FILTER_SYNCHRONIZATION_PRE_FIX": "FAIL",
+    "ALL_OR_BASE_ROOM_COUNT_OBSERVED": 200,
+    "FIRST_FLOOR_DISPLAYED_ROOM_COUNT_OBSERVED": 153,
+    "SECOND_FLOOR_DISPLAYED_ROOM_COUNT_OBSERVED": 153,
+    "SECOND_FLOOR_BIM_VISUAL_FILTER_CHANGED": "YES",
+    "EQUAL_COUNT_ACCEPTED_AS_CORRECT": "NO",
+    "RUNTIME_PROVENANCE_PRESERVED": "YES"
+  },
+  "preserved": {
+    "BUILD_1A1_LIFECYCLE_FIX_PRESERVED": "YES",
+    "ROOM_DISCOVERY_BASE_COLLECTION_COLLAPSES_TO_ZERO": "NO",
+    "BUILD_1A2_WORK_PRESERVED": "YES"
+  },
+  "trace": {
+    "STOREY_FILTER_AUTHORITY_CHAIN_TRACED": "YES",
+    "CANONICAL_STOREY_FILTER_OWNER": "programState.activeStoreyId (setClinicalProgramActiveStorey)",
+    "DUPLICATE_STOREY_STATE_FOUND": "NO (control mirrors the canonical value for rendering only)",
+    "ROOM_STOREY_IDENTITY_SOURCE": "DiscoveredRoomVolume.storeyId via resolveRoomStoreyId over programStoreyRanges",
+    "ROOM_STOREY_IDENTITY_COLLAPSE": "NO",
+    "CLINICAL_ROOM_FILTER_FUNCTION": "pre-fix: none (selector rendered unfiltered getClinicalProgramRooms(); count froze in refreshRooms)",
+    "FIRST_BROKEN_STOREY_FILTER_SEAM": "ClinicalProgramControl selector options+count not recomputed on activeStoreyId change; options never storey-filtered",
+    "ROOT_CAUSE": "selector count froze at First-Floor value captured during discovery and never recomputed on storey change; options came from the unfiltered base; getRoomDiscoveryUiStatus also leaked unresolved-storey rooms into every storey"
+  },
+  "fix": {
+    "STOREY_FILTER_MUTATES_BASE_DISCOVERY": "NO",
+    "ROOM_SELECTOR_COUNT_MEANING": "CURRENT_FILTERED_ROOM_OPTION_COUNT",
+    "ALL_FILTER_RETURNS_BASE_ROOM_COLLECTION": "YES",
+    "FIRST_FLOOR_FILTER_EXCLUDES_OTHER_STOREYS": "YES",
+    "SECOND_FLOOR_FILTER_EXCLUDES_OTHER_STOREYS": "YES",
+    "FIRST_AND_SECOND_FLOOR_EQUAL_COUNT_ACCEPTED_WITHOUT_IDENTITY_PROOF": "NO",
+    "ROOF_FILTER_CORRECT": "YES",
+    "TOF_FOOTING_FILTER_CORRECT": "YES",
+    "STOREY_FILTER_CHANGE_RECOMPUTES_ROOM_OPTIONS": "YES",
+    "OUT_OF_FILTER_SELECTED_ROOM_POLICY": "CLEAR_UI_SELECTION_PRESERVE_DOMAIN",
+    "STOREY_CHANGE_DELETES_ASSIGNMENT": "NO",
+    "STOREY_CHANGE_DELETES_PLANNING_VOLUME": "NO",
+    "VIEWER_AND_CLINICAL_STOREY_SELECTION_SYNCHRONIZED": "YES",
+    "STOREY_CHANGE_TRIGGERS_DESTRUCTIVE_ROOM_REFRESH": "NO",
+    "PURE_STOREY_ROOM_FILTER": "IMPLEMENTED (filterDiscoveredRoomsByStorey)",
+    "STOREY_FILTER_DIAGNOSTIC": "IMPLEMENTED"
+  },
+  "offline_verification": {
+    "TYPECHECK": "PASS",
+    "OFFLINE_TEST_FILE_COUNT": 41,
+    "OFFLINE_TEST_COUNT": 702,
+    "NEW_TEST_COUNT": 19,
+    "OFFLINE_TEST_REGRESSIONS": 0,
+    "STOREY_FILTER_DOMAIN_TESTS": "PASS",
+    "STOREY_FILTER_UI_TESTS": "PASS",
+    "PRODUCTION_BUILD": "PASS",
+    "CORE_FRONTEND_VERSION": "5.12.5",
+    "WORKER_ASSET_REAL": "YES",
+    "DRACO_WASM_ASSET_REAL": "YES"
+  },
+  "runtime_verification": {
+    "VIEWER_HTTP_STATUS": 200,
+    "DEV_SERVER_TERMINAL": "term_1789024121920_c3wclat88fj",
+    "DEV_SERVER_STATUS": "RUNNING"
+  },
+  "closed_domains": {
+    "EQUIPMENT_CODE_CHANGED": "NO",
+    "ROUTING_CODE_CHANGED": "NO",
+    "TRANSPORT_CODE_CHANGED": "NO",
+    "SIMULATION_CODE_CHANGED": "NO",
+    "OPENUSD_CODE_CHANGED": "NO",
+    "NVIDIA_CODE_CHANGED": "NO",
+    "OPTIMIZATION_CODE_CHANGED": "NO",
+    "ECONOMICS_CODE_CHANGED": "NO",
+    "WHAT_IF_CODE_CHANGED": "NO",
+    "LOCKDOWN_CODE_CHANGED": "NO"
+  },
+  "manual_acceptance": {
+    "MANUAL_STOREY_MATRIX": "MANUAL_CONFIRMATION_REQUIRED",
+    "MANUAL_FIRST_SECOND_FLOOR_MEMBERSHIP": "MANUAL_CONFIRMATION_REQUIRED",
+    "MANUAL_STOREY_FILTER_ROUNDTRIP": "MANUAL_CONFIRMATION_REQUIRED",
+    "MANUAL_OUT_OF_FILTER_SELECTION_POLICY": "MANUAL_CONFIRMATION_REQUIRED",
+    "BUILD_1A2_MANUAL_ACCEPTANCE_RESUMED": "NO"
+  },
+  "changed_files": {
+    "modified": [
+      "frontend/src/components/spatial/bimRoomVolumeRegistry.ts",
+      "frontend/src/components/spatial/spatialAssetOverlay.ts",
+      "frontend/src/components/spatial/ClinicalProgramControl.tsx"
+    ],
+    "new": [
+      "frontend/src/tests/build1a3StoreyFilter.test.ts",
+      "frontend/src/tests/build1a3StoreyFilterUi.test.tsx",
+      "MRT_PHARMA_BUILD_1A3_STOREY_FILTER_SYNCHRONIZATION_REPORT.md",
+      "mrt_pharma_build_1a3_storey_filter_synchronization_data.json"
+    ],
+    "prior_build_1a_preserved": [
+      "frontend/src/components/spatial/roomDiscoveryLifecycle.ts",
+      "frontend/src/components/spatial/AuditDiagnosticsPanel.tsx",
+      "frontend/src/tests/build1aGenericBimRoomVolume.test.ts",
+      "frontend/src/tests/roomDiscoveryLifecycle.test.ts",
+      "frontend/src/tests/build1a2GenericDiagnosticUi.test.tsx",
+      "frontend/src/tests/build1a2GenericRoomDiagnostic.test.ts"
+    ],
+    "excluded_untouched": ["frontend/.env"],
+    "product_source_py_changed": 0
+  },
+  "AUTHORIZED_BUILD_1A3_SCOPE_ONLY": "YES",
+  "PRIOR_BUILD_1A_WORK_PRESERVED": "YES",
+  "FILES_STAGED": "NO",
+  "COMMIT_CREATED": "NO",
+  "PUSH_PERFORMED": "NO",
+  "CHECKPOINT": "HOLD_FOR_BUILD_1A3_MANUAL_ACCEPTANCE",
+  "NEXT_BUILD": "BUILD_1B_COMPLETE_CLINICAL_PROGRAM_AND_EQUIPMENT_BINDING",
+  "NEXT_BUILD_STARTED": "NO"
+}

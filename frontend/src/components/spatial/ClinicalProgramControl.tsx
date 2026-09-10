@@ -62,6 +62,27 @@ export function ClinicalProgramControl(props?: { iModelId?: string; devMode?: bo
     const [containment, setContainment] = useState<string>('')
     const [note, setNote] = useState('')
     const [loading, setLoading] = useState(false)
+    // Build 1A.4: product-facing containment validation view model + summary.
+    const [validation, setValidation] = useState<import('./bimRoomVolumeRegistry').PlanningVolumeValidationState | null>(null)
+    const [validationSummary, setValidationSummary] = useState<import('./bimRoomVolumeRegistry').PlanningValidationSummary | null>(null)
+    // Build 1A.1: honest room-discovery lifecycle (never a false READY-zero).
+    const [discoveryStatus, setDiscoveryStatus] = useState<'NOT_BOUND' | 'LOADING' | 'READY' | 'ERROR'>('NOT_BOUND')
+    const [selectorLabel, setSelectorLabel] = useState<string>('Open the model to discover rooms')
+
+    // Build 1A.3: derive the STOREY-FILTERED selector options + honest count/label
+    // from the immutable base discovery via the overlay's pure filter. Called on
+    // every program notification (incl. storey-filter change) so the selector
+    // recomputes immediately. `o` is the already-imported overlay module.
+    const applyRoomOptions = useCallback((o: typeof import('./spatialAssetOverlay')) => {
+        const ui = o.getRoomDiscoveryUiStatus()
+        const options = o.getDiscoveredRoomOptions() // storey-filtered discovered rooms
+        setRooms(options.map((r) => ({ bimSpaceId: r.bimSpaceId, originalBimLabel: r.originalBimLabel || 'Unnamed space', storeyLabel: r.storeyId })))
+        setDiscoveryStatus(ui.status)
+        setSelectorLabel(ui.label)
+        if (ui.status === 'READY') setNote(ui.baseRoomCount === 0 ? 'This BIM exposes no valid rooms.' : '')
+        else if (ui.status === 'ERROR') setNote('Room discovery unavailable — retrying.')
+        else setNote('')
+    }, [])
 
     // Bind program state to the active iModel + subscribe.
     useEffect(() => {
@@ -77,6 +98,22 @@ export function ClinicalProgramControl(props?: { iModelId?: string; devMode?: bo
                 setSelectedSpaceId(snap.selectedSpaceId)
                 setAssignments(snap.assignments)
                 setShowRoomVolume(snap.showRoomVolume)
+                // Build 1A.2: re-read the selected room's geometry quality on EVERY
+                // program notification, so async exact-mesh extraction completion
+                // (which calls notifyProgram) reactively updates the Spatial geometry
+                // status — no reselect / reload / dev-mode needed.
+                setGeometryQuality(snap.selectedSpaceId
+                    ? (o.getClinicalProgramRoomGeometryQuality(snap.selectedSpaceId)?.description ?? null)
+                    : null)
+                // Build 1A.3: re-derive the STOREY-FILTERED room options + count on
+                // EVERY notification (a storey-filter change calls notifyProgram), so
+                // the selector recomputes immediately from the immutable base
+                // discovery — fixing the First=Second=153 stale-count/options defect.
+                applyRoomOptions(o)
+                // Out-of-filter selected-room policy: if the selected room is not in
+                // the active storey's options, clear the UI selection ONLY (never
+                // deletes the assignment or planning volume — domain state persists).
+                if (o.isSelectedRoomOutsideActiveStorey()) o.setClinicalProgramSelectedSpace(undefined)
             }
             unsub = o.subscribeClinicalProgram(sync)
             sync()
@@ -102,22 +139,40 @@ export function ClinicalProgramControl(props?: { iModelId?: string; devMode?: bo
         setLoading(true)
         try {
             const o = await import('./spatialAssetOverlay')
-            let list = o.getClinicalProgramRooms()
-            if (list.length === 0) {
-                await o.refreshModelSemantics()
-                list = o.getClinicalProgramRooms()
-            }
-            const opts: RoomOption[] = list.map((r) => ({
-                bimSpaceId: r.roomId,
-                originalBimLabel: r.displayName || 'Unnamed space',
-                storeyLabel: undefined,
-            }))
-            setRooms(opts)
-            setNote(list.length === 0 ? 'No BIM spaces available yet — open the model, then retry.' : '')
+            // Build 1A.1: drive the lifecycle-guarded refresh, then read the HONEST
+            // discovery status. A NOT_READY/FAILED refresh no longer erases a valid
+            // cache, and 0 rooms is only shown as final when status is READY.
+            await o.refreshModelSemantics()
+            applyRoomOptions(o)
         } finally { setLoading(false) }
-    }, [])
+    }, [applyRoomOptions])
 
-    useEffect(() => { if (enabled && rooms.length === 0) void refreshRooms() }, [enabled, rooms.length, refreshRooms])
+    // Drive discovery while enabled: (re)load until READY, then stop. A LOADING /
+    // NOT_BOUND / ERROR status schedules a bounded retry (the viewport may still
+    // be binding); a READY status (even READY-zero) is terminal for auto-retry.
+    useEffect(() => {
+        if (!enabled) return
+        if (discoveryStatus === 'READY') return
+        let cancelled = false
+        let attempts = 0
+        const tick = () => {
+            if (cancelled) return
+            attempts += 1
+            void refreshRooms().then(() => {
+                if (cancelled) return
+                // getRoomDiscoveryUiStatus already applied via setDiscoveryStatus;
+                // schedule another bounded attempt if still not READY.
+                if (attempts < 20) window.setTimeout(() => {
+                    if (cancelled) return
+                    void import('./spatialAssetOverlay').then((o) => {
+                        if (o.getRoomDiscoveryUiStatus().status !== 'READY') tick()
+                    })
+                }, 500)
+            })
+        }
+        tick()
+        return () => { cancelled = true }
+    }, [enabled, discoveryStatus, refreshRooms])
 
     const toggleEnabled = useCallback(() => {
         void import('./spatialAssetOverlay').then((o) => o.setClinicalProgramEnabled(!enabled))
@@ -170,10 +225,11 @@ export function ClinicalProgramControl(props?: { iModelId?: string; devMode?: bo
 
     // --- Clinical planning VOLUME handlers ---------------------------------
     const refreshVolume = useCallback((spaceId: string | undefined) => {
-        if (!spaceId) { setVol(null); setContainment(''); return }
+        if (!spaceId) { setVol(null); setContainment(''); setValidation(null); return }
         void import('./spatialAssetOverlay').then(async (o) => {
             const v = o.getClinicalPlanningVolume(spaceId)
             o.getClinicalVolumeSummary().then((s) => setVolumeSummary({ planningVolumes: s.planningVolumes, draft: s.draft, locked: s.locked })).catch(() => { })
+            o.getPlanningValidationSummary().then((s) => setValidationSummary(s)).catch(() => { })
             if (v) {
                 setVol({ params: v.params, lifecycleState: v.lifecycleState, hidden: v.hidden })
                 setVolDraft({ centerX: v.params.centerX, centerY: v.params.centerY, zLow: v.params.zLow, zHigh: v.params.zHigh, width: v.params.width, depth: v.params.depth, yawDeg: (v.params.yaw * 180) / Math.PI })
@@ -181,9 +237,30 @@ export function ClinicalProgramControl(props?: { iModelId?: string; devMode?: bo
                 if (c.status === 'PASS') setContainment(`INSIDE PARENT SPACE (${c.totalSamples - c.failedSamples}/${c.totalSamples})`)
                 else if (c.status === 'FAIL') setContainment(`OUTSIDE PARENT SPACE (${c.failedSamples}/${c.totalSamples} outside)`)
                 else setContainment(`CONTAINMENT NOT EVALUATED${c.reason ? ` (${c.reason})` : ''}`)
-            } else { setVol(null); setContainment('') }
+                // Build 1A.4: pure product-facing validation view model (warning,
+                // lock gate + reason, restore availability, approximate label).
+                setValidation((await o.getPlanningVolumeValidation(spaceId)) ?? null)
+            } else { setVol(null); setContainment(''); setValidation(null) }
         })
     }, [])
+
+    const restoreValidPosition = useCallback(() => {
+        if (!selectedRoom) return
+        void import('./spatialAssetOverlay').then(async (o) => {
+            const r = await o.restoreValidPosition(selectedRoom.bimSpaceId)
+            setNote(r.ok ? (r.source === 'LAST_KNOWN_VALID' ? 'Restored last valid position.' : 'No prior valid position — restored a parent-derived valid volume.') : `Cannot restore: ${r.reason}`)
+            refreshVolume(selectedRoom.bimSpaceId)
+        })
+    }, [selectedRoom, refreshVolume])
+
+    const resetToParentDerived = useCallback(() => {
+        if (!selectedRoom) return
+        void import('./spatialAssetOverlay').then(async (o) => {
+            const r = await o.resetToParentDerived(selectedRoom.bimSpaceId)
+            setNote(r.ok ? 'Reset to a fresh parent-derived volume.' : `Cannot reset: ${r.reason}`)
+            refreshVolume(selectedRoom.bimSpaceId)
+        })
+    }, [selectedRoom, refreshVolume])
 
     useEffect(() => { refreshVolume(selectedSpaceId) }, [selectedSpaceId, assignments, refreshVolume])
 
@@ -286,7 +363,7 @@ export function ClinicalProgramControl(props?: { iModelId?: string; devMode?: bo
                             value={selectedSpaceId ?? ''}
                             onChange={(e) => selectSpace(e.target.value || undefined)}
                         >
-                            <option value="">{loading ? 'Loading rooms…' : `Select a room (${rooms.length})`}</option>
+                            <option value="">{loading && discoveryStatus !== 'READY' ? 'Loading rooms…' : selectorLabel}</option>
                             {rooms.map((r) => {
                                 const a = assignments.find((x) => x.bimSpaceId === r.bimSpaceId && x.clinicalFunction !== 'UNASSIGNED_EXISTING')
                                 const label = a ? `${a.mrtDisplayName} — ${r.originalBimLabel}` : r.originalBimLabel
@@ -341,12 +418,35 @@ export function ClinicalProgramControl(props?: { iModelId?: string; devMode?: bo
                                                     </label>
                                                 ))}
                                             </div>
-                                            <div className={containment.startsWith('INSIDE') ? 'clinical-program-summary-line ok' : 'clinical-program-summary-line muted'}>{containment || '—'}</div>
+                                            {/* Build 1A.4: product-facing validation. Warning identifies the
+                                                room; technical sample detail is secondary. NOT_EVALUATED is
+                                                shown honestly (never inside/outside). */}
+                                            {validation?.containmentStatus === 'PASS' && (
+                                                <div className="clinical-program-summary-line ok">Fully inside its parent BIM room.{validation.approximateParent ? ' (parent is a range approximation)' : ''}</div>
+                                            )}
+                                            {validation?.warningCode === 'OUTSIDE_PARENT' && (
+                                                <div className="clinical-program-warning" role="alert">
+                                                    <strong>⚠ {validation.warningMessage}</strong>
+                                                    <div className="clinical-program-summary-line muted">{validation.technicalDetail}</div>
+                                                </div>
+                                            )}
+                                            {(validation?.warningCode === 'NOT_EVALUATED' || validation?.warningCode === 'PARENT_GEOMETRY_UNAVAILABLE') && (
+                                                <div className="clinical-program-summary-line muted">{validation.warningMessage}</div>
+                                            )}
                                             <div className="clinical-program-actions">
                                                 {vol.lifecycleState === 'DRAFT'
-                                                    ? <button type="button" className="clinical-program-btn primary" onClick={lockVolume} disabled={!containment.startsWith('INSIDE')}>Lock Volume</button>
+                                                    ? <button type="button" className="clinical-program-btn primary" onClick={lockVolume} disabled={!validation?.isLockAllowed} title={validation && !validation.isLockAllowed ? validation.lockDisabledReason : 'Lock this planning volume'}>Lock Volume</button>
                                                     : <button type="button" className="clinical-program-btn" onClick={unlockVolume}>Unlock for Editing</button>}
                                                 <button type="button" className={vol.hidden ? 'clinical-program-btn' : 'clinical-program-btn primary'} onClick={toggleThisVolume}>{vol.hidden ? 'Show Volume' : 'Hide Volume'}</button>
+                                            </div>
+                                            {vol.lifecycleState === 'DRAFT' && !validation?.isLockAllowed && (
+                                                <div className="clinical-program-summary-line muted">Lock unavailable: {validation?.lockDisabledReason}</div>
+                                            )}
+                                            <div className="clinical-program-actions">
+                                                {validation?.restoreAvailable && (
+                                                    <button type="button" className="clinical-program-btn" onClick={restoreValidPosition} disabled={vol.lifecycleState === 'LOCKED'} title="Restore this volume's most recent valid position (or a parent-derived valid volume)">Restore Valid Position</button>
+                                                )}
+                                                <button type="button" className="clinical-program-btn" onClick={resetToParentDerived} disabled={vol.lifecycleState === 'LOCKED'} title="Recompute a fresh valid volume from this room's own BIM geometry">Reset to Parent-Derived Volume</button>
                                             </div>
                                             <div className="clinical-program-actions">
                                                 <button type="button" className="clinical-program-btn" onClick={deleteVolume} disabled={vol.lifecycleState === 'LOCKED'} title={vol.lifecycleState === 'LOCKED' ? 'Unlock before deleting' : 'Delete this planning volume (assignment kept)'}>Delete Volume</button>
@@ -359,6 +459,7 @@ export function ClinicalProgramControl(props?: { iModelId?: string; devMode?: bo
 
                             {devMode && (
                                 <div className="clinical-program-dev">
+                                    {containment && <span>containment(raw): {containment}</span>}
                                     <span>bimSpaceId: {selectedRoom.bimSpaceId}</span>
                                     {currentAssignment && <span>assignmentId: {currentAssignment.assignmentId}</span>}
                                     {currentAssignment?.bimStoreyId && <span>bimStoreyId: {currentAssignment.bimStoreyId}</span>}
@@ -372,6 +473,13 @@ export function ClinicalProgramControl(props?: { iModelId?: string; devMode?: bo
                         <span className="clinical-program-sub">Program summary</span>
                         <div className="clinical-program-summary-line">Assigned rooms: <strong>{summary.assignedCount}</strong></div>
                         {volumeSummary && <div className="clinical-program-summary-line">Planning volumes: <strong>{volumeSummary.planningVolumes}</strong> (draft {volumeSummary.draft} · locked {volumeSummary.locked})</div>}
+                        {validationSummary && validationSummary.planningVolumes > 0 && (
+                            <div className={validationSummary.needsAttention > 0 ? 'clinical-program-summary-line muted' : 'clinical-program-summary-line ok'}>
+                                Valid: <strong>{validationSummary.valid}</strong>
+                                {validationSummary.needsAttention > 0 && <> · Needs attention: <strong>{validationSummary.needsAttention}</strong></>}
+                                {validationSummary.notEvaluated > 0 && <> · Not evaluated: <strong>{validationSummary.notEvaluated}</strong></>}
+                            </div>
+                        )}
                         {summary.byFn.length === 0 && <div className="clinical-program-summary-line muted">No clinical functions assigned yet.</div>}
                         {summary.byFn.map(([fn, n]) => (
                             <div key={fn} className="clinical-program-summary-line">{FUNCTION_LABEL[fn]}: <strong>{n}</strong></div>

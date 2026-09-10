@@ -574,3 +574,47 @@ here is authorized-closed by this task; closure is a separate scoped build.
 *Maintenance: when a gap is genuinely closed by a future build, move it to a
 "Closed gaps" section with the closing build/commit, and update the corresponding
 row in `MRT_PHARMA_AUTHORITY_INDEX.md`.*
+
+---
+
+# Build 1A Closure — gap reconciliation
+
+**Checkpoint:** Build 1A manual completion gate PASSED. This section closes/reclassifies
+only what Build 1A actually delivered; all genuine remaining gaps are preserved.
+
+## Closed / advanced by Build 1A
+
+- **OG-FE-1 (live composition of Build-2A rooms)** → **CLOSED (foundation)**:
+  generic room discovery + user-controlled activation + parent-derived true-3D
+  ClinicalPlanningVolume + exact-parent containment + product-facing validation
+  are `IMPLEMENTED_AND_INTEGRATED` and manually accepted (Uptake 01 + Injection
+  Room 01 composed live; `AUTO_SELECTED_NEW_PARENT_ROOMS = 0`). The generalized
+  spatial planning foundation is complete. (Equipment placement within these
+  rooms remains OG-FE-3 / Build 1B.)
+- **Walkthrough facility navigation** → `IMPLEMENTED_AND_INTEGRATED` (floor-constrained
+  pedestrian forward/back/strafe/turn with wall collision + door pass; forward-movement
+  proximity-false-block corrected; incremental zoom; label visibility; trackpad look).
+
+## Preserved as genuinely OPEN (unchanged by Build 1A)
+
+- **OG-FE-2 (full PET department incl. Radiopharmacy + support spaces)** — PLANNED.
+- **OG-FE-3 (canonical equipment ↔ ClinicalPlanningVolume / live room binding)** —
+  PLANNED; **Build 1B** (room-parented, movable/rotatable, floor-aware,
+  envelope-contained, warn-on-invalid, lock-blocked-when-invalid, Restore/Reset,
+  iModel-scoped, crosswalked to existing capacity/production/cost authority; ONLY
+  existing canonical equipment classes — no new classes).
+- **OG-ROUTE-INT (live facility geometry → canonical routing authority)** — PLANNED
+  (Build 2 automatic connectivity doctrine).
+- **OG-CAP-2 (free composition optimizer)** — PLANNED.
+- **OG-OPS-1 (long-horizon → one-day execution seam)** — PARTIAL.
+- **OG-SIM-1 (animated operational runtime)** — PLANNED.
+- **OG-USD-1 (NVIDIA Omniverse runtime)** — PLANNED (OpenUSD export exists).
+- **OG-WIF-UI (What-If / Lockdown product UI)** — PLANNED.
+- **Economics calibration/integration** (OG-CYC-1 / OG-SCN-1 / OG-OPEX-1 / OG-GEN-1) — PARTIAL.
+- **NEW OG-SPATIAL-ISO — true physical storey spatial isolation + exploded storey/system
+  visualization** — PLANNED. Discussed during Build 1A but intentionally NOT
+  implemented in the walkthrough correction; recorded here as later spatial/UI work.
+
+Build 1A closes the generic spatial planning foundation only; it does not close
+equipment, routing, optimization, operations, simulation, economics, What-If, or
+NVIDIA work.

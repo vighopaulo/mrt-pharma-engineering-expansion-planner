@@ -26,15 +26,20 @@ export function CameraModeControl() {
     const [pending, setPending] = useState(false)
     const [note, setNote] = useState('')
     const [fov, setFov] = useState<'NORMAL' | 'WIDE' | 'ULTRA_WIDE'>('NORMAL')
+    // Build 1A walkthrough final UX: the controls/help pane is dismissible
+    // (× / Esc / outside-click) and reopenable. Opens fresh each time walkthrough
+    // is entered; never auto-reopens on camera movement.
+    const [controlsHelpOpen, setControlsHelpOpen] = useState(true)
 
     const applyMode = useCallback(async (next: CameraMode, storeyId?: string) => {
         if (pending) return
         setPending(true)
-        setNote(next === 'WALKTHROUGH' ? 'Entering walkthrough… (click the model, WASD to move, mouse to look, Esc to release)' : next === 'BIRDS_EYE_CUTAWAY' ? 'Opening bird\u2019s-eye…' : 'Planning view')
+        setNote(next === 'WALKTHROUGH' ? 'Entering walkthrough… (W/S/A/D to walk, click + drag to look, two-finger scroll to dolly, Esc to release)' : next === 'BIRDS_EYE_CUTAWAY' ? 'Opening bird\u2019s-eye…' : 'Planning view')
         try {
             const overlay = await import('./spatialAssetOverlay')
             await overlay.applyCameraMode(next, { storeyId, fovPreset: next === 'WALKTHROUGH' ? fov : undefined })
             setMode(next)
+            if (next === 'WALKTHROUGH') setControlsHelpOpen(true) // fresh help on entry
             setNote(next === 'WALKTHROUGH' ? 'Walkthrough active — Esc releases the pointer.' : 'Ready')
         } catch (e) {
             setNote(`camera mode error: ${e instanceof Error ? e.message : String(e)}`)
@@ -52,6 +57,35 @@ export function CameraModeControl() {
         })
         return () => { cancelled = true }
     }, [mode])
+
+    // Build 1A walkthrough final UX: dismiss the help pane via Esc (first Esc
+    // closes the pane; if already closed, the controller's Esc pointer-release is
+    // untouched) and via outside-click. Only active while in walkthrough. The Esc
+    // handler runs in the CAPTURE phase so a pane-closing Esc is consumed before
+    // the controller's window keydown releases the pointer — one Esc, one action.
+    useEffect(() => {
+        if (mode !== 'WALKTHROUGH') return
+        const onKeyDownCapture = (e: KeyboardEvent) => {
+            if (e.key === 'Escape' && controlsHelpOpen) {
+                setControlsHelpOpen(false)
+                e.stopPropagation() // consume: don't also release the pointer this press
+            }
+            // If the pane is already closed, do nothing here — the controller's
+            // own Esc handler performs the existing pointer-release behavior.
+        }
+        const onOutsidePointerDown = (e: PointerEvent) => {
+            if (!controlsHelpOpen) return
+            const target = e.target as HTMLElement | null
+            // Outside the help pane => close it. Clicks INSIDE the pane keep it open.
+            if (target && !target.closest('.camera-mode-help')) setControlsHelpOpen(false)
+        }
+        window.addEventListener('keydown', onKeyDownCapture, true) // capture phase
+        window.addEventListener('pointerdown', onOutsidePointerDown)
+        return () => {
+            window.removeEventListener('keydown', onKeyDownCapture, true)
+            window.removeEventListener('pointerdown', onOutsidePointerDown)
+        }
+    }, [mode, controlsHelpOpen])
 
     const policy = resolveCameraModePolicy(mode)
 
@@ -123,7 +157,25 @@ export function CameraModeControl() {
                         <button type="button" className="camera-mode-btn" disabled={pending} onClick={() => { void import('./spatialAssetOverlay').then((o) => o.resetWalkthroughMode()) }}>RESET WALKTHROUGH</button>
                     </div>
                     <button type="button" className="camera-mode-exit" disabled={pending} onClick={() => void applyMode('PLANNING')}>EXIT WALKTHROUGH</button>
-                    <div className="camera-mode-help">W/S Walk · A/D Strafe · ←/→ Turn · Shift Faster · Drag to look · Esc release</div>
+                    {controlsHelpOpen ? (
+                        <div className="camera-mode-help" role="dialog" aria-label="Walkthrough controls">
+                            <button
+                                type="button"
+                                className="camera-mode-help-close"
+                                aria-label="Close controls"
+                                title="Close controls (Esc)"
+                                onClick={() => setControlsHelpOpen(false)}
+                            >×</button>
+                            <span className="camera-mode-help-text">Click + drag: Look around · Two-finger scroll: Incremental dolly · W/S: Walk · A/D: Strafe · ←/→: Turn · Shift: Faster · Esc: Release</span>
+                        </div>
+                    ) : (
+                        <button
+                            type="button"
+                            className="camera-mode-help-reopen"
+                            aria-label="Show walkthrough controls"
+                            onClick={() => setControlsHelpOpen(true)}
+                        >Controls ?</button>
+                    )}
                 </>
             )}
             {note && <div className="camera-mode-note">{note}</div>}

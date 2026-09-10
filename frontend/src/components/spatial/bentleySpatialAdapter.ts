@@ -358,6 +358,33 @@ export async function buildModelSemantics(maxRooms = 200): Promise<SpatialModelS
 }
 
 /**
+ * The active iModel id backing room discovery, or undefined when no viewport /
+ * iModel is currently bound (viewer mid-lifecycle). Read-only.
+ */
+export function getActiveSemanticsIModelId(): string | undefined {
+    return getIModel()?.iModelId
+}
+
+/**
+ * Build the active-iModel semantics AND report which iModel it ran against plus
+ * whether an iModel was actually bound. This lets the caller's lifecycle policy
+ * distinguish a NOT_READY refresh (no iModel bound → EMPTY that must NOT
+ * overwrite a valid cache) from a legitimate current-iModel result. Read-only;
+ * never triggers mesh extraction. (Build 1A.1)
+ */
+export async function buildActiveModelSemantics(maxRooms = 200): Promise<{
+    bound: boolean
+    ranAgainstIModelId?: string
+    semantics: SpatialModelSemantics
+}> {
+    const iModel = getIModel()
+    if (!iModel) return { bound: false, ranAgainstIModelId: undefined, semantics: { ...EMPTY_MODEL_SEMANTICS } }
+    const ranAgainstIModelId = iModel.iModelId
+    const semantics = await buildModelSemantics(maxRooms)
+    return { bound: true, ranAgainstIModelId, semantics }
+}
+
+/**
  * Bounded DEV diagnostic: list the discovered room ranges (id, label, low/high,
  * geometry type). Read-only. Intended for a small number of spaces (e.g. 8);
  * capped so it never dumps arbitrary geometry.

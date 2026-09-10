@@ -27,6 +27,26 @@ import { ClinicalProgramDecorator } from './ClinicalProgramDecorator'
 import { deriveRoomFootprint, resolveRoomStoreyId, type StoreyZRange } from './planningPlan'
 import { resolveDecoratorRegistrationAction } from './decoratorRegistration'
 import { resolveClinicalProgramFacilityAnchor, describeGeometryQuality } from './clinicalProgramAnchor'
+import {
+    discoverRoomVolumes,
+    summarizeRoomVolumeDiscovery,
+    filterDiscoveredRoomsByStorey,
+    countRoomsByStorey,
+    buildSelectedRoomVolumeDiagnostic,
+    formatSelectedRoomVolumeDiagnostic,
+    type DiscoveredRoomVolume,
+    type RoomVolumeDiscoverySummary,
+    type RoomMeshCacheFacts,
+} from './bimRoomVolumeRegistry'
+import {
+    INITIAL_ROOM_DISCOVERY_STATE,
+    beginRefreshState,
+    decideSemanticsCommit,
+    roomSelectorLabel,
+    type RoomDiscoveryState,
+    type RefreshCompletion,
+    type RefreshOutcome,
+} from './roomDiscoveryLifecycle'
 import { resolveViewportSource, type ViewportSource } from './viewportResolution'
 import type { ScreenViewport } from '@itwin/core-frontend'
 import {
@@ -385,8 +405,15 @@ export function ensureClinicalProgramDecoratorRegistered(): void {
             getPlanningVolumeForSpace: (bimSpaceId: string) => {
                 const v = planningVolumes.find((x) => x.parentBimSpaceId === bimSpaceId)
                 if (!v || v.hidden) return undefined // per-volume visibility
-                return { params: v.params, lifecycleState: v.lifecycleState, displayName: v.displayName, selected: programState.selectedSpaceId === bimSpaceId }
+                // Build 1A.4: surface the last-computed containment FAIL as an
+                // invalid visual cue (synchronous read of the per-space status
+                // cache; updated by getClinicalVolumeContainment on every edit).
+                const invalid = containmentStatusCache.get(bimSpaceId) === 'FAIL'
+                return { params: v.params, lifecycleState: v.lifecycleState, displayName: v.displayName, selected: programState.selectedSpaceId === bimSpaceId, invalid }
             },
+            // Build 1A label-occlusion: the active camera mode drives the
+            // walkthrough-aware label-visibility policy in the decorator.
+            getCameraMode: () => activeCameraMode,
         })
     }
     removeClinicalProgramDecorator = IModelApp.viewManager.addDecorator(clinicalProgramDecorator)
@@ -1002,9 +1029,17 @@ import { EMPTY_MODEL_SEMANTICS, computeSpatialAssociation, summarizeAssociation 
 /** Cached model semantics (Bentley-free). Refreshed explicitly, never per-frame. */
 let cachedModelSemantics: SpatialModelSemantics = { ...EMPTY_MODEL_SEMANTICS }
 let semanticsLoaded = false
-/** Monotonic generation; bumped each successful refresh so consumers can detect
+/** Monotonic generation; bumped each successful COMMIT so consumers can detect
  * whether they computed against the same BIM semantics snapshot. */
 let semanticsGeneration = 0
+/**
+ * Build 1A.1 — explicit room-discovery lifecycle (iModel ownership + status +
+ * stale-guard). Prevents a not-ready/failed/stale refresh from erasing a valid
+ * cache (the 200 → 0 regression). See roomDiscoveryLifecycle.ts.
+ */
+let roomDiscoveryState: RoomDiscoveryState = { ...INITIAL_ROOM_DISCOVERY_STATE }
+/** In-flight refresh dedupe (one live refresh at a time; callers await it). */
+let semanticsRefreshInFlight: Promise<SpatialModelSemantics> | undefined
 
 /** The current cached semantics (may be empty until refreshed). */
 export function getCachedModelSemantics(): SpatialModelSemantics {
@@ -1021,21 +1056,76 @@ export function isSemanticsLoaded(): boolean {
     return semanticsLoaded
 }
 
+/** The current room-discovery lifecycle state (read-only copy). */
+export function getRoomDiscoveryState(): RoomDiscoveryState {
+    return { ...roomDiscoveryState }
+}
+
+/** Whether a semantics refresh is currently in flight. */
+export function isSemanticsRefreshInFlight(): boolean {
+    return !!semanticsRefreshInFlight
+}
+
 /**
  * Refresh the cached SpatialModelSemantics from the live iModel via the adapter
  * (dynamic import so the Bentley query code is never pulled into tests). Bounded,
- * read-only, one-shot per call. Returns the refreshed semantics.
+ * read-only.
+ *
+ * Build 1A.1 lifecycle guard: the result is committed through
+ * `decideSemanticsCommit`, so a NOT_READY (viewport transiently unbound), FAILED,
+ * or STALE (different iModel) refresh NEVER overwrites a currently-valid cache —
+ * fixing the 200 → 0 regression where an empty not-ready result clobbered the
+ * good room set. A legitimate current-iModel zero IS still accepted. Concurrent
+ * callers share one in-flight refresh.
  */
 export async function refreshModelSemantics(): Promise<SpatialModelSemantics> {
-    try {
-        const { buildModelSemantics } = await import('./bentleySpatialAdapter')
-        cachedModelSemantics = await buildModelSemantics()
-        semanticsLoaded = true
-        semanticsGeneration += 1
-    } catch (e) {
-        if (import.meta.env.DEV) console.error('[bentley-spatial] REFRESH_ERROR', e instanceof Error ? e.message : String(e))
-    }
-    return cachedModelSemantics
+    if (semanticsRefreshInFlight) return semanticsRefreshInFlight
+    const run = (async (): Promise<SpatialModelSemantics> => {
+        const targetIModelId = programState.iModelId || undefined
+        roomDiscoveryState = beginRefreshState({ current: roomDiscoveryState, targetIModelId })
+        let completion: RefreshCompletion
+        try {
+            const { buildActiveModelSemantics, getActiveSemanticsIModelId } = await import('./bentleySpatialAdapter')
+            const active = getActiveSemanticsIModelId()
+            const built = await buildActiveModelSemantics()
+            const outcome: RefreshOutcome = !built.bound
+                ? 'NOT_READY'
+                : built.semantics.rooms.length > 0 ? 'READY_NONEMPTY' : 'READY_EMPTY'
+            completion = {
+                targetIModelId,
+                ranAgainstIModelId: built.ranAgainstIModelId ?? active,
+                outcome,
+                roomCount: built.semantics.rooms.length,
+            }
+            const decision = decideSemanticsCommit({
+                current: roomDiscoveryState,
+                activeIModelId: programState.iModelId || undefined,
+                completion,
+            })
+            roomDiscoveryState = decision.next
+            if (decision.commit) {
+                cachedModelSemantics = built.semantics
+                semanticsLoaded = true
+                semanticsGeneration += 1
+                roomStoreyIdCache.clear() // storey binning depends on the new rooms
+            } else if (import.meta.env.DEV) {
+                console.info('[bentley-spatial] SEMANTICS_DISCARDED reason=%s outcome=%s target=%s ran=%s',
+                    decision.reason, completion.outcome, String(targetIModelId), String(completion.ranAgainstIModelId))
+            }
+        } catch (e) {
+            const errorClass = e instanceof Error ? e.name : 'UNKNOWN'
+            completion = { targetIModelId, outcome: 'FAILED', roomCount: 0, errorClass }
+            roomDiscoveryState = decideSemanticsCommit({
+                current: roomDiscoveryState,
+                activeIModelId: programState.iModelId || undefined,
+                completion,
+            }).next
+            if (import.meta.env.DEV) console.error('[bentley-spatial] REFRESH_ERROR', e instanceof Error ? e.message : String(e))
+        }
+        return cachedModelSemantics
+    })()
+    semanticsRefreshInFlight = run
+    try { return await run } finally { semanticsRefreshInFlight = undefined }
 }
 
 /**
@@ -1108,7 +1198,23 @@ export async function applyCameraMode(mode: import('./cameraNav').CameraMode, op
         const storeys = await ctl.loadStoreys()
         storey = storeys.find((s) => s.id === opts.storeyId)
     }
-    return ctl.applyCameraMode(mode, { storey, startStoreyId: opts?.storeyId, fovPreset: opts?.fovPreset })
+    // Build 1A label-occlusion: track the active CAMERA mode (distinct from the
+    // ViewerMode planning/developer axis) so the ClinicalProgramDecorator can
+    // apply the walkthrough-aware label-visibility policy. View concern only.
+    activeCameraMode = mode
+    const ok = await ctl.applyCameraMode(mode, { storey, startStoreyId: opts?.storeyId, fovPreset: opts?.fovPreset })
+    notifyProgram() // redraw so labels re-evaluate under the new camera-mode policy
+    return ok
+}
+
+/**
+ * Build 1A — the active product CAMERA mode (PLANNING / WALKTHROUGH /
+ * BIRDS_EYE_CUTAWAY). Separate axis from ViewerMode; drives the walkthrough
+ * label-visibility policy. Defaults to PLANNING.
+ */
+let activeCameraMode: import('./cameraNav').CameraMode = 'PLANNING'
+export function getActiveCameraMode(): import('./cameraNav').CameraMode {
+    return activeCameraMode
 }
 
 export async function setWalkthroughFov(preset: import('./walkNav').FovPreset): Promise<void> {
@@ -1129,6 +1235,12 @@ export async function loadCameraStoreys(): Promise<import('./walkthroughControll
 export async function exitWalkthroughMode(): Promise<void> {
     const ctl = await import('./walkthroughController')
     ctl.exitWalkthrough()
+}
+
+/** DEV: bounded walkthrough movement diagnostic (Build 1A walkthrough correction). */
+export async function diagnoseWalkthroughMovement(): Promise<string> {
+    const ctl = await import('./walkthroughController')
+    return ctl.diagnoseWalkthroughMovement()
 }
 
 export async function resetWalkthroughMode(): Promise<void> {
@@ -1227,6 +1339,15 @@ export function loadClinicalProgramForIModel(iModelId: string): void {
     authoritativeFootprints.clear()
     authoritativeInFlight.clear()
     planningVolumes = []
+    // Build 1A.1: switching iModel intentionally invalidates the room-discovery
+    // authority (semantics belong to the previous BIM). Reset to NOT_BOUND so a
+    // stale previous-iModel refresh cannot be treated as current; the next
+    // refresh rebinds for the new iModel. (Never copies rooms across iModels.)
+    cachedModelSemantics = { ...EMPTY_MODEL_SEMANTICS }
+    semanticsLoaded = false
+    roomDiscoveryState = { ...INITIAL_ROOM_DISCOVERY_STATE }
+    roomStoreyIdCache.clear()
+    containmentStatusCache.clear() // Build 1A.4: per-space invalid cue is iModel-scoped
     loadPlanningVolumesForIModel(iModelId)
     // Ensure the decorator is attached once the runtime is ready (idempotent;
     // no-op if runtime not ready — ensureDecoratorRegistered will attach later).
@@ -1263,6 +1384,13 @@ export function getClinicalProgramSnapshot(): {
 export function setClinicalProgramShowRoomVolume(show: boolean): void {
     if (programState.showRoomVolume === show) return
     programState.showRoomVolume = show
+    // Build 1A.2: turning the volume ON lazily requests the SELECTED room's exact
+    // authoritative mesh (on-demand; idempotent + cached; never eager/all-rooms).
+    // ensureAuthoritativeRoomFootprint calls notifyProgram() on completion, so the
+    // product panel's geometry status refreshes reactively without a reselect.
+    if (show && programState.selectedSpaceId) {
+        void ensureAuthoritativeRoomFootprint(programState.selectedSpaceId)
+    }
     notifyProgram()
 }
 
@@ -1285,6 +1413,12 @@ let planningVolumes: import('./clinicalPlanningVolume').ClinicalPlanningVolume[]
 /** True once the active iModel's volumes have been loaded (writes gated until then). */
 let planningVolumesHydrated = false
 let showClinicalVolume = true
+/**
+ * Build 1A.4 — per-space last-computed containment status (synchronous cache for
+ * the decorator's invalid visual cue). Updated by getClinicalVolumeContainment;
+ * cleared on iModel switch. Never authoritative — containment is recomputed.
+ */
+const containmentStatusCache = new Map<string, 'PASS' | 'FAIL' | 'NOT_EVALUATED'>()
 
 /** Load planning volumes for the active iModel (scoped; cleared on switch). */
 function loadPlanningVolumesForIModel(iModelId: string): void {
@@ -1428,11 +1562,107 @@ export async function getClinicalVolumeContainment(parentBimSpaceId: string): Pr
     const parent = authoritativeFootprints.get(parentBimSpaceId)
     const parentMeshAvailable = !!(parent?.ok && parent.mesh && parent.mesh.triangles.length >= 3)
     if (!parentMeshAvailable) {
-        return { status: m.resolveContainmentStatus({ parentMeshAvailable: false, sampleCount: 0, failedSampleCount: 0 }), failedSamples: 0, totalSamples: 0, parentMeshAvailable: false, reason: parent?.reason ?? 'PARENT_MESH_NOT_LOADED' }
+        const naStatus = m.resolveContainmentStatus({ parentMeshAvailable: false, sampleCount: 0, failedSampleCount: 0 })
+        containmentStatusCache.set(parentBimSpaceId, naStatus)
+        return { status: naStatus, failedSamples: 0, totalSamples: 0, parentMeshAvailable: false, reason: parent?.reason ?? 'PARENT_MESH_NOT_LOADED' }
     }
     const r = m.validatePlanningVolumeContainment({ params: v.params, parentMesh: parent!.mesh! })
     const status = m.resolveContainmentStatus({ parentMeshAvailable: true, sampleCount: r.totalSamples, failedSampleCount: r.failedSamples })
+    containmentStatusCache.set(parentBimSpaceId, status)
+    // Build 1A.4: record the LAST-KNOWN-VALID geometry on PASS. Never overwrite it
+    // with an invalid (FAIL) edit — that is what makes "Restore Valid Position"
+    // safe. App-owned only; persisted; no Bentley write.
+    if (status === 'PASS') {
+        const snapshot = { ...v.params }
+        if (JSON.stringify(v.lastKnownValidParams) !== JSON.stringify(snapshot)) {
+            v.lastKnownValidParams = snapshot
+            planningVolumes = [...planningVolumes]
+            persistPlanningVolumes()
+        }
+    }
     return { status, failedSamples: r.failedSamples, totalSamples: r.totalSamples, parentMeshAvailable: true, reason: r.reason }
+}
+
+/**
+ * Build 1A.4 — the product-facing VALIDATION view model for a planning volume
+ * (pure model resolved from live containment + authority quality + last-known-
+ * valid presence). Read-only; never mutates geometry, lifecycle, or Bentley.
+ */
+export async function getPlanningVolumeValidation(parentBimSpaceId: string): Promise<import('./bimRoomVolumeRegistry').PlanningVolumeValidationState | undefined> {
+    const v = planningVolumes.find((x) => x.parentBimSpaceId === parentBimSpaceId)
+    if (!v) return undefined
+    const reg = await import('./bimRoomVolumeRegistry')
+    const contain = await getClinicalVolumeContainment(parentBimSpaceId)
+    const quality = getClinicalProgramRoomGeometryQuality(parentBimSpaceId)?.quality
+    const authorityQuality: import('./bimRoomVolumeRegistry').PlanningAuthorityQuality =
+        quality === 'EXACT_ROOM_BOUNDARY' ? 'EXACT_SPACE_GEOMETRY'
+            : quality === 'BIM_RANGE_APPROXIMATION' ? 'RANGE_ONLY_APPROXIMATION'
+                : 'NOT_AVAILABLE'
+    return reg.resolvePlanningVolumeValidation({
+        planningVolumeId: v.id,
+        displayName: v.displayName,
+        lifecycleState: v.lifecycleState,
+        containmentStatus: contain.status,
+        authorityQuality,
+        totalSamples: contain.totalSamples,
+        failedSamples: contain.failedSamples,
+        hasLastKnownValid: !!v.lastKnownValidParams,
+        parentMeshAvailable: contain.parentMeshAvailable,
+    })
+}
+
+/** Build 1A.4 — restrained planning-validation summary across ALL volumes. */
+export async function getPlanningValidationSummary(): Promise<import('./bimRoomVolumeRegistry').PlanningValidationSummary> {
+    const reg = await import('./bimRoomVolumeRegistry')
+    const states: import('./bimRoomVolumeRegistry').PlanningVolumeValidationState[] = []
+    for (const v of planningVolumes) {
+        const s = await getPlanningVolumeValidation(v.parentBimSpaceId)
+        if (s) states.push(s)
+    }
+    return reg.summarizePlanningValidation(states)
+}
+
+/**
+ * Build 1A.4 — RESTORE VALID POSITION for a DRAFT volume: restore this SAME
+ * volume's most recent last-known-valid geometry; if none exists, fall back to a
+ * parent-derived seed from this room's OWN authoritative geometry. Never restores
+ * Uptake coords / another room / origin. No Bentley write. Rejected if LOCKED.
+ */
+export async function restoreValidPosition(parentBimSpaceId: string): Promise<{ ok: boolean; reason?: string; source?: 'LAST_KNOWN_VALID' | 'PARENT_DERIVED' }> {
+    const v = planningVolumes.find((x) => x.parentBimSpaceId === parentBimSpaceId)
+    if (!v) return { ok: false, reason: 'NO_VOLUME' }
+    if (v.lifecycleState === 'LOCKED') return { ok: false, reason: 'LOCKED' }
+    if (v.lastKnownValidParams) {
+        v.params = { ...v.lastKnownValidParams }
+        planningVolumes = [...planningVolumes]
+        persistPlanningVolumes()
+        notifyProgram()
+        return { ok: true, source: 'LAST_KNOWN_VALID' }
+    }
+    // No last-known-valid — derive a fresh valid seed from this room's own parent.
+    const seed = await suggestPlanningVolumeSeedForParent(parentBimSpaceId)
+    v.params = seed
+    planningVolumes = [...planningVolumes]
+    persistPlanningVolumes()
+    notifyProgram()
+    return { ok: true, source: 'PARENT_DERIVED' }
+}
+
+/**
+ * Build 1A.4 — RESET TO PARENT-DERIVED VOLUME: recompute a fresh valid seed from
+ * this room's OWN authoritative parent geometry (distinct from Restore, which
+ * uses the most recent valid USER state). No Bentley write. Rejected if LOCKED.
+ */
+export async function resetToParentDerived(parentBimSpaceId: string): Promise<{ ok: boolean; reason?: string }> {
+    const v = planningVolumes.find((x) => x.parentBimSpaceId === parentBimSpaceId)
+    if (!v) return { ok: false, reason: 'NO_VOLUME' }
+    if (v.lifecycleState === 'LOCKED') return { ok: false, reason: 'LOCKED' }
+    const seed = await suggestPlanningVolumeSeedForParent(parentBimSpaceId)
+    v.params = seed
+    planningVolumes = [...planningVolumes]
+    persistPlanningVolumes()
+    notifyProgram()
+    return { ok: true }
 }
 
 /** Lock the volume (only when containment PASS + valid). No Bentley write. */
@@ -1666,12 +1896,226 @@ export function setClinicalProgramActiveStorey(storeyId: string | undefined): vo
 export function setClinicalProgramSelectedSpace(bimSpaceId: string | undefined): void {
     if (programState.selectedSpaceId === bimSpaceId) return
     programState.selectedSpaceId = bimSpaceId
+    // Build 1A.2: selecting a room lazily requests its exact authoritative mesh
+    // (on-demand, idempotent, cached — never eager/all-rooms). This resolves the
+    // honest EXACT vs RANGE geometry status for the selected room; the async
+    // completion calls notifyProgram() so the panel refreshes reactively. Never
+    // creates an assignment or a planning volume.
+    if (bimSpaceId) void ensureAuthoritativeRoomFootprint(bimSpaceId)
     notifyProgram()
 }
 
 /** The rooms the UI can select from (authoritative cached BIM spaces). */
 export function getClinicalProgramRooms(): readonly SpatialRoomReference[] {
     return cachedModelSemantics.rooms
+}
+
+// ===========================================================================
+// BUILD 1A — GENERIC BIM ROOM-VOLUME DISCOVERY + ACTIVATION (all valid rooms)
+// ===========================================================================
+//
+// Generalizes the accepted Uptake-01 spatial proof: every discovered BIM room
+// becomes spatially addressable + volume-aware WITHOUT auto-creating any
+// ClinicalPlanningVolume (§6). Exact-mesh extraction stays LAZY (§8/§23): the
+// discovered-room model only REPORTS cache availability; extraction happens
+// on-demand when a room is inspected/activated. Discovery is iModel-scoped by
+// the active programState.iModelId + cachedModelSemantics (cleared on switch).
+
+/** Build the per-room cache facts from the on-demand authoritative footprint map. */
+function roomMeshCacheFacts(bimSpaceId: string): RoomMeshCacheFacts {
+    const e = authoritativeFootprints.get(bimSpaceId)
+    if (!e) return { exactMeshCached: false, exactMeshOk: false }
+    return {
+        exactMeshCached: true,
+        exactMeshOk: !!e.ok,
+        vertexCount: e.volume?.vertexCount ?? 0,
+        triangleCount: e.volume?.triangleCount ?? 0,
+        closedMesh: e.volume?.closedMesh ?? false,
+        extractionReason: e.ok ? undefined : e.reason,
+    }
+}
+
+/** Assemble the cache-facts record for every currently-discovered room. */
+function allRoomMeshCacheFacts(): Record<string, RoomMeshCacheFacts> {
+    const out: Record<string, RoomMeshCacheFacts> = {}
+    for (const room of cachedModelSemantics.rooms) {
+        if (room.roomId) out[room.roomId] = roomMeshCacheFacts(room.roomId)
+    }
+    return out
+}
+
+/**
+ * The GENERIC discovered room-volume model for the active BIM. Reflects live
+ * assignment + planning-volume + lazy-mesh-cache state; NEVER creates any of
+ * them. Camera-independent, iModel-scoped. (§5, §6, §7, §9)
+ */
+export function getDiscoveredRoomVolumes(): DiscoveredRoomVolume[] {
+    return discoverRoomVolumes({
+        iModelId: programState.iModelId,
+        rooms: cachedModelSemantics.rooms,
+        storeys: programStoreyRanges,
+        meshCacheByRoom: allRoomMeshCacheFacts(),
+        assignments: programState.assignments.map((a) => ({
+            bimSpaceId: a.bimSpaceId,
+            clinicalFunction: a.clinicalFunction,
+            mrtDisplayName: a.mrtDisplayName,
+        })),
+        planningVolumeParentIds: planningVolumes.map((v) => v.parentBimSpaceId),
+    })
+}
+
+/** Bounded room-volume discovery summary for the active BIM (§24). */
+export function getRoomVolumeDiscoverySummary(): RoomVolumeDiscoverySummary {
+    return summarizeRoomVolumeDiscovery({
+        iModelId: programState.iModelId,
+        discovered: getDiscoveredRoomVolumes(),
+        planningVolumeCount: planningVolumes.length,
+    })
+}
+
+/**
+ * Build 1A.1 — the UI-facing room-discovery lifecycle for the room selector.
+ * Returns the explicit status, the storey-filtered room count, and the label the
+ * selector should show (never a false READY-zero). The count reflects the active
+ * storey filter (view subset only — the underlying discovery authority is not
+ * mutated by filtering).
+ */
+export function getRoomDiscoveryUiStatus(): {
+    status: RoomDiscoveryState['status']
+    baseRoomCount: number
+    filteredRoomCount: number
+    label: string
+} {
+    const discovered = getDiscoveredRoomVolumes()
+    // Build 1A.3: canonical storey filter (a specific storey shows ONLY its own
+    // rooms; unresolved-storey rooms appear only under "All"). Fixes the observed
+    // First=Second=153 collapse where the count/options ignored the storey change.
+    const filtered = filterDiscoveredRoomsByStorey(discovered, programState.activeStoreyId)
+    const label = roomSelectorLabel({ status: roomDiscoveryState.status, filteredRoomCount: filtered.length })
+    return {
+        status: roomDiscoveryState.status,
+        baseRoomCount: discovered.length,
+        filteredRoomCount: filtered.length,
+        label,
+    }
+}
+
+/**
+ * Build 1A.3 — the storey-filtered discovered-room OPTIONS for the Clinical
+ * Program room selector. Recomputed from the immutable base discovery + the
+ * current canonical storey filter (programState.activeStoreyId). The count of
+ * this list is exactly the selector count (getRoomDiscoveryUiStatus.filteredRoomCount).
+ */
+export function getDiscoveredRoomOptions(): DiscoveredRoomVolume[] {
+    return filterDiscoveredRoomsByStorey(getDiscoveredRoomVolumes(), programState.activeStoreyId)
+}
+
+/**
+ * Build 1A.3 — whether the currently SELECTED room is outside the active storey
+ * filter. The UI uses this to clear the visible selection (out-of-filter policy)
+ * WITHOUT deleting the domain assignment or planning volume.
+ */
+export function isSelectedRoomOutsideActiveStorey(): boolean {
+    const sel = programState.selectedSpaceId
+    if (!sel || !programState.activeStoreyId) return false
+    const options = getDiscoveredRoomOptions()
+    return !options.some((r) => r.bimSpaceId === sel)
+}
+
+/**
+ * DEV: GENERIC BIM room-discovery diagnostic (§17). Bounded; never dumps raw room
+ * payloads. Reports the live authority chain so a 200 → 0 style regression can be
+ * localized to the exact seam. Read-only (does NOT force a refresh).
+ */
+export async function diagnoseBimRoomDiscovery(): Promise<string> {
+    const { getActiveSemanticsIModelId } = await import('./bentleySpatialAdapter')
+    let productViewportIModelId: string | undefined
+    let viewportFound = false
+    try {
+        const { viewport } = resolveActiveProductViewport()
+        viewportFound = !!viewport
+        productViewportIModelId = viewport?.iModel?.iModelId
+    } catch { /* runtime not ready */ }
+    const semanticsIModelId = getActiveSemanticsIModelId()
+    const discovered = getDiscoveredRoomVolumes()
+    const activeStorey = programState.activeStoreyId
+    const filtered = filterDiscoveredRoomsByStorey(discovered, activeStorey)
+    const L: string[] = ['=== BIM ROOM DISCOVERY DIAGNOSTIC ===']
+    L.push(`ACTIVE_PRODUCT_VIEWPORT_FOUND = ${viewportFound ? 'YES' : 'NO'}`)
+    L.push(`PRODUCT_VIEWPORT_IMODEL_ID = ${productViewportIModelId ?? '(none)'}`)
+    L.push(`CLINICAL_PROGRAM_IMODEL_ID = ${programState.iModelId || '(none)'}`)
+    L.push(`SEMANTICS_CACHE_OWNER_IMODEL_ID = ${roomDiscoveryState.ownerIModelId ?? '(none)'}`)
+    L.push(`LIVE_SEMANTICS_IMODEL_ID = ${semanticsIModelId ?? '(none)'}`)
+    L.push(`SEMANTICS_STATUS = ${roomDiscoveryState.status}`)
+    L.push(`SEMANTICS_REFRESH_IN_FLIGHT = ${semanticsRefreshInFlight ? 'YES' : 'NO'}`)
+    L.push(`SEMANTICS_ROOM_COUNT = ${cachedModelSemantics.rooms.length}`)
+    L.push(`BASE_DISCOVERED_ROOM_COUNT = ${discovered.length}`)
+    L.push(`ACTIVE_STOREY_FILTER = ${activeStorey ?? 'ALL'}`)
+    L.push(`FILTERED_ROOM_COUNT = ${filtered.length}`)
+    L.push(`CLINICAL_PROGRAM_ON = ${programState.enabled ? 'YES' : 'NO'}`)
+    L.push(`SELECTED_ROOM_ID = ${programState.selectedSpaceId ?? '(none)'}`)
+    L.push(`SELECTED_ROOM_OUTSIDE_ACTIVE_STOREY = ${isSelectedRoomOutsideActiveStorey() ? 'YES' : 'NO'}`)
+    // Build 1A.3 — bounded per-storey facts (never a full room dump).
+    const counts = countRoomsByStorey(discovered)
+    L.push('--- storey counts ---')
+    L.push(`ALL = ${counts.all}`)
+    L.push(`UNRESOLVED_STOREY = ${counts.unresolved}`)
+    for (const s of programStoreyRanges) {
+        const sample = discovered.filter((r) => r.storeyId === s.id).slice(0, 3)
+            .map((r) => `${r.bimSpaceId}[${r.originalBimLabel}]`).join(', ')
+        L.push(`${s.label} (${s.id}) = ${counts.byStorey[s.id] ?? 0}${sample ? ` | e.g. ${sample}` : ''}`)
+    }
+    L.push(`LAST_REFRESH_RESULT = ${roomDiscoveryState.lastRefreshResult ?? '(none)'}`)
+    L.push(`LAST_REFRESH_ERROR_CLASS = ${roomDiscoveryState.lastRefreshErrorClass ?? '(none)'}`)
+    L.push(`STALE_REFRESH_DISCARDED_COUNT = ${roomDiscoveryState.staleDiscardedCount}`)
+    L.push(`SELECTOR_LABEL = ${roomSelectorLabel({ status: roomDiscoveryState.status, filteredRoomCount: filtered.length })}`)
+    return L.join('\n')
+}
+
+/**
+ * Read-only inspection of ANY discovered room's authoritative volume (§10).
+ * Triggers LAZY exact-mesh extraction for the inspected room ONLY (never every
+ * room), then returns the honest discovered-room model. Inspection NEVER creates
+ * a ClinicalPlanningVolume or a Clinical Program assignment.
+ */
+export async function inspectRoomVolume(bimSpaceId: string): Promise<DiscoveredRoomVolume | undefined> {
+    if (!bimSpaceId) return undefined
+    // Lazy on-demand extraction for the inspected room only (idempotent + cached).
+    await ensureAuthoritativeRoomFootprint(bimSpaceId)
+    return getDiscoveredRoomVolumes().find((r) => r.bimSpaceId === bimSpaceId)
+}
+
+/**
+ * DEV: GENERIC selected-room volume diagnostic (§25) — targets ANY selected
+ * room, not only Uptake 01. Defaults to the currently selected space. Read-only;
+ * lazily extracts the exact mesh for the target room, computes live containment
+ * (only when a planning volume exists), and composes a bounded report.
+ */
+export async function diagnoseSelectedRoomVolume(bimSpaceId?: string): Promise<string> {
+    const targetId = bimSpaceId
+        ?? programState.selectedSpaceId
+        ?? programState.assignments.find((a) => a.clinicalFunction !== 'UNASSIGNED_EXISTING')?.bimSpaceId
+    if (!targetId) return 'NO_SELECTED_ROOM: select a BIM room first.'
+    // Ensure semantics are loaded so the room is discoverable (read-only).
+    if (!semanticsLoaded || cachedModelSemantics.rooms.length === 0) {
+        try { await refreshModelSemantics() } catch { /* offline */ }
+    }
+    await ensureAuthoritativeRoomFootprint(targetId)
+    const room = getDiscoveredRoomVolumes().find((r) => r.bimSpaceId === targetId)
+    if (!room) return `ROOM_NOT_DISCOVERED: ${targetId}`
+    const entry = authoritativeFootprints.get(targetId)
+    const pv = planningVolumes.find((v) => v.parentBimSpaceId === targetId)
+    const containment = pv
+        ? (await getClinicalVolumeContainment(targetId)).status
+        : 'NOT_EVALUATED' as const
+    const d = buildSelectedRoomVolumeDiagnostic({
+        room,
+        closedMesh: entry?.volume?.closedMesh ?? false,
+        planningVolumeId: pv?.id,
+        containmentStatus: containment,
+        uptakeBaselineBimSpaceId: '0x200000001f1',
+    })
+    return formatSelectedRoomVolumeDiagnostic(d)
 }
 
 /**
@@ -1856,7 +2300,15 @@ function requestAuthoritativeFootprintsForAssignments(): void {
 export function getClinicalProgramRoomGeometryQuality(roomId: string): { quality: string; description: string } | undefined {
     const room = cachedModelSemantics.rooms.find((r) => r.roomId === roomId)
     if (!room) return undefined
-    const anchor = resolveClinicalProgramFacilityAnchor({ room, storeys: programStoreyRanges })
+    // Build 1A.2: prefer the cached AUTHORITATIVE exact footprint when it has been
+    // lazily extracted for this room — so the product status reflects real
+    // EXACT_ROOM_BOUNDARY rather than remaining stuck at BIM_RANGE_APPROXIMATION.
+    // The range fallback stays honest when no exact mesh is available.
+    const cached = authoritativeFootprints.get(roomId)
+    const exactBoundary = cached?.ok && cached.outerLoop && cached.outerLoop.length >= 3
+        ? { ring: cached.outerLoop, elevation: cached.floorZ }
+        : undefined
+    const anchor = resolveClinicalProgramFacilityAnchor({ room, storeys: programStoreyRanges, exactBoundary })
     return { quality: anchor.geometryQuality, description: describeGeometryQuality(anchor.geometryQuality) }
 }
 

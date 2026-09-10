@@ -1,0 +1,127 @@
+{
+  "build": "BUILD_1A1_ROOM_DISCOVERY_LIFECYCLE_CORRECTION",
+  "continues": "BUILD_1A_GENERIC_BIM_ROOM_VOLUME_ACTIVATION",
+  "precheck": {
+    "PRECHECK_HEAD": "344d0289723e873c7a2974d0d8d295b38f44a6a3",
+    "PRECHECK_ORIGIN_MAIN": "344d0289723e873c7a2974d0d8d295b38f44a6a3",
+    "PRECHECK_DIVERGENCE": "0 0",
+    "BUILD_1A_UNCOMMITTED_WORK_PRESERVED": "YES",
+    "FRONTEND_ENV_STAGED": "NO"
+  },
+  "runtime_failure_provenance": {
+    "BIM_VISIBLE_DURING_REPORTED_FAILURE": "YES",
+    "PREVIOUSLY_OBSERVED_DISCOVERED_ROOM_COUNT": 200,
+    "FAILED_OBSERVED_DISCOVERED_ROOM_COUNT": 0,
+    "PERSISTED_CLINICAL_ASSIGNMENT_PRESENT": "YES",
+    "MANUAL_ROOM_DISCOVERY_ORIGINAL": "FAIL",
+    "RUNTIME_FAILURE_PROVENANCE_PRESERVED": "YES"
+  },
+  "diagnosis": {
+    "ROOM_DISCOVERY_AUTHORITY_CHAIN_TRACED": "YES",
+    "INITIAL_200_COUNT_SOURCE": "REAL_buildModelSemantics_AGAINST_CLINIC_IMODEL (cachedModelSemantics.rooms, LIMIT 200)",
+    "INITIAL_200_COUNT_IMODEL_ID": "36381ef4-b5f5-4d6d-b64b-2dbd69ba26a4 (active clinic; from live viewport at the time)",
+    "FIRST_BROKEN_ROOM_DISCOVERY_SEAM": "refreshModelSemantics() unconditional assignment cachedModelSemantics = await buildModelSemantics()",
+    "ROOT_CAUSE": "getIModel() = IModelApp.viewManager.selectedView.iModel is transiently undefined during viewer lifecycle events; buildModelSemantics() then returns EMPTY_MODEL_SEMANTICS, and refreshModelSemantics overwrote the valid 200-room cache (no iModel ownership, no async-race guard, no lifecycle status); UI conflated rooms.length===0 with 'no BIM spaces'.",
+    "BIM_VISIBILITY_USED_AS_RUNTIME_EVIDENCE": "YES",
+    "SYNTHETIC_ROOM_RECOVERY": "NO"
+  },
+  "fix": {
+    "SEMANTICS_CACHE_IMODEL_SCOPED": "YES",
+    "STALE_SEMANTICS_REFRESH_CAN_OVERWRITE_CURRENT": "NO",
+    "LEGITIMATE_ZERO_ROOM_RESULT_SUPPORTED": "YES",
+    "FAILED_REFRESH_MAPPED_TO_ZERO_ROOMS": "NO",
+    "ROOM_DISCOVERY_LIFECYCLE_EXPLICIT": "YES",
+    "CLINICAL_PROGRAM_TOGGLE_CLEARS_ROOM_DISCOVERY": "NO",
+    "STOREY_FILTER_MUTATES_DISCOVERED_ROOM_AUTHORITY": "NO",
+    "CAMERA_MODE_MUTATES_ROOM_DISCOVERY": "NO",
+    "ROOM_DISCOVERY_DEPENDS_ON_DEVELOPER_MODE": "NO",
+    "BIM_VISIBILITY_AND_SEMANTICS_READINESS_DISTINGUISHED": "YES",
+    "UPTAKE_SPECIFIC_ROOM_DISCOVERY_FIX": "NO",
+    "GENERIC_ROOM_DISCOVERY_DIAGNOSTIC": "IMPLEMENTED",
+    "ROOM_SELECTOR_COUNT_SEMANTICS": "EXPLICIT",
+    "BUILD_1A_ARCHITECTURE_PRESERVED": "YES",
+    "ALL_ROOM_MESH_EXTRACTION_ON_STARTUP": "NO"
+  },
+  "offline_verification": {
+    "TYPECHECK": "PASS",
+    "OFFLINE_TEST_FILE_COUNT": 37,
+    "OFFLINE_TEST_COUNT": 666,
+    "NEW_TEST_COUNT": 16,
+    "OFFLINE_TEST_REGRESSIONS": 0,
+    "ROOM_DISCOVERY_LIFECYCLE_TESTS": "PASS",
+    "BUILD_1A_GENERIC_ROOM_TESTS": "PASS",
+    "UPTAKE_01_REGRESSION": "PASS",
+    "PRODUCTION_BUILD": "PASS",
+    "CORE_FRONTEND_VERSION": "5.12.5",
+    "WORKER_ASSET_REAL": "YES",
+    "DRACO_WASM_ASSET_REAL": "YES"
+  },
+  "runtime_verification": {
+    "VIEWER_HTTP_STATUS": 200,
+    "DEV_SERVER_TERMINAL": "term_1789021571948_vf4ffyp087t",
+    "DEV_SERVER_STATUS": "RUNNING"
+  },
+  "lifecycle_tests_21": {
+    "1_not_bound_not_ready_zero": "PASS",
+    "2_loading_not_ready_zero": "PASS",
+    "3_ready_200_reports_200": "PASS",
+    "4_ready_legit_zero_reports_0": "PASS",
+    "5_error_not_ready_zero": "PASS",
+    "6_stale_refresh_cannot_overwrite_current_imodel": "PASS",
+    "7_stale_empty_cannot_erase_current_valid_rooms": "PASS",
+    "8_current_valid_empty_accepted": "PASS",
+    "9_imodel_switch_clears_binds_intentionally": "PASS",
+    "10_program_toggle_does_not_clear_discovery": "PASS (policy has no toggle input)",
+    "11_storey_filter_does_not_mutate_base_discovery": "PASS (view subset over discovery)",
+    "12_camera_mode_does_not_mutate_discovery": "PASS (policy has no camera input)",
+    "13_developer_mode_does_not_own_discovery": "PASS (policy has no dev-mode input)",
+    "14_same_imodel_refresh_updates_legitimately": "PASS",
+    "15_discovery_does_not_auto_create_planning_volumes": "PASS (Build 1A test)"
+  },
+  "closed_domains": {
+    "EQUIPMENT_CODE_CHANGED": "NO",
+    "ROUTING_CODE_CHANGED": "NO",
+    "TRANSPORT_CODE_CHANGED": "NO",
+    "SIMULATION_CODE_CHANGED": "NO",
+    "OPENUSD_CODE_CHANGED": "NO",
+    "NVIDIA_CODE_CHANGED": "NO",
+    "OPTIMIZATION_CODE_CHANGED": "NO",
+    "ECONOMICS_CODE_CHANGED": "NO",
+    "WHAT_IF_CODE_CHANGED": "NO",
+    "LOCKDOWN_CODE_CHANGED": "NO"
+  },
+  "manual_acceptance": {
+    "MANUAL_ROOM_DISCOVERY_LIFECYCLE": "MANUAL_CONFIRMATION_REQUIRED",
+    "ROOM_COUNT_COLLAPSED_TO_ZERO_UNEXPECTEDLY": "MANUAL_CONFIRMATION_REQUIRED",
+    "BUILD_1A_MANUAL_ACCEPTANCE_RESUMED": "NO (pending first-gate re-test)"
+  },
+  "changed_files": {
+    "new": [
+      "frontend/src/components/spatial/roomDiscoveryLifecycle.ts",
+      "frontend/src/tests/roomDiscoveryLifecycle.test.ts",
+      "MRT_PHARMA_BUILD_1A1_ROOM_DISCOVERY_LIFECYCLE_CORRECTION_REPORT.md",
+      "mrt_pharma_build_1a1_room_discovery_lifecycle_correction_data.json"
+    ],
+    "modified": [
+      "frontend/src/components/spatial/spatialAssetOverlay.ts",
+      "frontend/src/components/spatial/bentleySpatialAdapter.ts",
+      "frontend/src/components/spatial/ClinicalProgramControl.tsx"
+    ],
+    "build_1a_preserved": [
+      "frontend/src/components/spatial/bimRoomVolumeRegistry.ts",
+      "frontend/src/tests/build1aGenericBimRoomVolume.test.ts",
+      "MRT_PHARMA_BUILD_1A_GENERIC_BIM_ROOM_VOLUME_ACTIVATION_REPORT.md",
+      "mrt_pharma_build_1a_generic_bim_room_volume_activation_data.json"
+    ],
+    "excluded_untouched": ["frontend/.env"],
+    "product_source_py_changed": 0
+  },
+  "AUTHORIZED_BUILD_1A1_SCOPE_ONLY": "YES",
+  "BUILD_1A_WORK_PRESERVED": "YES",
+  "FILES_STAGED": "NO",
+  "COMMIT_CREATED": "NO",
+  "PUSH_PERFORMED": "NO",
+  "CHECKPOINT": "HOLD_FOR_BUILD_1A_MANUAL_ACCEPTANCE",
+  "NEXT_BUILD": "BUILD_1B_COMPLETE_CLINICAL_PROGRAM_AND_EQUIPMENT_BINDING",
+  "NEXT_BUILD_STARTED": "NO"
+}

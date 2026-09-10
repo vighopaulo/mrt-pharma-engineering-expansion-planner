@@ -1100,3 +1100,58 @@ the first demo. B and the demo slice of C + J are the first-demo critical path.
 **This addendum, together with the September 9 section of `MRT_PHARMA_OPEN_GAPS.md`,
 is the CURRENT repository authority/gap source of truth as of HEAD `bdd2103`.**
 Historical build reports remain provenance and are not retroactively rewritten.
+
+---
+
+# Build 1A Completion Addendum — Generic Spatial Planning Foundation (COMPLETE)
+
+**Checkpoint:** Build 1A manual completion gate PASSED (user-confirmed) on the
+working tree following the Build 1A → 1A.4 + Walkthrough-correction chain.
+**Nature:** GOVERNANCE update recording the completed Build 1A product authority.
+Historical sections above are unchanged; standardized status vocabulary (§R.1) is
+preserved. This does NOT mark equipment binding, routing integration, or the full
+PET department complete.
+
+## B1A.1 Build 1A authority (frontend clinical spatial planning) — status
+
+| Concern | Canonical source | Status |
+|---|---|---|
+| Generic BIM room discovery (iModel-scoped) | `bimRoomVolumeRegistry.ts` (`discoverRoomVolumes`) + `spatialAssetOverlay.ts` (`getDiscoveredRoomVolumes`), from `cachedModelSemantics.rooms` | `IMPLEMENTED_AND_INTEGRATED` |
+| Room-discovery lifecycle (NOT_BOUND/LOADING/READY/ERROR, iModel-owned, stale-guard) | `roomDiscoveryLifecycle.ts` + guarded `refreshModelSemantics` | `IMPLEMENTED_AND_INTEGRATED` |
+| Storey-aware room collection (canonical storey filter) | `bimRoomVolumeRegistry.filterDiscoveredRoomsByStorey` + `getDiscoveredRoomOptions` | `IMPLEMENTED_AND_INTEGRATED` |
+| Lazy exact IfcSpace geometry inspection | `authoritativeRoomGeometryProbe.extractAuthoritativeRoomGeometry` (generateElementMeshes) via on-demand `ensureAuthoritativeRoomFootprint` + generic diagnostics | `IMPLEMENTED_AND_INTEGRATED` |
+| User-controlled clinical room activation | `clinicalProgram.assignClinicalFunction` (USER authority; no auto-assignment) | `IMPLEMENTED_AND_INTEGRATED` |
+| Parent-derived ClinicalPlanningVolume seed | `clinicalPlanningVolume.seedPrismParamsFromParent` + overlay `suggestPlanningVolumeSeedForParent` | `IMPLEMENTED_AND_INTEGRATED` |
+| True-3D editable ClinicalPlanningVolume | `clinicalPlanningVolume.ts` (oriented prism, X/Y/W/D/Zlo/Zhi/yaw) | `IMPLEMENTED_AND_INTEGRATED` |
+| Exact-parent 3D containment | `validatePlanningVolumeContainment` + `getClinicalVolumeContainment` (EXACT_BIM_SPACE geometry when available; range-only labeled approximate) | `IMPLEMENTED_AND_INTEGRATED` |
+| Product-facing containment validation (warning, invalid cue, lock reason, Restore Valid Position, Reset to Parent-Derived, last-known-valid, summary) | `resolvePlanningVolumeValidation` + overlay `restoreValidPosition`/`resetToParentDerived` + `ClinicalProgramControl` + `ClinicalProgramDecorator` | `IMPLEMENTED_AND_INTEGRATED` |
+| Multi-room planning foundation (per-room edit/visibility/lifecycle/containment isolation; iModel isolation; persistence) | `clinicalVolumeCollection.ts` + iModel-scoped persistence keys | `IMPLEMENTED_AND_INTEGRATED` |
+| Walkthrough facility navigation (floor-constrained pedestrian forward/back/strafe/turn, wall collision + door pass, floor-clearance, incremental zoom/FOV, label visibility, trackpad look) | `walkNav.ts`, `firstPerson.ts`, `walkthroughController.ts`, `walkthroughLabelVisibility.ts` | `IMPLEMENTED_AND_INTEGRATED` |
+
+**BUILD_1A_STATUS = COMPLETE** (manual acceptance gate PASSED; offline: 51 test
+files / 815 tests / 0 regressions; production build PASS; core-frontend 5.12.5).
+
+## B1A.2 Explicit remaining limits (NOT complete at Build 1A closure)
+
+`FULL_PET_DEPARTMENT_COMPLETE = NO`; `CANONICAL_EQUIPMENT_BINDING_COMPLETE = NO`;
+`AUTOMATIC_SPATIAL_ROUTING_COMPLETE = NO`; `FREE_COMPOSITION_OPTIMIZER_COMPLETE =
+NO`; `ANIMATED_SIMULATION_RUNTIME_COMPLETE = NO`; `ECONOMICS_INTEGRATION_COMPLETE
+= NO`; `WHAT_IF_UI_COMPLETE = NO`; `NVIDIA_RUNTIME_COMPLETE = NO`;
+`TRUE_STOREY_SPATIAL_ISOLATION_COMPLETE = NO`; `EXPLODED_STOREY_VIEW_COMPLETE = NO`.
+
+## B1A.3 Next builds (recorded; not started)
+
+- `BUILD_1B_COMPLETE_CLINICAL_PROGRAM_AND_CANONICAL_EQUIPMENT_BINDING` — complete
+  the PET/nuclear-medicine clinical program and bind ONLY existing canonical
+  equipment/resources (cyclotron, radionuclide generators, imaging equipment, MRT
+  vestibule/endpoints, other currently-canonical resources — verified source-first;
+  no new equipment classes) to the true-3D clinical spaces, with room-parented,
+  movable/rotatable, floor-aware, envelope-contained, warn-on-invalid,
+  lock-blocked-when-invalid, Restore/Reset, iModel-scoped placement crosswalked to
+  existing capacity/production/cost authority.
+- `BUILD_2_AUTOMATIC_FACILITY_CONNECTIVITY_AND_SPATIAL_TRANSPORT_INTEGRATION` —
+  doctrine: SIMULATE → infer required logistics missions → determine eligible
+  transport modes → auto-generate feasible spatial connections/routes → evaluate.
+  Normal simulation must NOT require the user to manually choose every MRT/PTS
+  connection; manual route/mode forcing belongs to future What-If/engineering
+  override.

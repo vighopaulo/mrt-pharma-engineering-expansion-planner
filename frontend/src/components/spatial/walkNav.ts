@@ -112,9 +112,20 @@ export function resolveWalkCollision(input: WalkCollisionInput): WalkResult {
     for (const wall of storey.wallBoundaries) {
         const crosses = segmentsIntersect(current, candidate, wall.a, wall.b)
         // Radius check: even without a mathematical crossing, if the candidate
-        // ends within (radius + halfThickness) of the wall, treat as contact.
+        // ends within (radius + halfThickness) of the wall, treat as contact —
+        // BUT only when the step is NOT moving away from the wall. This fixes the
+        // forward-movement defect: the walker spawns near an interior wall, so a
+        // proximity-only block would reject EVERY step that ends near that wall
+        // (forward into the room) while allowing the opposite (backward) step
+        // that increases distance. A step that stays at/reduces the wall distance
+        // is a genuine approach and still blocks; a step that increases the wall
+        // distance (moving away / parallel-outward) is never blocked by proximity
+        // alone. A true crossing always blocks regardless of direction.
+        const band = collisionRadius + wall.thickness / 2
         const nearDist = pointSegmentDistance(candidate, wall.a, wall.b)
-        const contact = crosses || nearDist <= collisionRadius + wall.thickness / 2
+        const curDist = pointSegmentDistance(current, wall.a, wall.b)
+        const approachingWithinBand = nearDist <= band && nearDist <= curDist + 1e-6
+        const contact = crosses || approachingWithinBand
         if (!contact) continue
 
         const cross = crossingPointOnWall(current, candidate, wall)
@@ -139,6 +150,63 @@ export function slideAlongWall(current: Vec2, candidate: Vec2, wall: WallSegment
     const move = sub(candidate, current)
     const tangential = dot(move, unit)
     return { x: current.x + unit.x * tangential, y: current.y + unit.y * tangential }
+}
+
+// ---------------------------------------------------------------------------
+// Walkthrough incremental zoom/dolly — pure bounded wheel/trackpad normalization
+// ---------------------------------------------------------------------------
+//
+// The walkthrough controller must OWN the wheel (otherwise Bentley's default
+// viewport zoom-to-target runs: rapid, eased, spring-back, multi-scene leap).
+// This pure seam turns a raw wheel/trackpad event into a SMALL, BOUNDED,
+// deterministic dolly step (meters, signed: + = forward/zoom-in). No inertia,
+// no animation — the caller applies one step and stops.
+
+/** deltaMode values per the DOM WheelEvent spec. */
+export const WHEEL_DELTA_MODE_PIXEL = 0
+export const WHEEL_DELTA_MODE_LINE = 1
+export const WHEEL_DELTA_MODE_PAGE = 2
+
+/** Base dolly step for one "unit" of normalized wheel input (meters). */
+export const WALKTHROUGH_ZOOM_BASE_STEP_M = 0.25
+/** Hard cap on a single wheel event's dolly step (meters) — no multi-room leap. */
+export const WALKTHROUGH_ZOOM_MAX_STEP_M = 0.6
+/** Line-mode delta → pixel-equivalent (one wheel "line" ≈ 16 px). */
+export const WHEEL_LINE_TO_PIXELS = 16
+/** Page-mode delta → pixel-equivalent (one "page" ≈ 100 px, still clamped). */
+export const WHEEL_PAGE_TO_PIXELS = 100
+/** Reference pixel magnitude that maps to one base step (moderate sensitivity). */
+export const WHEEL_PIXELS_PER_BASE_STEP = 100
+
+export interface WheelDollyInput {
+    /** Raw WheelEvent.deltaY. */
+    deltaY: number
+    /** Raw WheelEvent.deltaMode (0 pixel, 1 line, 2 page). */
+    deltaMode: number
+}
+
+/**
+ * Normalize a raw wheel/trackpad event into a bounded signed dolly step (meters).
+ * + = forward/zoom-in (wheel up / deltaY negative), − = backward/zoom-out.
+ *
+ * Deterministic and finite for all inputs: NaN/Infinity → 0; a huge trackpad
+ * burst is clamped to ±WALKTHROUGH_ZOOM_MAX_STEP_M so one gesture can never leap
+ * through multiple rooms; symmetric in sign; zero delta → zero step.
+ */
+export function normalizeWheelDolly(input: WheelDollyInput): number {
+    const { deltaY, deltaMode } = input
+    if (!Number.isFinite(deltaY) || deltaY === 0) return 0
+    // Convert to a pixel-equivalent magnitude regardless of device delta mode.
+    const toPixels = deltaMode === WHEEL_DELTA_MODE_LINE ? WHEEL_LINE_TO_PIXELS
+        : deltaMode === WHEEL_DELTA_MODE_PAGE ? WHEEL_PAGE_TO_PIXELS
+            : 1
+    const pixels = deltaY * toPixels
+    // Wheel UP (deltaY < 0) = zoom IN = forward (+). Hence negate.
+    const rawStep = (-pixels / WHEEL_PIXELS_PER_BASE_STEP) * WALKTHROUGH_ZOOM_BASE_STEP_M
+    if (!Number.isFinite(rawStep)) return 0
+    // Clamp magnitude to the bounded maximum (no uncontrolled multi-scene leap).
+    const sign = rawStep < 0 ? -1 : 1
+    return sign * Math.min(Math.abs(rawStep), WALKTHROUGH_ZOOM_MAX_STEP_M)
 }
 
 // ---------------------------------------------------------------------------

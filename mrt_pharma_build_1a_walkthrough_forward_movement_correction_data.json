@@ -1,0 +1,134 @@
+{
+  "build": "BUILD_1A_WALKTHROUGH_FORWARD_MOVEMENT_CORRECTION",
+  "sequencing_note": "A Build 1B prompt arrived mid-correction; Build 1B was NOT started (Build 1A must pass its manual completion gate first, per Build 1B section 76). This report covers only the walkthrough forward-movement defect.",
+  "precheck": {
+    "PRECHECK_HEAD": "344d0289723e873c7a2974d0d8d295b38f44a6a3",
+    "PRECHECK_ORIGIN_MAIN": "344d0289723e873c7a2974d0d8d295b38f44a6a3",
+    "PRECHECK_DIVERGENCE": "0 0",
+    "PRIOR_BUILD_1A_WORK_PRESERVED": "YES",
+    "FRONTEND_ENV_STAGED": "NO"
+  },
+  "runtime_provenance": {
+    "WALKTHROUGH_MODE_ENTERED": "YES",
+    "WALKTHROUGH_STRAFE": "PASS",
+    "WALKTHROUGH_TURN": "PASS",
+    "WALKTHROUGH_BACKWARD": "PASS",
+    "WALKTHROUGH_FORWARD": "FAIL (pre-fix)",
+    "APPLICATION_CRASHED": "NO",
+    "WALKTHROUGH_FORWARD_MOVEMENT_DEFECT": "CONFIRMED",
+    "MANUAL_RESTORE_VALID_POSITION": "PASS",
+    "MANUAL_VALID_BASELINE": "PASS",
+    "RUNTIME_PROVENANCE_PRESERVED": "YES"
+  },
+  "trace": {
+    "W_KEY_EVENT_RECEIVED": "YES",
+    "W_KEY_ACTION_MAPPING": "input.forward = (w||arrowup?1:0)-(s||arrowdown?1:0) in walkthroughController.step()",
+    "WALKTHROUGH_FORWARD_VECTOR_SOURCE": "candidateEye -> resolveFirstPersonOrientation(yaw,0).forwardFlat (yaw-only horizontal)",
+    "FORWARD_VECTOR_VALID": "YES",
+    "FORWARD_BACKWARD_PATHS_COMPARED": "YES",
+    "FIRST_ASYMMETRIC_SEAM": "resolveWalkCollision proximity contact test (nearDist <= radius + thickness/2) blocked away/parallel steps",
+    "FORWARD_REQUESTED_DISPLACEMENT_NONZERO": "YES",
+    "COLLISION_AUTHORITY_TRACED": "YES",
+    "FORWARD_STEP_REJECTED_BY_COLLISION": "YES",
+    "COLLISION_DISABLED_AS_FIX": "NO",
+    "CUTAWAY_COLLISION_INTERACTION_TRACED": "YES (walkthrough clears cutaway; collision model is whole-building plane)",
+    "WALKER_FLOOR_CONTACT_VALID": "YES (eye Z = eyeZForFloor(floorElevation, eyeHeight) each frame)",
+    "DOOR_OPENING_COLLISION_POLICY": "door portals traversable with locality; windows/unknown openings non-traversable; walls solid",
+    "FIRST_BROKEN_WALKTHROUGH_SEAM": "resolveWalkCollision proximity-only block ignored movement direction relative to the wall",
+    "ROOT_CAUSE": "walker spawns near an interior wall; proximity band blocked EVERY step ending near any wall (forward into room) while allowing the opposite (backward) step that increases distance; no genuine crossing involved",
+    "ROOT_CAUSE_PROVEN_FROM_SOURCE": "YES"
+  },
+  "fix": {
+    "FORWARD_MOVEMENT_IMPLEMENTED": "YES",
+    "BACKWARD_MOVEMENT_PRESERVED": "YES",
+    "STRAFE_PRESERVED": "YES",
+    "TURN_PRESERVED": "YES",
+    "SHIFT_FAST_MODE_PRESERVED": "YES",
+    "SOLID_WALL_COLLISION_PRESERVED": "YES",
+    "SLAB_COLLISION_PRESERVED": "YES",
+    "BLOCKED_FORWARD_MOVEMENT_CRASHES": "NO",
+    "WALKTHROUGH_MOVEMENT_MODEL": "FLOOR_CONSTRAINED_PEDESTRIAN",
+    "CAMERA_PITCH_CONTROLS_VIEW": "YES",
+    "CAMERA_PITCH_CONTROLS_VERTICAL_TRANSLATION": "NO",
+    "WALKTHROUGH_FLOOR_PENETRATION": "PROHIBITED",
+    "GLOBAL_HARDCODED_WALKER_Z": "NO",
+    "WALKABLE_SURFACE_AUTHORITY": "loadStoreys() per-storey floor elevation (BuildingSpatial.Story + model Z bands)",
+    "WALKABLE_SURFACE_WORLD_SPACE": "YES",
+    "PEDESTRIAN_EYE_HEIGHT_AUTHORITY": "WALKTHROUGH_EYE_HEIGHT_M (cameraNav.ts) via eyeZForFloor",
+    "CAMERA_ORIGIN_ON_FLOOR": "NO",
+    "VERTICAL_DRIFT_DURING_LEVEL_WALK": "NO",
+    "WALKER_MAINTAINS_FLOOR_CLEARANCE": "YES",
+    "WALK_THROUGH_SLAB_TO_CHANGE_STOREY": "NO",
+    "UNMODELED_VERTICAL_STOREY_TRANSITION": "PROHIBITED",
+    "WALKTHROUGH_MOVEMENT_DIAGNOSTIC": "IMPLEMENTED (diagnoseWalkthroughMovement)",
+    "WALKTHROUGH_MUTATES_CLINICAL_VOLUME_COORDINATES": "NO",
+    "STOREY_EXPLODED_VIEW_IMPLEMENTED": "NO"
+  },
+  "offline_verification": {
+    "TYPECHECK": "PASS",
+    "OFFLINE_TEST_FILE_COUNT": 51,
+    "OFFLINE_TEST_COUNT": 815,
+    "NEW_TEST_COUNT": 15,
+    "OFFLINE_TEST_REGRESSIONS": 0,
+    "WALKTHROUGH_FORWARD_MOVEMENT_TESTS": "PASS",
+    "WALKTHROUGH_FLOOR_CONSTRAINT_TESTS": "PASS",
+    "DOWNWARD_LOOK_FORWARD_TEST": "PASS",
+    "UPWARD_LOOK_FORWARD_TEST": "PASS",
+    "PRODUCTION_BUILD": "PASS",
+    "CORE_FRONTEND_VERSION": "5.12.5",
+    "WORKER_ASSET_REAL": "YES",
+    "DRACO_WASM_ASSET_REAL": "YES",
+    "VIEWER_HTTP_STATUS": 200
+  },
+  "build_1b_requirement_recorded": {
+    "BUILD_1B_EQUIPMENT_CONTAINMENT_REQUIREMENT_RECORDED": "YES",
+    "NEW_EQUIPMENT_CLASSES_INTRODUCED": "NO",
+    "EQUIPMENT_CODE_CHANGED": "NO",
+    "BUILD_1B_STARTED": "NO"
+  },
+  "closed_domains": {
+    "EQUIPMENT_CODE_CHANGED": "NO",
+    "ROUTING_CODE_CHANGED": "NO",
+    "TRANSPORT_CODE_CHANGED": "NO",
+    "OPERATIONS_CODE_CHANGED": "NO",
+    "SIMULATION_CODE_CHANGED": "NO",
+    "OPENUSD_CODE_CHANGED": "NO",
+    "NVIDIA_CODE_CHANGED": "NO",
+    "OPTIMIZATION_CODE_CHANGED": "NO",
+    "ECONOMICS_CODE_CHANGED": "NO",
+    "WHAT_IF_CODE_CHANGED": "NO",
+    "LOCKDOWN_CODE_CHANGED": "NO"
+  },
+  "manual_acceptance": {
+    "MANUAL_WALKTHROUGH_FORWARD": "MANUAL_CONFIRMATION_REQUIRED",
+    "MANUAL_WALKTHROUGH_BACKWARD": "MANUAL_CONFIRMATION_REQUIRED",
+    "MANUAL_WALKTHROUGH_STRAFE": "MANUAL_CONFIRMATION_REQUIRED",
+    "MANUAL_WALKTHROUGH_SOLID_WALL_COLLISION": "MANUAL_CONFIRMATION_REQUIRED",
+    "MANUAL_WALKTHROUGH_FACILITY_NAVIGATION": "MANUAL_CONFIRMATION_REQUIRED",
+    "MANUAL_WALKTHROUGH_PLANNING_VOLUME_INVARIANCE": "MANUAL_CONFIRMATION_REQUIRED",
+    "BUILD_1A_CLOSURE_RESUMED": "NO"
+  },
+  "authority_docs": {
+    "BUILD_1A_AUTHORITY_COMPLETION_DEFERRED": "YES",
+    "AUTHORITY_DOCS_UPDATED": "NO"
+  },
+  "changed_files_this_correction": {
+    "modified": [
+      "frontend/src/components/spatial/walkNav.ts",
+      "frontend/src/components/spatial/walkthroughController.ts",
+      "frontend/src/components/spatial/spatialAssetOverlay.ts"
+    ],
+    "new": [
+      "frontend/src/tests/build1aWalkthroughForward.test.ts",
+      "MRT_PHARMA_BUILD_1A_WALKTHROUGH_FORWARD_MOVEMENT_CORRECTION_REPORT.md",
+      "mrt_pharma_build_1a_walkthrough_forward_movement_correction_data.json"
+    ],
+    "product_source_py_changed": 0,
+    "note": "Other uncommitted frontend walkthrough files (zoom/trackpad/label-visibility/controls-pane/final-UX + CameraModeControl + walkthroughLabelVisibility.ts) are pre-existing accumulated Build 1A walkthrough work, not created by this correction."
+  },
+  "AUTHORIZED_SCOPE_ONLY": "YES",
+  "FILES_STAGED": "NO",
+  "COMMIT_CREATED": "NO",
+  "PUSH_PERFORMED": "NO",
+  "CHECKPOINT": "HOLD_FOR_BUILD_1A_WALKTHROUGH_MANUAL_ACCEPTANCE"
+}

@@ -1,0 +1,120 @@
+{
+  "build": "1A_WALKTHROUGH_INCREMENTAL_ZOOM_DOLLY_CORRECTION",
+  "continuation_of": [
+    "BUILD_1A",
+    "BUILD_1A.1",
+    "BUILD_1A.2",
+    "BUILD_1A.3",
+    "BUILD_1A.4",
+    "WALKTHROUGH_FORWARD_MOVEMENT_CORRECTION",
+    "WALKTHROUGH_LABEL_VISIBILITY_CORRECTION"
+  ],
+  "scope_expansion": false,
+  "new_feature": false,
+  "build_1b_started": false,
+  "defect_provenance": {
+    "forward_movement": "FIXED_PRIOR_BUILD",
+    "label_occlusion": "FIXED_PRIOR_BUILD",
+    "zoom_dolly": "TOO_RAPID_AND_SPRINGY_MULTI_SCENE_LEAP_SPRING_BACK"
+  },
+  "root_cause": {
+    "WALKTHROUGH_ZOOM_INPUT_PIPELINE_TRACED": "YES",
+    "walkthrough_wheel_owner_before": "BENTLEY_DEFAULT_VIEWPORT_ZOOM_TO_TARGET",
+    "first_broken_zoom_control_seam": "NO_WHEEL_INTERCEPTION_IN_enterWalkthrough",
+    "cause": "walkthrough_controller_never_captured_wheel_so_bentley_default_rapid_eased_zoom_with_spring_back_owned_it"
+  },
+  "fix": {
+    "normalization_seam": "frontend/src/components/spatial/walkNav.ts::normalizeWheelDolly",
+    "constants": {
+      "WALKTHROUGH_ZOOM_BASE_STEP_M": 0.25,
+      "WALKTHROUGH_ZOOM_MAX_STEP_M": 0.6,
+      "WHEEL_LINE_TO_PIXELS": 16,
+      "WHEEL_PAGE_TO_PIXELS": 100,
+      "WHEEL_PIXELS_PER_BASE_STEP": 100,
+      "WHEEL_DELTA_MODE_PIXEL": 0,
+      "WHEEL_DELTA_MODE_LINE": 1,
+      "WHEEL_DELTA_MODE_PAGE": 2
+    },
+    "wheel_owned_by_walkthrough": true,
+    "wheel_listener": "canvas.addEventListener('wheel', onWheel, { passive: false }) + preventDefault + stopPropagation",
+    "dolly_path": "SHARED_applyMove_reuses_candidateEye_and_resolveWalkCollision",
+    "vertical_free_flight": false,
+    "wall_bypass": false,
+    "inertia": false,
+    "animation_or_spring_back": false,
+    "immediate_after_step": true,
+    "shift_faster_bounded_x2": true,
+    "fov_on_wheel": false,
+    "fov_stays_on_buttons": ["NORMAL", "WIDE", "ULTRA_WIDE"],
+    "diagnostic_extended_fields": [
+      "lastWheelRawDelta",
+      "lastWheelDeltaMode",
+      "lastWheelNormalizedStep",
+      "lastZoomCameraBefore",
+      "lastZoomCameraAfter",
+      "lastZoomCollisionResult",
+      "lastZoomAccepted",
+      "lastZoomRejectionReason",
+      "zoomAnimationActive"
+    ]
+  },
+  "files_changed_this_build": [
+    "frontend/src/components/spatial/walkNav.ts",
+    "frontend/src/components/spatial/walkthroughController.ts",
+    "frontend/src/tests/build1aWalkthroughZoom.test.ts"
+  ],
+  "py_files_changed": 0,
+  "bentley_writes": 0,
+  "env_touched": false,
+  "verification": {
+    "typecheck": "PASS",
+    "offline_test_file_count": 48,
+    "offline_test_count": 787,
+    "new_test_count": 15,
+    "baseline_test_file_count": 47,
+    "baseline_test_count": 772,
+    "regressions": 0,
+    "production_build": "PASS",
+    "worker_head": "(()=>{\"use strict\";f",
+    "draco_wasm_magic": "0061 736d",
+    "core_frontend_version": "5.12.5",
+    "dev_server_restarted": true,
+    "viewer_http_status": 200
+  },
+  "manual_acceptance": {
+    "incremental_zoom_step": "MANUAL_CONFIRMATION_REQUIRED",
+    "repeated_steps_smooth": "MANUAL_CONFIRMATION_REQUIRED",
+    "no_spring_back_no_overshoot": "MANUAL_CONFIRMATION_REQUIRED",
+    "immediate_steering_after_step": "MANUAL_CONFIRMATION_REQUIRED",
+    "floor_and_collision_preserved": "MANUAL_CONFIRMATION_REQUIRED",
+    "checkpoint": "HOLD_FOR_BUILD_1A_WALKTHROUGH_ZOOM_MANUAL_ACCEPTANCE"
+  },
+  "preserved": {
+    "walkthrough_forward_collision_fix": true,
+    "floor_constrained_pedestrian": true,
+    "movement_diagnostic": true,
+    "label_occlusion_fix": true,
+    "no_free_flight_reintroduced": true,
+    "controls": "W/S_walk_A/D_strafe_arrows_turn_shift_faster_drag_look_esc_release"
+  },
+  "record_only": {
+    "build_1b_equipment_containment_requirement": "RECORDED_ONLY",
+    "storey_isolation_exploded_view": "RECORDED_FUTURE_NOT_IMPLEMENTED",
+    "BUILD_1A_AUTHORITY_COMPLETION_DEFERRED": "YES",
+    "authority_index_updated": false,
+    "open_gaps_updated": false,
+    "FULL_PET_DEPARTMENT_COMPLETE": "NO",
+    "EQUIPMENT_BINDING_COMPLETE": "NO",
+    "NEXT_BUILD": "BUILD_1B_COMPLETE_CLINICAL_PROGRAM_AND_EQUIPMENT_BINDING"
+  },
+  "git": {
+    "head": "344d0289723e873c7a2974d0d8d295b38f44a6a3",
+    "origin_main": "344d0289723e873c7a2974d0d8d295b38f44a6a3",
+    "ahead": 0,
+    "behind": 0,
+    "staged": false,
+    "committed": false,
+    "pushed": false,
+    "destructive_git_ops": "NONE"
+  }
+}

@@ -748,10 +748,48 @@
 }
 
 .camera-mode-help {
+    position: relative;
     font-size: 0.62rem;
     color: #8a94a3;
     max-width: 220px;
     line-height: 1.4;
+    padding: 6px 22px 6px 8px;
+    border: 1px solid rgba(138, 148, 163, 0.35);
+    border-radius: 6px;
+    background: rgba(18, 24, 33, 0.7);
+}
+
+/* Build 1A walkthrough final UX — dismiss (×) + reopen (Controls ?) affordances. */
+.camera-mode-help-close {
+    position: absolute;
+    top: 2px;
+    right: 4px;
+    border: none;
+    background: transparent;
+    color: #cdd6df;
+    font-size: 0.9rem;
+    line-height: 1;
+    cursor: pointer;
+    padding: 2px 4px;
+}
+
+.camera-mode-help-close:hover {
+    color: #fff;
+}
+
+.camera-mode-help-reopen {
+    align-self: flex-start;
+    font-size: 0.62rem;
+    color: #cdd6df;
+    background: rgba(18, 24, 33, 0.7);
+    border: 1px solid rgba(138, 148, 163, 0.35);
+    border-radius: 6px;
+    padding: 3px 8px;
+    cursor: pointer;
+}
+
+.camera-mode-help-reopen:hover {
+    color: #fff;
 }
 
 /* Compact planning control bar — top-right, small, never covers the model. */
@@ -1149,6 +1187,23 @@
 
 .clinical-program-summary-line.ok {
     color: #8fd6b6;
+}
+
+/* Build 1A.4 — product-facing containment warning (not color-only: icon + text
+   + border pattern). Appears in the normal Clinical Program editor. */
+.clinical-program-warning {
+    margin: 6px 0;
+    padding: 8px 10px;
+    border: 2px dashed rgba(235, 90, 80, 0.9);
+    border-radius: 6px;
+    background: rgba(70, 18, 14, 0.5);
+    color: #ffd9d3;
+    font-size: 0.72rem;
+    line-height: 1.35;
+}
+
+.clinical-program-warning strong {
+    color: #ffe6e2;
 }
 
 .clinical-program-dev {

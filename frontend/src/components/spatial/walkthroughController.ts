@@ -17,9 +17,10 @@ import {
     WALKTHROUGH_SPEED_M_PER_S,
     type CameraMode,
 } from './cameraNav'
-import { candidateEye, eyeZForFloor, resolveFirstPersonOrientation } from './firstPerson'
+import { candidateEye, clampPitch, eyeZForFloor, resolveFirstPersonOrientation } from './firstPerson'
 import {
     clampFovDegrees,
+    normalizeWheelDolly,
     resolveKeyboardYaw,
     resolveStoreyCutaway,
     resolveWalkCollision,
@@ -256,12 +257,15 @@ export function applyBirdsEye(): boolean {
 let walkState: {
     yaw: number; pitch: number; pos: Point3d; startPos: Point3d;
     keys: Set<string>; raf: number; lastT: number; fovDeg: number;
+    activeStoreyId: string | undefined;
     collisionModel: WalkCollisionStorey | undefined;
     dragging: boolean; lastDragX: number; lastDragY: number;
     applyCamera: () => void;
+    applyMove: (input: { forward: number; strafe: number }, distance: number, kind: 'KEY' | 'WHEEL') => boolean;
     onKeyDown: (e: KeyboardEvent) => void; onKeyUp: (e: KeyboardEvent) => void;
     onMouseMove: (e: MouseEvent) => void; onPointerLockChange: () => void;
     onPointerDown: (e: PointerEvent) => void; onPointerUp: () => void;
+    onWheel: (e: WheelEvent) => void;
     canvas: HTMLElement;
 } | undefined
 
@@ -269,6 +273,70 @@ let walkState: {
 export const MOUSE_LOOK_SENSITIVITY = 0.0022
 /** Collision radius (human navigation body). NOT equipment clearance. */
 export const WALK_COLLISION_RADIUS_M = 0.35
+
+/**
+ * Build 1A walkthrough movement diagnostic — bounded, on-demand (never per-frame
+ * console spam). Updated on each movement step; read via diagnoseWalkthroughMovement().
+ */
+interface WalkMovementDiag {
+    active: boolean
+    eye: { x: number; y: number; z: number }
+    walkDir: { x: number; y: number }
+    lastRequestedDirection: { forward: number; strafe: number }
+    lastRequestedDisplacement: { dx: number; dy: number }
+    lastCandidate: { x: number; y: number }
+    lastCollisionResult: string
+    lastMovementAccepted: boolean
+    lastRejectionReason: string
+    activeStorey: string
+    // Build 1A incremental-zoom fields.
+    lastWheelRawDelta?: number
+    lastWheelDeltaMode?: number
+    lastWheelNormalizedStep?: number
+    lastZoomCameraBefore?: { x: number; y: number; z: number }
+    lastZoomCameraAfter?: { x: number; y: number; z: number }
+    lastZoomCollisionResult?: string
+    lastZoomAccepted?: boolean
+    lastZoomRejectionReason?: string
+    zoomAnimationActive?: boolean
+}
+let lastWalkDiag: WalkMovementDiag | undefined
+
+/** The current walkthrough eye position (world), or undefined when not walking. */
+export function getWalkEye(): { x: number; y: number; z: number } | undefined {
+    const s = walkState
+    if (!s) return undefined
+    return { x: s.pos.x, y: s.pos.y, z: s.pos.z }
+}
+
+/** On-demand bounded walkthrough movement diagnostic (no per-frame logging). */
+export function diagnoseWalkthroughMovement(): string {
+    const d = lastWalkDiag
+    const L: string[] = ['=== WALKTHROUGH MOVEMENT ===']
+    if (!d) { L.push('WALKTHROUGH_ACTIVE = NO (enter Walkthrough and move first)'); return L.join('\n') }
+    L.push(`WALKTHROUGH_ACTIVE = ${d.active ? 'YES' : 'NO'}`)
+    L.push(`EYE_POSITION = (${d.eye.x.toFixed(2)}, ${d.eye.y.toFixed(2)}, ${d.eye.z.toFixed(2)})`)
+    L.push(`WALK_DIRECTION = (${d.walkDir.x.toFixed(3)}, ${d.walkDir.y.toFixed(3)})`)
+    L.push(`LAST_REQUESTED_DIRECTION = forward ${d.lastRequestedDirection.forward} strafe ${d.lastRequestedDirection.strafe}`)
+    L.push(`LAST_REQUESTED_DISPLACEMENT = (${d.lastRequestedDisplacement.dx.toFixed(3)}, ${d.lastRequestedDisplacement.dy.toFixed(3)})`)
+    L.push(`LAST_CANDIDATE_POSITION = (${d.lastCandidate.x.toFixed(2)}, ${d.lastCandidate.y.toFixed(2)})`)
+    L.push(`LAST_COLLISION_RESULT = ${d.lastCollisionResult}`)
+    L.push(`LAST_MOVEMENT_ACCEPTED = ${d.lastMovementAccepted ? 'YES' : 'NO'}`)
+    L.push(`LAST_REJECTION_REASON = ${d.lastRejectionReason || '(none)'}`)
+    L.push(`ACTIVE_STOREY = ${d.activeStorey}`)
+    L.push('--- zoom / dolly ---')
+    L.push(`LAST_WHEEL_RAW_DELTA = ${d.lastWheelRawDelta ?? '(none)'}`)
+    L.push(`LAST_WHEEL_DELTA_MODE = ${d.lastWheelDeltaMode ?? '(none)'}`)
+    L.push(`LAST_WHEEL_NORMALIZED_STEP = ${d.lastWheelNormalizedStep !== undefined ? d.lastWheelNormalizedStep.toFixed(3) : '(none)'}`)
+    L.push(`LAST_ZOOM_DOLLY_STEP = ${d.lastWheelNormalizedStep !== undefined ? d.lastWheelNormalizedStep.toFixed(3) : '(none)'}`)
+    L.push(`LAST_ZOOM_CAMERA_BEFORE = ${d.lastZoomCameraBefore ? `(${d.lastZoomCameraBefore.x.toFixed(2)}, ${d.lastZoomCameraBefore.y.toFixed(2)}, ${d.lastZoomCameraBefore.z.toFixed(2)})` : '(none)'}`)
+    L.push(`LAST_ZOOM_CAMERA_AFTER = ${d.lastZoomCameraAfter ? `(${d.lastZoomCameraAfter.x.toFixed(2)}, ${d.lastZoomCameraAfter.y.toFixed(2)}, ${d.lastZoomCameraAfter.z.toFixed(2)})` : '(none)'}`)
+    L.push(`LAST_ZOOM_COLLISION_RESULT = ${d.lastZoomCollisionResult ?? '(none)'}`)
+    L.push(`LAST_ZOOM_ACCEPTED = ${d.lastZoomAccepted === undefined ? '(none)' : d.lastZoomAccepted ? 'YES' : 'NO'}`)
+    L.push(`LAST_ZOOM_REJECTION_REASON = ${d.lastZoomRejectionReason || '(none)'}`)
+    L.push(`ZOOM_ANIMATION_ACTIVE = ${d.zoomAnimationActive ? 'YES' : 'NO'} (incremental; no inertia/spring-back)`)
+    return L.join('\n')
+}
 
 /**
  * Enter first-person walkthrough. Places the camera at eye height near the model
@@ -293,9 +361,41 @@ export async function enterWalkthrough(startStoreyId?: string, fovPreset: FovPre
         const state = {
             yaw: 0, pitch: 0, pos: start, startPos: start.clone(), keys: new Set<string>(),
             raf: 0, lastT: performance.now(), fovDeg: clampFovDegrees(resolveWalkthroughFovDegrees(fovPreset)),
+            activeStoreyId: chosen ? chosen.id : undefined as string | undefined,
             collisionModel, dragging: false, lastDragX: 0, lastDragY: 0,
             applyCamera: () => { /* set below */ },
+            applyMove: (_i: { forward: number; strafe: number }, _d: number, _k: 'KEY' | 'WHEEL') => false, // set below
             canvas,
+            // Build 1A incremental zoom/dolly: MRT Pharma OWNS the wheel during
+            // walkthrough (preventDefault stops Bentley's rapid/eased zoom-to-target
+            // + spring-back). Each event => one BOUNDED incremental forward/back
+            // dolly through the SAME collision + floor-constrained path. No inertia,
+            // no animation, no queue — the camera stops and the user steers next.
+            onWheel: (e: WheelEvent) => {
+                e.preventDefault()
+                e.stopPropagation()
+                const stepM = normalizeWheelDolly({ deltaY: e.deltaY, deltaMode: e.deltaMode })
+                // Record raw wheel facts on the diagnostic even when the step is 0.
+                lastWalkDiag = {
+                    ...(lastWalkDiag ?? {
+                        active: true, eye: { x: state.pos.x, y: state.pos.y, z: state.pos.z },
+                        walkDir: { x: 0, y: 0 }, lastRequestedDirection: { forward: 0, strafe: 0 },
+                        lastRequestedDisplacement: { dx: 0, dy: 0 }, lastCandidate: { x: state.pos.x, y: state.pos.y },
+                        lastCollisionResult: '(none)', lastMovementAccepted: false, lastRejectionReason: '',
+                        activeStorey: state.activeStoreyId ?? '(entry)',
+                    }),
+                    lastWheelRawDelta: e.deltaY,
+                    lastWheelDeltaMode: e.deltaMode,
+                    lastWheelNormalizedStep: stepM,
+                    zoomAnimationActive: false,
+                }
+                if (stepM === 0) return
+                // + step = forward/zoom-in; − = backward. Shift = faster (bounded).
+                const dir = stepM > 0 ? 1 : -1
+                const dist = Math.abs(stepM) * (state.keys.has('shift') ? 2 : 1)
+                state.applyMove({ forward: dir, strafe: 0 }, dist, 'WHEEL')
+                state.applyCamera() // immediate; no animation frame wait
+            },
             onKeyDown: (e: KeyboardEvent) => {
                 const k = e.key.toLowerCase()
                 state.keys.add(k)
@@ -308,16 +408,23 @@ export async function enterWalkthrough(startStoreyId?: string, fovPreset: FovPre
                 // Two look paths (both first-person yaw/pitch, never orbit):
                 //  1. pointer-lock movementX/Y (external mouse), when locked;
                 //  2. click-drag delta (MacBook trackpad friendly), when dragging.
+                // Build 1A walkthrough final UX: pitch is clamped by the single
+                // named authority clampPitch (±MAX_PITCH). Dragging/moving UP
+                // (negative movementY) increases pitch => look up; DOWN => look
+                // down. Symmetric up/down; never inverts the camera. Pitch only
+                // changes the LOOK direction — translation stays horizontal
+                // (candidateEye ignores pitch), so looking up/down never drives
+                // the pedestrian vertically.
                 if (document.pointerLockElement === canvas) {
                     state.yaw -= e.movementX * MOUSE_LOOK_SENSITIVITY
-                    state.pitch = Math.max(-1.45, Math.min(1.45, state.pitch - e.movementY * MOUSE_LOOK_SENSITIVITY))
+                    state.pitch = clampPitch(state.pitch - e.movementY * MOUSE_LOOK_SENSITIVITY)
                 } else if (state.dragging) {
                     const dx = e.clientX - state.lastDragX
                     const dy = e.clientY - state.lastDragY
                     state.lastDragX = e.clientX
                     state.lastDragY = e.clientY
                     state.yaw -= dx * MOUSE_LOOK_SENSITIVITY
-                    state.pitch = Math.max(-1.45, Math.min(1.45, state.pitch - dy * MOUSE_LOOK_SENSITIVITY))
+                    state.pitch = clampPitch(state.pitch - dy * MOUSE_LOOK_SENSITIVITY)
                 }
             },
             onPointerDown: (e: PointerEvent) => {
@@ -361,6 +468,81 @@ export async function enterWalkthrough(startStoreyId?: string, fovPreset: FovPre
         }
         state.applyCamera = applyCamera
 
+        /**
+         * Shared move-apply: translate the eye by a bounded horizontal step in the
+         * requested walk direction, through the SAME collision + floor-constrained
+         * path used by both keyboard walking and wheel dolly. `distance` in meters.
+         * Returns whether the move was accepted. Records the movement diagnostic.
+         * Floor-constrained (z pinned by applyCamera); never vertical free flight.
+         */
+        const applyMove = (input: { forward: number; strafe: number }, distance: number, kind: 'KEY' | 'WHEEL'): boolean => {
+            const cand = candidateEye({ x: state.pos.x, y: state.pos.y, z: state.pos.z }, state.yaw, input, distance)
+            const model = state.collisionModel
+            const cur2 = { x: state.pos.x, y: state.pos.y }
+            const cand2 = { x: cand.x, y: cand.y }
+            const oFlat = resolveFirstPersonOrientation(state.yaw, 0)
+            const before = { x: state.pos.x, y: state.pos.y, z: state.pos.z }
+            let accepted = false
+            let collisionResult = 'NO_MODEL'
+            let rejection = ''
+            if (!model) {
+                state.pos = Point3d.create(cand.x, cand.y, cand.z)
+                accepted = true; collisionResult = 'ALLOW'
+            } else {
+                const decision = resolveWalkCollision({ current: cur2, candidate: cand2, storey: model, collisionRadius: WALK_COLLISION_RADIUS_M })
+                collisionResult = decision
+                if (decision === 'ALLOW' || decision === 'ALLOW_DOOR') {
+                    state.pos = Point3d.create(cand.x, cand.y, cand.z)
+                    accepted = true
+                } else if (decision === 'BLOCK_WALL') {
+                    let bestWall: WallSegment | undefined; let bestD = Infinity
+                    for (const w of model.wallBoundaries) {
+                        const d = pointSegmentDistance2d(cand2, w.a, w.b)
+                        if (d < bestD) { bestD = d; bestWall = w }
+                    }
+                    if (bestWall) {
+                        const slid = slideAlongWall(cur2, cand2, bestWall)
+                        const slideOk = resolveWalkCollision({ current: cur2, candidate: slid, storey: model, collisionRadius: WALK_COLLISION_RADIUS_M })
+                        if (slideOk === 'ALLOW' || slideOk === 'ALLOW_DOOR') {
+                            state.pos = Point3d.create(slid.x, slid.y, cand.z)
+                            accepted = true; collisionResult = `${decision}->SLIDE_${slideOk}`
+                        } else { rejection = 'BLOCK_WALL (no slide)' }
+                    } else { rejection = 'BLOCK_WALL' }
+                } else {
+                    rejection = decision // BLOCK_WINDOW / BLOCK_UNKNOWN_OPENING / BLOCK_NO_FLOOR => no move.
+                }
+            }
+            const base: WalkMovementDiag = {
+                active: true,
+                eye: { x: state.pos.x, y: state.pos.y, z: state.pos.z },
+                walkDir: { x: oFlat.forwardFlat.x, y: oFlat.forwardFlat.y },
+                lastRequestedDirection: { forward: input.forward, strafe: input.strafe },
+                lastRequestedDisplacement: { dx: cand.x - cur2.x, dy: cand.y - cur2.y },
+                lastCandidate: { x: cand.x, y: cand.y },
+                lastCollisionResult: collisionResult,
+                lastMovementAccepted: accepted,
+                lastRejectionReason: rejection,
+                activeStorey: state.activeStoreyId ?? '(entry)',
+                // Preserve prior zoom fields unless THIS was a wheel move.
+                ...(lastWalkDiag ? {
+                    lastWheelRawDelta: lastWalkDiag.lastWheelRawDelta,
+                    lastWheelDeltaMode: lastWalkDiag.lastWheelDeltaMode,
+                    lastWheelNormalizedStep: lastWalkDiag.lastWheelNormalizedStep,
+                } : {}),
+            }
+            if (kind === 'WHEEL') {
+                base.lastZoomCameraBefore = before
+                base.lastZoomCameraAfter = { x: state.pos.x, y: state.pos.y, z: state.pos.z }
+                base.lastZoomCollisionResult = collisionResult
+                base.lastZoomAccepted = accepted
+                base.lastZoomRejectionReason = rejection
+                base.zoomAnimationActive = false // incremental: never an active animation
+            }
+            lastWalkDiag = base
+            return accepted
+        }
+        state.applyMove = applyMove
+
         const step = () => {
             const now = performance.now()
             const dt = Math.min(0.1, (now - state.lastT) / 1000)
@@ -379,35 +561,7 @@ export async function enterWalkthrough(startStoreyId?: string, fovPreset: FovPre
                 forward: (state.keys.has('w') || state.keys.has('arrowup') ? 1 : 0) - (state.keys.has('s') || state.keys.has('arrowdown') ? 1 : 0),
                 strafe: (state.keys.has('d') ? 1 : 0) - (state.keys.has('a') ? 1 : 0),
             }
-            if (input.forward !== 0 || input.strafe !== 0) {
-                const cand = candidateEye({ x: state.pos.x, y: state.pos.y, z: state.pos.z }, state.yaw, input, speed)
-                const model = state.collisionModel
-                const cur2 = { x: state.pos.x, y: state.pos.y }
-                const cand2 = { x: cand.x, y: cand.y }
-                if (!model) {
-                    state.pos = Point3d.create(cand.x, cand.y, cand.z)
-                } else {
-                    const decision = resolveWalkCollision({ current: cur2, candidate: cand2, storey: model, collisionRadius: WALK_COLLISION_RADIUS_M })
-                    if (decision === 'ALLOW' || decision === 'ALLOW_DOOR') {
-                        state.pos = Point3d.create(cand.x, cand.y, cand.z)
-                    } else if (decision === 'BLOCK_WALL') {
-                        // Attempt a wall slide along the nearest blocking wall.
-                        let bestWall: WallSegment | undefined; let bestD = Infinity
-                        for (const w of model.wallBoundaries) {
-                            const d = pointSegmentDistance2d(cand2, w.a, w.b)
-                            if (d < bestD) { bestD = d; bestWall = w }
-                        }
-                        if (bestWall) {
-                            const slid = slideAlongWall(cur2, cand2, bestWall)
-                            const slideOk = resolveWalkCollision({ current: cur2, candidate: slid, storey: model, collisionRadius: WALK_COLLISION_RADIUS_M })
-                            if (slideOk === 'ALLOW' || slideOk === 'ALLOW_DOOR') {
-                                state.pos = Point3d.create(slid.x, slid.y, cand.z)
-                            }
-                        }
-                    }
-                    // BLOCK_WINDOW / BLOCK_UNKNOWN_OPENING / BLOCK_NO_FLOOR => no move.
-                }
-            }
+            if (input.forward !== 0 || input.strafe !== 0) applyMove(input, speed, 'KEY')
             applyCamera()
             state.raf = requestAnimationFrame(step)
         }
@@ -418,6 +572,8 @@ export async function enterWalkthrough(startStoreyId?: string, fovPreset: FovPre
         canvas.addEventListener('pointerdown', state.onPointerDown)
         window.addEventListener('pointerup', state.onPointerUp)
         document.addEventListener('pointerlockchange', state.onPointerLockChange)
+        // { passive: false } so preventDefault stops Bentley's default wheel zoom.
+        canvas.addEventListener('wheel', state.onWheel, { passive: false })
         // Do NOT force pointer lock (unreliable on MacBook trackpads). The user
         // steers with arrow keys and/or click-drag look; an external mouse can
         // still request lock by clicking the canvas if desired.
@@ -469,8 +625,10 @@ export function exitWalkthrough(): void {
     s.canvas.removeEventListener('pointerdown', s.onPointerDown)
     window.removeEventListener('pointerup', s.onPointerUp)
     document.removeEventListener('pointerlockchange', s.onPointerLockChange)
+    s.canvas.removeEventListener('wheel', s.onWheel)
     exitPointerLock()
     walkState = undefined
+    if (lastWalkDiag) lastWalkDiag = { ...lastWalkDiag, active: false }
 }
 
 /** Apply a camera mode. Returns whether it took effect. VIEW-ONLY. */

@@ -27,6 +27,8 @@ import {
 } from './clinicalProgramOverlay'
 import { buildOrientedPlanningPrism, type PrismParams, type ClinicalVolumeLifecycle } from './clinicalPlanningVolume'
 import type { ViewerMode } from './planningVisuals'
+import type { CameraMode } from './cameraNav'
+import { resolveWalkthroughLabelVisibility } from './walkthroughLabelVisibility'
 import type { ClinicalProgramAssignment, ClinicalFunction } from './clinicalProgram'
 
 // Restrained clinical-planning category tints (UI ONLY — not regulatory).
@@ -106,7 +108,15 @@ export interface ClinicalProgramInputs {
     /** Whether to render the MRT clinical PLANNING volume (true 3D world prism). */
     getShowClinicalVolume?: () => boolean
     /** The planning volume for a parent space, if defined + visible. */
-    getPlanningVolumeForSpace?: (bimSpaceId: string) => { params: PrismParams; lifecycleState: ClinicalVolumeLifecycle; displayName: string; selected: boolean } | undefined
+    getPlanningVolumeForSpace?: (bimSpaceId: string) => { params: PrismParams; lifecycleState: ClinicalVolumeLifecycle; displayName: string; selected: boolean; invalid?: boolean } | undefined
+    /**
+     * Build 1A label-occlusion: the active product CAMERA mode (PLANNING /
+     * WALKTHROUGH / BIRDS_EYE_CUTAWAY). In WALKTHROUGH the planning-volume label
+     * becomes visibility-aware (occlusion + behind-camera + off-screen +
+     * proximity); PLANNING / BIRDS_EYE keep persistent labels. Defaults to
+     * PLANNING when not supplied (backward compatible).
+     */
+    getCameraMode?: () => CameraMode
 }
 
 /** Bounded instrumentation snapshot from the most recent decorate() call. */
@@ -209,8 +219,8 @@ export class ClinicalProgramDecorator implements Decorator {
                 // The PLANNING volume is the physical authority for the assigned
                 // room: draw the true 3D prism and anchor the label to it. The old
                 // range accent/footprint is suppressed for this room (no duplicate).
-                this.drawPlanningPrism(context, planning.params, planning.lifecycleState, planning.selected)
-                this.drawPlanningLabel(context, planning, room.label)
+                this.drawPlanningPrism(context, planning.params, planning.lifecycleState, planning.selected, planning.invalid ?? false)
+                this.drawPlanningLabel(context, planning, room.label, planning.invalid ?? false)
             } else {
                 this.drawRoomAccent(context, room)
                 this.drawLabel(context, room)
@@ -224,13 +234,16 @@ export class ClinicalProgramDecorator implements Decorator {
      * coordinates. It is NOT a billboard — it rotates/foreshortens with the scene
      * exactly like other world geometry. DRAFT vs LOCKED are visually distinct.
      */
-    private drawPlanningPrism(context: DecorateContext, params: PrismParams, state: ClinicalVolumeLifecycle, selected: boolean): void {
+    private drawPlanningPrism(context: DecorateContext, params: PrismParams, state: ClinicalVolumeLifecycle, selected: boolean, invalid: boolean): void {
         const g = buildOrientedPlanningPrism(params)
         const V = g.vertices.map((p) => Point3d.create(p.x, p.y, p.z))
-        // DRAFT = warm amber; LOCKED = teal; SELECTED = brighter blue-tinted edge.
-        const rgb: [number, number, number] = selected ? [130, 180, 255] : state === 'LOCKED' ? [110, 200, 175] : [235, 190, 110]
+        // INVALID (containment FAIL) = red; DRAFT = warm amber; LOCKED = teal;
+        // SELECTED = brighter blue-tinted edge. (Color is only ONE cue — the
+        // invalid state also uses a DASHED edge pattern + thicker outline + an
+        // OUTSIDE badge on the label, so it never relies on color alone.)
+        const rgb: [number, number, number] = invalid ? [230, 90, 80] : selected ? [130, 180, 255] : state === 'LOCKED' ? [110, 200, 175] : [235, 190, 110]
         const edge = ColorDef.from(...rgb)
-        const fill = ColorDef.from(...rgb).withTransparency(selected ? 175 : state === 'LOCKED' ? 205 : 190)
+        const fill = ColorDef.from(...rgb).withTransparency(invalid ? 170 : selected ? 175 : state === 'LOCKED' ? 205 : 190)
 
         // Faces (true world geometry, depth-tested WorldDecoration so it reads as
         // a solid in the scene). Bottom, top, and 4 sides.
@@ -244,9 +257,10 @@ export class ClinicalProgramDecorator implements Decorator {
         for (const [a, b, c, d] of faces) faceBuilder.addShape([V[a], V[b], V[c], V[d], V[a]])
         context.addDecorationFromBuilder(faceBuilder)
 
-        // Crisp world edges (selected = thicker for a non-color cue too).
+        // Crisp world edges (selected/invalid = thicker for a non-color cue too;
+        // invalid uses a DASHED pattern as an additional shape/pattern cue).
         const edgeBuilder = context.createGraphicBuilder(GraphicType.WorldDecoration)
-        edgeBuilder.setSymbology(edge, edge, selected ? 4 : state === 'LOCKED' ? 3 : 2, LinePixels.Solid)
+        edgeBuilder.setSymbology(edge, edge, invalid ? 4 : selected ? 4 : state === 'LOCKED' ? 3 : 2, invalid ? LinePixels.Code2 : LinePixels.Solid)
         const edges: [number, number][] = [[0, 1], [1, 2], [2, 3], [3, 0], [4, 5], [5, 6], [6, 7], [7, 4], [0, 4], [1, 5], [2, 6], [3, 7]]
         for (const [a, b] of edges) edgeBuilder.addLineString([V[a], V[b]])
         context.addDecorationFromBuilder(edgeBuilder)
@@ -255,14 +269,54 @@ export class ClinicalProgramDecorator implements Decorator {
     }
 
     /** VIEW_ANNOTATION label for the planning volume — billboards; world-anchored. */
-    private drawPlanningLabel(context: DecorateContext, planning: { params: PrismParams; lifecycleState: ClinicalVolumeLifecycle }, label: string): void {
+    private drawPlanningLabel(context: DecorateContext, planning: { params: PrismParams; lifecycleState: ClinicalVolumeLifecycle }, label: string, invalid: boolean): void {
         const g = buildOrientedPlanningPrism(planning.params)
+        // World-space anchor (upper-center of the prism). NEVER moved toward the
+        // camera — the label is anchored to the actual planning volume.
         const world = Point3d.create(g.interiorAnchor.x, g.interiorAnchor.y, planning.params.zHigh + 0.1)
         const view = context.viewport.worldToView(world)
         if (!Number.isFinite(view.x) || !Number.isFinite(view.y)) return
+
+        // Build 1A label-occlusion policy. In WALKTHROUGH the label is visibility-
+        // aware; PLANNING / BIRDS_EYE remain persistent. Anchor stays world-space.
+        const cameraMode: CameraMode = this.inputs.getCameraMode?.() ?? 'PLANNING'
+        if (cameraMode === 'WALKTHROUGH') {
+            const vp = context.viewport
+            // Behind-camera / off-screen from the view projection (npc.z outside
+            // [0,1] => outside the frustum depth; view x/y outside the view rect
+            // => off-screen).
+            const npc = vp.worldToNpc(world)
+            const behindCamera = !Number.isFinite(npc.z) || npc.z < 0 || npc.z > 1
+            const rect = vp.viewRect
+            const onScreen = view.x >= rect.left && view.x <= rect.right && view.y >= rect.top && view.y <= rect.bottom
+            // Distance from the walk eye to the anchor (proximity policy).
+            let distance = Infinity
+            try {
+                const eye = (vp.view as unknown as { getEyePoint?: () => Point3d }).getEyePoint?.()
+                if (eye) distance = eye.distance(world)
+            } catch { /* no camera eye */ }
+            // Occlusion via the accepted viewer visibility authority: pick the
+            // NEAREST visible geometry at the label pixel; if solid BIM geometry
+            // is closer to the eye than the anchor, the label is occluded.
+            let occluded = false
+            try {
+                const eye = (vp.view as unknown as { getEyePoint?: () => Point3d }).getEyePoint?.()
+                const hit = (vp as unknown as { pickNearestVisibleGeometry?: (p: Point3d) => Point3d | undefined }).pickNearestVisibleGeometry?.(world)
+                if (eye && hit) {
+                    const hitDist = eye.distance(hit)
+                    const anchorDist = eye.distance(world)
+                    // A hit meaningfully nearer than the anchor => something solid
+                    // is between the eye and the label => occluded.
+                    occluded = hitDist + 0.25 < anchorDist
+                }
+            } catch { /* pick unavailable: treat as not occluded (fail-open to visible-nearby) */ }
+            const decision = resolveWalkthroughLabelVisibility({ cameraMode, behindCamera, onScreen, occluded, distance })
+            if (!decision.visible) { this.diag.labelDrawnFor.add(`planning:hidden:${decision.reason}`); return }
+        }
         const div = document.createElement('div')
-        div.className = 'mrt-program-label mrt-program-label--assigned'
-        div.textContent = `${label}${planning.lifecycleState === 'DRAFT' ? ' (draft)' : ''}`
+        div.className = invalid ? 'mrt-program-label mrt-program-label--invalid' : 'mrt-program-label mrt-program-label--assigned'
+        // Invalid gets an explicit textual badge (a non-color cue).
+        div.textContent = invalid ? `⚠ ${label} — OUTSIDE PARENT` : `${label}${planning.lifecycleState === 'DRAFT' ? ' (draft)' : ''}`
         div.style.position = 'absolute'
         div.style.left = `${Math.round(view.x)}px`
         div.style.top = `${Math.round(view.y)}px`
@@ -270,11 +324,11 @@ export class ClinicalProgramDecorator implements Decorator {
         div.style.pointerEvents = 'none'
         div.style.whiteSpace = 'nowrap'
         div.style.font = '700 13px system-ui, sans-serif'
-        div.style.color = planning.lifecycleState === 'LOCKED' ? '#e6faf1' : '#fbf0d8'
+        div.style.color = invalid ? '#ffe6e2' : planning.lifecycleState === 'LOCKED' ? '#e6faf1' : '#fbf0d8'
         div.style.padding = '2px 8px'
         div.style.borderRadius = '5px'
-        div.style.background = planning.lifecycleState === 'LOCKED' ? 'rgba(16,42,36,0.8)' : 'rgba(60,44,12,0.8)'
-        div.style.border = `1px solid ${planning.lifecycleState === 'LOCKED' ? 'rgba(110,200,175,0.9)' : 'rgba(235,190,110,0.9)'}`
+        div.style.background = invalid ? 'rgba(70,18,14,0.86)' : planning.lifecycleState === 'LOCKED' ? 'rgba(16,42,36,0.8)' : 'rgba(60,44,12,0.8)'
+        div.style.border = `${invalid ? '2px dashed rgba(235,90,80,0.95)' : `1px solid ${planning.lifecycleState === 'LOCKED' ? 'rgba(110,200,175,0.9)' : 'rgba(235,190,110,0.9)'}`}`
         div.style.textShadow = '0 1px 3px rgba(0,0,0,0.95)'
         context.addHtmlDecoration?.(div)
         this.diag.labelDrawnFor.add('planning')

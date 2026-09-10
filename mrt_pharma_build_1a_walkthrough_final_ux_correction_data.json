@@ -1,0 +1,94 @@
+{
+  "build": "BUILD_1A_WALKTHROUGH_FINAL_UX_CORRECTION",
+  "scope": "two defects only: dismissible controls pane + full look pitch (floor-constrained)",
+  "precheck": {
+    "PRECHECK_HEAD": "344d0289723e873c7a2974d0d8d295b38f44a6a3",
+    "PRECHECK_ORIGIN_MAIN": "344d0289723e873c7a2974d0d8d295b38f44a6a3",
+    "PRECHECK_DIVERGENCE": "0 0",
+    "PRIOR_BUILD_1A_WORK_PRESERVED": "YES",
+    "FRONTEND_ENV_STAGED": "NO"
+  },
+  "controls_pane": {
+    "CONTROL_PANE_COMPONENT": "CameraModeControl.tsx (.camera-mode-help)",
+    "CONTROL_PANE_VISIBILITY_OWNER": "controlsHelpOpen state (was: derived from mode only)",
+    "ROOT_CAUSE_CONTROLS_PANE_NOT_DISMISSIBLE": "no independent visibility state, no close/outside/Esc handler",
+    "CONTROL_PANE_CLOSE_BUTTON": "IMPLEMENTED",
+    "CONTROL_PANE_ESC_DISMISS": "YES",
+    "CONTROL_PANE_OUTSIDE_CLICK_DISMISS": "YES",
+    "ESC_CONTROL_PANE_PRIORITY": "IMPLEMENTED",
+    "ESC_POINTER_RELEASE_PRESERVED": "YES",
+    "CONTROL_PANE_REOPEN": "IMPLEMENTED",
+    "CONTROL_PANE_AUTO_REOPENS": "NO",
+    "CLOSED_PANE_BLOCKS_POINTER_INPUT": "NO"
+  },
+  "look_pitch": {
+    "CURRENT_PITCH_AUTHORITY": "firstPerson.clampPitch (MAX_PITCH=1.45 rad ~83deg)",
+    "PITCH_LIMIT_AUTHORITY": "firstPerson.clampPitch (MAX_PITCH)",
+    "WALKTHROUGH_LOOK_UP": "YES",
+    "WALKTHROUGH_LOOK_DOWN": "YES",
+    "WALKTHROUGH_LOOK_LEFT_RIGHT": "YES",
+    "CAMERA_INVERSION_ALLOWED": "NO",
+    "CAMERA_PITCH_CONTROLS_VIEW": "YES",
+    "CAMERA_PITCH_CONTROLS_VERTICAL_TRANSLATION": "NO",
+    "WALKTHROUGH_MOVEMENT_MODEL": "FLOOR_CONSTRAINED_PEDESTRIAN",
+    "LOOK_UP_CAUSES_VERTICAL_FLIGHT": "NO",
+    "LOOK_DOWN_CAUSES_FLOOR_PENETRATION": "NO",
+    "VERTICAL_DRIFT_DURING_LEVEL_WALK": "NO"
+  },
+  "preserved": {
+    "INCREMENTAL_ZOOM_FIX_PRESERVED": "YES",
+    "WALKTHROUGH_LABEL_OCCLUSION_FIX_PRESERVED": "YES",
+    "WALKTHROUGH_FORWARD_FIX_PRESERVED": "YES",
+    "WALKTHROUGH_COLLISION_PRESERVED": "YES"
+  },
+  "offline_verification": {
+    "WALKTHROUGH_FINAL_UX_TESTS": "PASS",
+    "TYPECHECK": "PASS",
+    "OFFLINE_TEST_FILE_COUNT": 50,
+    "OFFLINE_TEST_COUNT": 804,
+    "NEW_TEST_COUNT": 17,
+    "OFFLINE_TEST_REGRESSIONS": 0,
+    "PRODUCTION_BUILD": "PASS",
+    "CORE_FRONTEND_VERSION": "5.12.5",
+    "WORKER_ASSET_REAL": "YES",
+    "DRACO_WASM_ASSET_REAL": "YES",
+    "VIEWER_HTTP_STATUS": 200
+  },
+  "runtime": {
+    "DEV_SERVER_TERMINAL": "term_1789055549928_36wpfhjgyy",
+    "DEV_SERVER_STATUS": "RUNNING"
+  },
+  "manual_acceptance": {
+    "MANUAL_CONTROL_PANE_DISMISS": "MANUAL_CONFIRMATION_REQUIRED",
+    "MANUAL_CONTROL_PANE_REOPEN": "MANUAL_CONFIRMATION_REQUIRED",
+    "MANUAL_WALKTHROUGH_LOOK_UP": "MANUAL_CONFIRMATION_REQUIRED",
+    "MANUAL_WALKTHROUGH_LOOK_DOWN": "MANUAL_CONFIRMATION_REQUIRED",
+    "MANUAL_LOOK_PITCH_FLOOR_CONSTRAINT": "MANUAL_CONFIRMATION_REQUIRED"
+  },
+  "boundaries": {
+    "NEW_PRODUCT_SCOPE_INTRODUCED": "NO",
+    "STOREY_EXPLODED_VIEW_IMPLEMENTED": "NO",
+    "product_source_py_changed": 0,
+    "BUILD_1A_AUTHORITY_COMPLETION_DEFERRED": "YES",
+    "BUILD_1A_COMPLETE": "NO"
+  },
+  "changed_files": {
+    "modified": [
+      "frontend/src/components/spatial/CameraModeControl.tsx",
+      "frontend/src/components/spatial/walkthroughController.ts",
+      "frontend/src/components/spatial/walkNav.ts",
+      "frontend/src/routes/BentleyViewer.css"
+    ],
+    "new": [
+      "frontend/src/tests/build1aWalkthroughFinalUx.test.ts",
+      "frontend/src/tests/build1aWalkthroughControlsPaneUi.test.tsx",
+      "MRT_PHARMA_BUILD_1A_WALKTHROUGH_FINAL_UX_CORRECTION_REPORT.md",
+      "mrt_pharma_build_1a_walkthrough_final_ux_correction_data.json"
+    ],
+    "excluded_untouched": ["frontend/.env"]
+  },
+  "FILES_STAGED": "NO",
+  "COMMIT_CREATED": "NO",
+  "PUSH_PERFORMED": "NO",
+  "CHECKPOINT": "HOLD_FOR_FINAL_BUILD_1A_MANUAL_ACCEPTANCE"
+}

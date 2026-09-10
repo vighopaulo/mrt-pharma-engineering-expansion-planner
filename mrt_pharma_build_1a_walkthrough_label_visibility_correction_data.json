@@ -1,0 +1,137 @@
+{
+  "build": "1A",
+  "correction": "WALKTHROUGH_LABEL_OCCLUSION_VISIBILITY",
+  "scope_expanded": false,
+  "build_1a_restarted": false,
+  "build_1b_started": false,
+  "authority_completion_deferred": "YES",
+  "manual_confirmation_required": true,
+  "defect": {
+    "summary": "ClinicalPlanningVolume labels (Uptake 01 / Injection Room 01) render through walls and across rooms in Walkthrough.",
+    "user_observed": "Demo loaded, Walkthrough entered; draft labels visible through walls / across rooms.",
+    "class": "LABEL_DISPLAY_ONLY",
+    "domain_state_affected": false
+  },
+  "provenance_chain": [
+    "walkthrough_forward_movement_FAILED_then_corrected_offline_collision_kept_active",
+    "during_manual_acceptance_labels_show_through_walls_observed",
+    "this_correction_fixes_label_display_only_no_movement_no_geometry_no_domain"
+  ],
+  "root_cause": {
+    "current_label_renderer": "ClinicalProgramDecorator.drawPlanningLabel via context.addHtmlDecoration",
+    "current_label_anchor_source": "world upper-center of planning prism, worldToView projected (world-space anchor)",
+    "current_label_visibility_policy_pre_fix": "none (HTML decorations have no depth/occlusion test)",
+    "first_broken_seam": "decorator had no active-camera-mode awareness and no per-label visibility test",
+    "root_cause": "CameraMode (PLANNING/WALKTHROUGH/BIRDS_EYE_CUTAWAY) is a separate axis from decorator ViewerMode (NORMAL_PLANNING/DEVELOPER); Walkthrough keeps ViewerMode NORMAL_PLANNING so labels kept drawing, and HTML decorations are never occluded"
+  },
+  "fix": {
+    "new_pure_module": "frontend/src/components/spatial/walkthroughLabelVisibility.ts",
+    "policy_function": "resolveWalkthroughLabelVisibility",
+    "helper": "isPersistentLabelMode",
+    "named_distance_constant": "WALKTHROUGH_LABEL_MAX_DISTANCE_M",
+    "named_distance_constant_value_m": 18,
+    "reasons": [
+      "MODE_PERSISTENT",
+      "VISIBLE_NEARBY",
+      "HIDDEN_BEHIND_CAMERA",
+      "HIDDEN_OFFSCREEN",
+      "HIDDEN_TOO_FAR",
+      "HIDDEN_OCCLUDED"
+    ],
+    "walkthrough_precedence": ["behind_camera", "offscreen", "too_far", "occluded", "visible_nearby"],
+    "persistent_modes": ["PLANNING", "BIRDS_EYE_CUTAWAY"],
+    "camera_mode_tracking": {
+      "file": "frontend/src/components/spatial/spatialAssetOverlay.ts",
+      "var": "activeCameraMode",
+      "default": "PLANNING",
+      "set_in": "applyCameraMode",
+      "redraw": "notifyProgram",
+      "getter": "getActiveCameraMode",
+      "iModel_write": false
+    },
+    "walk_eye_access": {
+      "file": "frontend/src/components/spatial/walkthroughController.ts",
+      "getter": "getWalkEye"
+    },
+    "decorator_wiring": {
+      "file": "frontend/src/components/spatial/ClinicalProgramDecorator.ts",
+      "input": "getCameraMode",
+      "behind_camera": "vp.worldToNpc(world).z outside [0,1]",
+      "on_screen": "anchor within vp.viewRect",
+      "distance": "vp.view.getEyePoint().distance(world)",
+      "occlusion": "vp.pickNearestVisibleGeometry(world) nearer than anchor by >0.25m",
+      "occlusion_fail_open": true,
+      "anchor_space": "WORLD",
+      "prism_geometry_changed": false,
+      "planning_birds_eye_labels_changed": false
+    }
+  },
+  "not_done": [
+    "no planning-volume move/coordinate/parent change",
+    "no global label deletion",
+    "no volume hiding in Planning/Bird's-eye",
+    "no prism geometry change",
+    "no Bentley/iModel write or engineering event",
+    "no wayfinding",
+    "no label-layout redesign",
+    "no domain-state mutation",
+    "closed domains untouched",
+    "authority docs not updated"
+  ],
+  "verification": {
+    "typecheck": "PASS",
+    "test_files": 47,
+    "tests": 772,
+    "test_failures": 0,
+    "regressions": 0,
+    "baseline_test_files": 45,
+    "baseline_tests": 745,
+    "new_test_files": 2,
+    "new_tests": 27,
+    "new_test_file_names": [
+      "frontend/src/tests/build1aWalkthroughLabelVisibility.test.ts",
+      "frontend/src/tests/build1aWalkthroughLabelVisibilityUi.test.tsx"
+    ],
+    "forward_fix_tests_preserved": [
+      "frontend/src/tests/build1aWalkthroughForward.test.ts",
+      "frontend/src/tests/build1aWalkthroughForwardUi.test.tsx"
+    ],
+    "production_build": "PASS",
+    "worker_head": "(()=>{\"use strict\";f",
+    "wasm_magic": "0061 736d",
+    "core_frontend_version": "5.12.5",
+    "dev_server_viewer_http": 200
+  },
+  "git": {
+    "head": "344d0289723e873c7a2974d0d8d295b38f44a6a3",
+    "origin_main": "344d0289723e873c7a2974d0d8d295b38f44a6a3",
+    "ahead": 0,
+    "behind": 0,
+    "env_modified_unstaged": true,
+    "env_touched_by_agent": false,
+    "py_files_changed": 0,
+    "staged": false,
+    "committed": false,
+    "pushed": false,
+    "step_changed_files": [
+      "frontend/src/components/spatial/walkthroughLabelVisibility.ts",
+      "frontend/src/components/spatial/ClinicalProgramDecorator.ts",
+      "frontend/src/components/spatial/spatialAssetOverlay.ts",
+      "frontend/src/components/spatial/walkthroughController.ts",
+      "frontend/src/tests/build1aWalkthroughLabelVisibility.test.ts",
+      "frontend/src/tests/build1aWalkthroughLabelVisibilityUi.test.tsx",
+      "MRT_PHARMA_BUILD_1A_WALKTHROUGH_LABEL_VISIBILITY_CORRECTION_REPORT.md",
+      "mrt_pharma_build_1a_walkthrough_label_visibility_correction_data.json"
+    ]
+  },
+  "preserved": {
+    "uptake_01": true,
+    "injection_room_01": true,
+    "assigned_rooms": 2,
+    "planning_volumes": 2,
+    "forward_fix": ["W", "S", "A", "D", "turn", "Shift", "floor_constraint", "wall_collision"],
+    "collision_active": true
+  },
+  "build_1b_forward_requirement": "Equipment containment (equipment inside owning room planning volume + containment check), consistent with 1A.4 validation model. No equipment code this step.",
+  "checkpoint": "MANUAL_CONFIRMATION_REQUIRED"
+}

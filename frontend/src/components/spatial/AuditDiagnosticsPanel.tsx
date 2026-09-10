@@ -178,6 +178,59 @@ export function AuditDiagnosticsPanel() {
         } finally { setBusy(false) }
     }, [busy])
 
+    // Build 1A.2 — GENERIC BIM room-discovery diagnostic (the whole live authority
+    // chain: viewport → iModel → semantics lifecycle → discovered rooms → filter).
+    const runRoomDiscoveryDiag = useCallback(async () => {
+        setClickCount((n) => n + 1)
+        setStatus('BIM_ROOM_DISCOVERY_DIAGNOSTIC_START_RECEIVED')
+        if (busy) { setOut('ROOM DISCOVERY DIAGNOSTIC blocked: a diagnostic is still running.'); return }
+        setBusy(true); setOut('BIM_ROOM_DISCOVERY_DIAGNOSTIC_RUNNING…')
+        try {
+            const mod = await import('./spatialAssetOverlay')
+            const text = await mod.diagnoseBimRoomDiscovery()
+            setOut(text)
+            setStatus('BIM_ROOM_DISCOVERY_DIAGNOSTIC_DONE')
+        } catch (e) {
+            setOut(`BIM_ROOM_DISCOVERY_DIAGNOSTIC error: ${e instanceof Error ? e.message : String(e)}`)
+            setStatus('BIM_ROOM_DISCOVERY_DIAGNOSTIC_ERROR')
+        } finally { setBusy(false) }
+    }, [busy])
+
+    // Build 1A walkthrough correction — bounded walkthrough movement diagnostic.
+    const runWalkthroughDiag = useCallback(async () => {
+        setClickCount((n) => n + 1)
+        setStatus('WALKTHROUGH_MOVEMENT_DIAGNOSTIC_START_RECEIVED')
+        if (busy) { setOut('WALKTHROUGH DIAGNOSTIC blocked: a diagnostic is still running.'); return }
+        setBusy(true); setOut('WALKTHROUGH_MOVEMENT_DIAGNOSTIC_RUNNING…')
+        try {
+            const mod = await import('./spatialAssetOverlay')
+            const text = await mod.diagnoseWalkthroughMovement()
+            setOut(text)
+            setStatus('WALKTHROUGH_MOVEMENT_DIAGNOSTIC_DONE')
+        } catch (e) {
+            setOut(`WALKTHROUGH_MOVEMENT_DIAGNOSTIC error: ${e instanceof Error ? e.message : String(e)}`)
+            setStatus('WALKTHROUGH_MOVEMENT_DIAGNOSTIC_ERROR')
+        } finally { setBusy(false) }
+    }, [busy])
+
+    // Build 1A.2 — GENERIC selected-room volume diagnostic (targets the CURRENTLY
+    // selected BIM room; lazily extracts its exact mesh; never Uptake-substituted).
+    const runSelectedRoomVolumeDiag = useCallback(async () => {
+        setClickCount((n) => n + 1)
+        setStatus('SELECTED_ROOM_VOLUME_DIAGNOSTIC_START_RECEIVED')
+        if (busy) { setOut('SELECTED ROOM VOLUME DIAGNOSTIC blocked: a diagnostic is still running.'); return }
+        setBusy(true); setOut('SELECTED_ROOM_VOLUME_DIAGNOSTIC_RUNNING (lazy exact-mesh extraction for the selected room)…')
+        try {
+            const mod = await import('./spatialAssetOverlay')
+            const text = await mod.diagnoseSelectedRoomVolume()
+            setOut(text)
+            setStatus('SELECTED_ROOM_VOLUME_DIAGNOSTIC_DONE')
+        } catch (e) {
+            setOut(`SELECTED_ROOM_VOLUME_DIAGNOSTIC error: ${e instanceof Error ? e.message : String(e)}`)
+            setStatus('SELECTED_ROOM_VOLUME_DIAGNOSTIC_ERROR')
+        } finally { setBusy(false) }
+    }, [busy])
+
     return (
         <div className="audit-diag" aria-label="BIM audit diagnostics">
             <span className="viewer-dev-label">BIM AUDIT DIAGNOSTICS</span>
@@ -192,6 +245,21 @@ export function AuditDiagnosticsPanel() {
                     onPointerDown={() => setPointerDownCount((n) => n + 1)}
                     onClick={() => void runProbe()}
                 >PROBE BENTLEY CLOUD PERMISSIONS</button>
+                <button
+                    type="button"
+                    onPointerDown={() => setPointerDownCount((n) => n + 1)}
+                    onClick={() => void runRoomDiscoveryDiag()}
+                >DIAGNOSE BIM ROOM DISCOVERY</button>
+                <button
+                    type="button"
+                    onPointerDown={() => setPointerDownCount((n) => n + 1)}
+                    onClick={() => void runSelectedRoomVolumeDiag()}
+                >DIAGNOSE SELECTED ROOM VOLUME</button>
+                <button
+                    type="button"
+                    onPointerDown={() => setPointerDownCount((n) => n + 1)}
+                    onClick={() => void runWalkthroughDiag()}
+                >DIAGNOSE WALKTHROUGH MOVEMENT</button>
                 <button
                     type="button"
                     onPointerDown={() => setPointerDownCount((n) => n + 1)}

@@ -46,6 +46,12 @@ export interface ClinicalPlanningVolume {
     geometrySource: 'MRT_PLANNING_SUBVOLUME'
     /** View-only per-volume visibility (default visible when absent). */
     hidden?: boolean
+    /**
+     * Build 1A.4 — the most recent CONTAINED (valid) params for this volume. Set
+     * only when containment PASSes; NEVER overwritten by an invalid edit. Used by
+     * "Restore Valid Position" (app-owned; no Bentley write).
+     */
+    lastKnownValidParams?: PrismParams
 }
 
 /** Generated world geometry for a prism (WORLD_GEOMETRY, never screen-space). */
@@ -227,7 +233,7 @@ const FORBIDDEN_KEYS = ['token', 'accessToken', 'refreshToken', 'authorization',
 
 export function isSafeVolumePayload(v: unknown): v is ClinicalPlanningVolume[] {
     if (!Array.isArray(v)) return false
-    const allowed = new Set(['id', 'iModelId', 'parentBimSpaceId', 'storeyId', 'clinicalFunction', 'displayName', 'geometryType', 'params', 'lifecycleState', 'geometrySource', 'hidden'])
+    const allowed = new Set(['id', 'iModelId', 'parentBimSpaceId', 'storeyId', 'clinicalFunction', 'displayName', 'geometryType', 'params', 'lifecycleState', 'geometrySource', 'hidden', 'lastKnownValidParams'])
     const paramKeys = new Set(['centerX', 'centerY', 'zLow', 'zHigh', 'width', 'depth', 'yaw'])
     return v.every((a) => {
         if (!a || typeof a !== 'object') return false
@@ -237,6 +243,12 @@ export function isSafeVolumePayload(v: unknown): v is ClinicalPlanningVolume[] {
         const o = a as ClinicalPlanningVolume
         if (!o.params || typeof o.params !== 'object') return false
         if (!Object.keys(o.params).every((k) => paramKeys.has(k))) return false
+        // lastKnownValidParams (optional) must itself be a valid prism when present.
+        if (o.lastKnownValidParams !== undefined) {
+            if (typeof o.lastKnownValidParams !== 'object' || o.lastKnownValidParams === null) return false
+            if (!Object.keys(o.lastKnownValidParams).every((k) => paramKeys.has(k))) return false
+            if (!isValidPrismParams(o.lastKnownValidParams)) return false
+        }
         return typeof o.id === 'string' && typeof o.parentBimSpaceId === 'string' && isValidPrismParams(o.params)
     })
 }
@@ -247,6 +259,9 @@ export function toSafeVolumePayload(vols: readonly ClinicalPlanningVolume[]): Cl
         clinicalFunction: v.clinicalFunction, displayName: v.displayName, geometryType: v.geometryType,
         params: { centerX: v.params.centerX, centerY: v.params.centerY, zLow: v.params.zLow, zHigh: v.params.zHigh, width: v.params.width, depth: v.params.depth, yaw: v.params.yaw },
         lifecycleState: v.lifecycleState, geometrySource: v.geometrySource, hidden: v.hidden,
+        lastKnownValidParams: v.lastKnownValidParams
+            ? { centerX: v.lastKnownValidParams.centerX, centerY: v.lastKnownValidParams.centerY, zLow: v.lastKnownValidParams.zLow, zHigh: v.lastKnownValidParams.zHigh, width: v.lastKnownValidParams.width, depth: v.lastKnownValidParams.depth, yaw: v.lastKnownValidParams.yaw }
+            : undefined,
     }))
 }
 
