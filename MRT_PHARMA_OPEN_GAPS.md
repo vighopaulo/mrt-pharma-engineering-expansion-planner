@@ -447,3 +447,130 @@ authority each gap references.
 *Maintenance: when a gap is genuinely closed by a future build, move it to a
 "Closed gaps" section with the closing build/commit, and update the corresponding
 row in `MRT_PHARMA_AUTHORITY_INDEX.md`.*
+
+---
+
+# September 9 Reconciliation — gap review + frontend gaps
+
+**Checkpoint:** HEAD `bdd2103d7e4e189625a6c725bc81e166754df730`
+("MRT Pharma: checkpoint BIM spatial and clinical-program foundation"),
+divergence `0 0`. Verified against physical source (frontend `.ts/.tsx` +
+backend `.py`), not report `.md` files. This section reconciles the existing
+`OG-*` entries against current source and adds the September 4–9 frontend gaps.
+Status vocabulary follows `MRT_PHARMA_AUTHORITY_INDEX.md` §R.1. No gap listed
+here is authorized-closed by this task; closure is a separate scoped build.
+
+## Existing OG-* review (source-verified at this checkpoint)
+
+| Gap | Reconciled classification | Note |
+|---|---|---|
+| OG-CAP-1 (NO_BUILD not first-class) | STILL_OPEN (PARTIAL) | Legacy Build-3A identity only; unchanged. |
+| OG-CAP-2 (free composition optimizer) | STILL_OPEN (PLANNED) | Verified: no `composition_optimizer`/`compose_facility`/`free_composition` module exists. Priority workstream D. |
+| OG-OPS-1 (long-horizon → one-day seam) | STILL_OPEN (PARTIAL) | Orchestrator still does not consume `DailyOperationalSummary` directly. Workstream E. |
+| OG-ARIA-1 (live ARIA/vendor) | STILL_OPEN (PLANNED) | Fixture adapter only; no network/FHIR/HL7 client. |
+| OG-CYC-1 (cyclotron production estimation) | STILL_OPEN (PARTIAL) | Authority + evidence registry exist; most model×radionuclide pairs remain `NOT_AVAILABLE`. Calibration workstream H. |
+| OG-SYNTH-1 (synthetic source-capability) | STILL_OPEN (PARTIAL) | Selected-source representative path implemented; default path still benchmark-driven. |
+| OG-RAD-1 (clinical radionuclide portfolio) | STILL_OPEN (PARTIAL) | Portfolio authority exists; procedure taxonomy `NOT_MODELED`. |
+| OG-GEN-1 (Ge-68/Ga-68 generator) | PATHWAY_CLOSED / economics STILL_OPEN | Pathway identity canonical; procurement economics `NOT_CALIBRATED`. |
+| OG-TRN-1 (free-roaming FLOOR_AGV_AMR) | STILL_OPEN (NOT_IMPLEMENTED) | `FLOOR_AGV_AMR_IMPLEMENTATION_STATUS="NOT_IMPLEMENTED"`; RGHT ≠ free-roaming AGV. |
+| OG-TRN-2 (RP-PTS per-sample trajectory) | STILL_OPEN (PARTIAL) | Mission-cycle timing done; no dedicated per-sample sampler. |
+| OG-USD-1 (NVIDIA Omniverse runtime) | STILL_OPEN (PLANNED) | OpenUSD export exists; zero `omni` imports (re-verified). Workstream G. |
+| OG-SIM-1 (animated simulation runtime) | STILL_OPEN (PLANNED, LOCKED_PRODUCT_DOCTRINE) | Trajectory generation exists; interactive playback does not. Workstream F. |
+| OG-FIN-1 (CAD/BIM/IFC parsers → engineering model) | NEEDS_REWORDING (PARTIAL) | See below — a live viewer IfcSpace **read** path now exists, but that is not the backend engineering-model **ingestion** parser this gap describes. |
+| OG-BEN-1 (live Bentley + real BIM ingestion) | PARTIALLY_CLOSED / REWORDED | See below — live authenticated viewer + Project BIM + IfcSpace geometry read are now `IMPLEMENTED_AND_INTEGRATED`; automated/credentialed connection + backend-model ingestion remain open. |
+| OG-P3D-1 (Light-MRT not wired to contract) | STILL_OPEN (PARTIAL) | `evaluate_light_mrt_dominant` still hardcodes `feasible=True`. |
+| OG-P3D-2 (physical transport gate coverage) | STILL_OPEN (PARTIAL) | PORTER/AGV/RGHT/PTS/RP-PTS not yet in the physical gate. |
+| OG-SCN-1 (model-specific scanner calibration) | STILL_OPEN (PARTIAL) | Quantity/modality ready; economics/power/footprint `NOT_CALIBRATED`. Workstream H. |
+| OG-SCN-2 (Light-MRT variant `feasible`) | STILL_OPEN (PARTIAL) | Variant + zonal-hybrid candidate still hardcoded. |
+| OG-OPEX-1 (equipment OPEX monetary) | STILL_OPEN (PARTIAL) | Duty layer built; power kW + service/consumable/procurement $ `NOT_CALIBRATED`. Workstream H. |
+
+## Reworded gaps
+
+### OG-BEN-1 — Live Bentley/iTwin + real BIM ingestion — PARTIALLY_CLOSED (reworded)
+- **Closed by September 4–9 frontend (verified in source):** authenticated live
+  viewer (`LiveItwinViewer.tsx`, Auth-Code + PKCE) opening the real Medical Clinic
+  iModel (`36381ef4-…`); persistent Project BIM selection
+  (`projectBim.ts`, `mrtpharma.activeProjectBim.v1`); authoritative IfcSpace
+  geometry READ via `generateElementMeshes`
+  (`authoritativeRoomGeometryProbe.extractAuthoritativeRoomGeometry`). This is
+  `IMPLEMENTED_AND_INTEGRATED` on the `/viewer` product surface.
+- **Still open:** (a) an automated/credentialed exercise of the live connection in
+  CI (today the Python live transport is still `# pragma: no cover`, opt-in); (b)
+  the clinic IFC **write/ingestion** workflow (`bentleyClinicIngestion.ts`) is
+  DEV-gated and `MANUAL_ACCEPTANCE_PENDING`. Bentley identity remains subordinate
+  to canonical identity.
+
+### OG-FIN-1 — CAD/BIM/IFC/Revit/PDF ingestion into the ENGINEERING OBJECT MODEL — STILL_OPEN (reworded)
+- **Clarification:** reading IfcSpace geometry in the live *viewer* (OG-BEN-1) is
+  NOT the same as parsing an arbitrary IFC/Revit/DWG/DXF/PDF file into the backend
+  `facility_engineering_model.py` object model. The latter still has **no parser**.
+  BIM remains non-mandatory; geometry stays separate from the engineering model.
+
+## New frontend / integration gaps
+
+### OG-FE-1 — Live composition of the two NEW Build-2A rooms — MANUAL_ACCEPTANCE_PENDING
+- **Today:** Build 2A multi-room infrastructure is `IMPLEMENTED_AND_INTEGRATED` and
+  offline-verified (619 tests); deterministic naming ("Injection Room 01",
+  "PET/CT 01") and parent-seeded new volumes exist. **No rooms are auto-selected**
+  (`AUTO_SELECTED_NEW_PARENT_ROOMS = 0`).
+- **Closed would require:** the user (Build 2B) to select the two parent BIM rooms,
+  define + contain + accept the two live volumes, and confirm Uptake 01 is
+  unchanged on reload. Workstream B.
+
+### OG-FE-2 — Full PET department (Radiopharmacy + support spaces) — PLANNED
+- **Today:** only the three-room proof (Uptake + Injection + PET/CT) is in scope;
+  Radiopharmacy and remaining clinical/support program are deferred.
+  `CLINICAL_PROGRAM_FULL_PET_DEPARTMENT_COMPLETE = NO`.
+- **Closed would require:** the complete clinical program composition. Workstream B.
+
+### OG-FE-3 — Equipment ↔ ClinicalPlanningVolume / live room binding — PLANNED
+- **Today:** the frontend asset/placement system and the backend equipment domain
+  (scanner/cyclotron/generator catalogs, `AssetInstance`) exist independently;
+  equipment is not yet bound to a `ClinicalPlanningVolume`, live Bentley room
+  identity, world-space pose as a clinical resource, or capacity/economics through
+  the clinical program.
+- **Closed would require:** binding equipment instances to clinical planning
+  volumes + live room identity + capacity/economics. Workstream B.
+
+### OG-ROUTE-INT — Live facility geometry → existing canonical routing authority — PLANNED
+- **Today:** the canonical spatial routing authority already exists
+  (`canonical_spatial_authority.resolve_route`, human-circulation +
+  concealed-corridor families). Live IfcSpace geometry from the viewer is NOT yet
+  fed into it. The gap is INTEGRATION, not "build a routing engine".
+- **Closed would require:** a seam from authoritative IfcSpace geometry /
+  ClinicalPlanningVolume → the routing network authority. Workstream C.
+
+### OG-WIF-UI — What-If / Lockdown live product/UI orchestration — PLANNED
+- **Today:** the What-If/Lockdown **domain authority** is implemented
+  (`CanonicalLockdownRecord`, `CanonicalWhatIfRecord`, branching, lineage,
+  `promote_what_if_to_lockdown`). There is no live product/UI workflow that lets a
+  user branch/compare/promote scenarios in the viewer.
+- **Closed would require:** product/UI orchestration over the existing lineage
+  authority. Do NOT rebuild the domain records. Workstream I.
+
+## Demo-critical vs commercial-completeness classification
+
+- **DEMO_CRITICAL:** OG-FE-1 (Build 2B live composition), OG-FE-3 (equipment
+  binding, demo slice), OG-ROUTE-INT (demo slice), UI/UX + end-to-end demo (J).
+- **POST_DEMO_IMPORTANT:** OG-CAP-2, OG-OPS-1, OG-SIM-1, OG-WIF-UI, OG-FE-2.
+- **COMMERCIAL_CALIBRATION:** OG-CYC-1, OG-SCN-1, OG-OPEX-1, OG-GEN-1 (economics),
+  OG-P3D-1/2, OG-SCN-2, OG-TRN-2.
+- **OPTIONAL_FUTURE (for first demo):** OG-USD-1 (NVIDIA runtime), OG-TRN-1
+  (free-roaming AGV/AMR), OG-ARIA-1 (live vendor), OG-FIN-1 (arbitrary-file parsers).
+
+## Developer-diagnostic / recovery inventory (KEEP; do not remove in this task)
+
+| Instrument | Classification |
+|---|---|
+| BIM content audit (`bimContentAudit.ts`) | KEEP_DEVELOPER_DIAGNOSTIC |
+| Bentley permission/ingestion probe (`bentleyPermissionProbe.ts`, `bentleyClinicIngestion.ts`) | KEEP_DEVELOPER_DIAGNOSTIC |
+| Clinical overlay diagnostic (`clinicalOverlayDiagnostics.ts`) | KEEP_DEVELOPER_DIAGNOSTIC |
+| Room spatial authority probe (`roomSpatialAuthorityProbe.ts`) | KEEP_DEVELOPER_DIAGNOSTIC |
+| Authoritative geometry diagnostic (`authoritativeRoomGeometryProbe.ts`) | KEEP_DEVELOPER_DIAGNOSTIC |
+| Planning-volume diagnostic (`diagnoseClinicalPlanningVolume(s)`) | KEEP_DEVELOPER_DIAGNOSTIC |
+| Persistence diagnostic (`clinicalPersistenceDiagnostic.ts`) | KEEP_DEVELOPER_DIAGNOSTIC |
+| Uptake 01 reconstruction (`uptake01Reconstruction.ts`) | TEMPORARY_RECOVERY (explicit button; duplicate-guarded; never auto-runs) |
+
+*Maintenance: when a gap is genuinely closed by a future build, move it to a
+"Closed gaps" section with the closing build/commit, and update the corresponding
+row in `MRT_PHARMA_AUTHORITY_INDEX.md`.*

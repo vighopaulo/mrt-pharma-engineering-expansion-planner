@@ -1,0 +1,316 @@
+{
+  "report": "MRT_PHARMA_SEPTEMBER_9_AUTHORITY_RECONCILIATION",
+  "checkpoint": {
+    "head": "bdd2103d7e4e189625a6c725bc81e166754df730",
+    "origin_main": "bdd2103d7e4e189625a6c725bc81e166754df730",
+    "divergence": "0 0",
+    "commit_message": "MRT Pharma: checkpoint BIM spatial and clinical-program foundation",
+    "working_tree": "clean except intentional unstaged frontend/.env",
+    "nature": "DOCUMENTATION_AUTHORITY_RECONCILIATION_ONLY"
+  },
+  "flags": {
+    "SOURCE_FIRST_AUTHORITY_AUDIT": "YES",
+    "MAJOR_DOMAIN_AUDIT_COMPLETE": "YES",
+    "BENTLEY_AUTHORITY_RECONCILED": "YES",
+    "CLINICAL_PROGRAM_AUTHORITY_RECONCILED": "YES",
+    "CLINICAL_PROGRAM_FULL_PET_DEPARTMENT_COMPLETE": "NO",
+    "SPATIAL_AUTHORITY_HIERARCHY_DOCUMENTED": "YES",
+    "EQUIPMENT_AUTHORITY_RECONCILED": "YES",
+    "SPATIAL_ROUTING_AUTHORITY_RECONCILED": "YES",
+    "TRANSPORT_AUTHORITY_RECONCILED": "YES",
+    "FREE_COMPOSITION_OPTIMIZER_STATUS": "PLANNED",
+    "PATIENT_CLINICAL_AUTHORITY_RECONCILED": "YES",
+    "PRODUCTION_AUTHORITY_RECONCILED": "YES",
+    "OPERATIONS_AUTHORITY_RECONCILED": "YES",
+    "SIMULATION_ENGINE_STATUS": "IMPLEMENTED_DOMAIN_AUTHORITY",
+    "ANIMATED_SIMULATION_RUNTIME_STATUS": "PLANNED",
+    "TRAJECTORY_AUTHORITY_RECONCILED": "YES",
+    "CAPITAL_PROJECT_AUTHORITY_RECONCILED": "YES",
+    "ECONOMICS_AUTHORITY_RECONCILED": "YES",
+    "WHAT_IF_DOMAIN_AUTHORITY": "IMPLEMENTED_DOMAIN_AUTHORITY",
+    "LOCKDOWN_DOMAIN_AUTHORITY": "IMPLEMENTED_DOMAIN_AUTHORITY",
+    "OPENUSD_EXPORT_STATUS": "IMPLEMENTED_ADAPTER_OR_EXPORT",
+    "NVIDIA_OMNIVERSE_RUNTIME_STATUS": "PLANNED",
+    "REPORTING_AUTHORITY_RECONCILED": "YES",
+    "UI_UX_STATUS": "PARTIAL",
+    "LIVE_BENTLEY_AND_CLINICAL_WORKFLOW_INTEGRATED": "YES",
+    "END_TO_END_PRODUCT_WORKFLOW_INTEGRATED": "NO",
+    "ALL_EXISTING_OPEN_GAPS_REVIEWED": "YES",
+    "PRIORITY_OPEN_GAPS_VERIFIED": "YES",
+    "AUTHORITY_INDEX_UPDATED": "YES",
+    "OPEN_GAPS_REGISTER_UPDATED": "YES",
+    "AUTHORITY_DOCUMENT_CONTRADICTIONS_REVIEWED": "YES",
+    "AUTHORITY_DOCUMENT_CONTRADICTIONS_RESOLVED": "YES",
+    "HISTORICAL_REPORTS_REWRITTEN": "NO",
+    "AUTHORITY_STATUS_VOCABULARY_STANDARDIZED": "YES",
+    "OPENUSD_NVIDIA_DISTINCTION_DOCUMENTED": "YES",
+    "SIMULATION_TRAJECTORY_ANIMATION_DISTINCTION_DOCUMENTED": "YES",
+    "WHAT_IF_LOCKDOWN_DOMAIN_VS_PRODUCT_DISTINCTION": "YES",
+    "ROUTING_ENGINE_VS_LIVE_INTEGRATION_DISTINCTION": "YES",
+    "CLINICAL_PROGRAM_STATUS_RECONCILED": "YES",
+    "EQUIPMENT_DOMAIN_VS_SPATIAL_INTEGRATION_DISTINCTION": "YES",
+    "CANONICAL_AUTHORITY_OWNER_REVIEW": "COMPLETE",
+    "SUPERSEDED_FALLBACK_INVENTORY": "DOCUMENTED",
+    "DUPLICATE_AUTHORITY_RISK_REGISTER": "DOCUMENTED",
+    "REVISED_FINISH_LINE_WORKSTREAMS": "DOCUMENTED",
+    "REMAINING_WORK_DEPENDENCIES": "DOCUMENTED",
+    "OPEN_GAP_PRIORITY_CLASSIFICATION": "IMPLEMENTED",
+    "CURRENT_AUTHORITY_SOURCE_OF_TRUTH": "ESTABLISHED",
+    "DEVELOPER_DIAGNOSTIC_INVENTORY": "DOCUMENTED",
+    "PRODUCT_BEHAVIOR_CHANGED": "NO",
+    "NEW_PRODUCT_CAPABILITY_IMPLEMENTED": "NO",
+    "PRODUCT_SOURCE_FILE_CHANGE_COUNT": 0,
+    "EQUIPMENT_CODE_CHANGED": "NO",
+    "ROUTING_CODE_CHANGED": "NO",
+    "TRANSPORT_CODE_CHANGED": "NO",
+    "SIMULATION_CODE_CHANGED": "NO",
+    "OPTIMIZATION_CODE_CHANGED": "NO",
+    "ECONOMICS_CODE_CHANGED": "NO",
+    "OPENUSD_CODE_CHANGED": "NO",
+    "NVIDIA_CODE_CHANGED": "NO",
+    "UI_BEHAVIOR_CHANGED": "NO",
+    "BUILD_B_STARTED": "NO",
+    "MASTER_ROADMAP_REWRITTEN": "NO",
+    "OPEN_GAPS_REGISTER_REWRITTEN": "NO"
+  },
+  "verification": {
+    "TYPECHECK": "PASS",
+    "OFFLINE_TEST_COUNT": 619,
+    "OFFLINE_TEST_FILES": 35,
+    "OFFLINE_TEST_REGRESSIONS": 0,
+    "PRODUCTION_BUILD": "PASS",
+    "CORE_FRONTEND_VERSION": "5.12.5",
+    "note": "A single concurrent build+test run reported flaky file-level failures; a clean isolated run is 35/35 files and 619/619 tests."
+  },
+  "domain_status_matrix": {
+    "bentley_bim_spatial_live_viewer": "IMPLEMENTED_AND_INTEGRATED",
+    "clinical_program": "IMPLEMENTED_AND_INTEGRATED",
+    "equipment": "IMPLEMENTED_DOMAIN_AUTHORITY",
+    "spatial_routing": "IMPLEMENTED_DOMAIN_AUTHORITY",
+    "transport_technologies": "IMPLEMENTED_DOMAIN_AUTHORITY",
+    "mrt_infrastructure": "IMPLEMENTED_DOMAIN_AUTHORITY",
+    "patient_clinical_demand": "IMPLEMENTED_DOMAIN_AUTHORITY",
+    "cyclotron_production": "IMPLEMENTED_DOMAIN_AUTHORITY_PARTIAL_CALIBRATION",
+    "operations_scheduling": "IMPLEMENTED_DOMAIN_AUTHORITY_SEAM_PARTIAL",
+    "simulation_engine": "IMPLEMENTED_DOMAIN_AUTHORITY",
+    "dynamic_trajectories": "IMPLEMENTED_DOMAIN_AUTHORITY_RP_PTS_PARTIAL",
+    "optimization_capital_project": "IMPLEMENTED_DOMAIN_AUTHORITY_FREE_COMPOSITION_PLANNED",
+    "economics": "IMPLEMENTED_DOMAIN_AUTHORITY_PARTIAL_CALIBRATION",
+    "what_if_lockdown": "IMPLEMENTED_DOMAIN_AUTHORITY_LIVE_UI_PLANNED",
+    "openusd": "IMPLEMENTED_ADAPTER_OR_EXPORT",
+    "nvidia_omniverse_runtime": "PLANNED",
+    "reporting_export": "IMPLEMENTED_DOMAIN_AUTHORITY_UNIFIED_PRODUCT_REPORT_PLANNED",
+    "ui_ux_product_integration": "PARTIAL_LIVE_BENTLEY_AND_CLINICAL_INTEGRATED_END_TO_END_WORKFLOW_NOT_INTEGRATED"
+  },
+  "gap_review": {
+    "still_open": [
+      "OG-CAP-1",
+      "OG-CAP-2",
+      "OG-OPS-1",
+      "OG-ARIA-1",
+      "OG-CYC-1",
+      "OG-SYNTH-1",
+      "OG-RAD-1",
+      "OG-TRN-1",
+      "OG-TRN-2",
+      "OG-USD-1",
+      "OG-SIM-1",
+      "OG-P3D-1",
+      "OG-P3D-2",
+      "OG-SCN-1",
+      "OG-SCN-2",
+      "OG-OPEX-1"
+    ],
+    "pathway_closed_economics_open": [
+      "OG-GEN-1"
+    ],
+    "partially_closed_reworded": [
+      "OG-BEN-1"
+    ],
+    "needs_rewording": [
+      "OG-FIN-1"
+    ],
+    "new_gaps": [
+      "OG-FE-1",
+      "OG-FE-2",
+      "OG-FE-3",
+      "OG-ROUTE-INT",
+      "OG-WIF-UI"
+    ]
+  },
+  "new_gaps_detail": {
+    "OG-FE-1": {
+      "concern": "Live composition of Build-2A Injection Room 01 + PET/CT 01",
+      "status": "MANUAL_ACCEPTANCE_PENDING",
+      "priority": "DEMO_CRITICAL",
+      "auto_selected_new_parent_rooms": 0
+    },
+    "OG-FE-2": {
+      "concern": "Full PET department (Radiopharmacy + support spaces)",
+      "status": "PLANNED",
+      "priority": "POST_DEMO_IMPORTANT"
+    },
+    "OG-FE-3": {
+      "concern": "Equipment bound to ClinicalPlanningVolume + live room identity + capacity/economics",
+      "status": "PLANNED",
+      "priority": "DEMO_CRITICAL_SLICE"
+    },
+    "OG-ROUTE-INT": {
+      "concern": "Live IfcSpace/ClinicalPlanningVolume geometry -> existing canonical routing authority",
+      "status": "PLANNED",
+      "priority": "DEMO_CRITICAL_SLICE",
+      "note": "integration, not build-routing-engine"
+    },
+    "OG-WIF-UI": {
+      "concern": "What-If/Lockdown live product/UI orchestration over existing lineage authority",
+      "status": "PLANNED",
+      "priority": "POST_DEMO_IMPORTANT"
+    }
+  },
+  "duplicate_authority_risk_register": [
+    {
+      "concept": "room geometry (frontend)",
+      "candidates": [
+        "roomSpatialAuthority",
+        "authoritativeRoomFootprint",
+        "RoomPlanDecorator"
+      ],
+      "canonical": "authoritative IfcSpace footprint (exact > range)",
+      "action": "consolidate later"
+    },
+    {
+      "concept": "clinical volume",
+      "candidates": [
+        "frontend ClinicalPlanningVolume",
+        "backend interactive_spatial_authoring.py"
+      ],
+      "canonical": "distinct products/coordinate authorities",
+      "action": "watch if frontend feeds backend model"
+    },
+    {
+      "concept": "route/network",
+      "candidates": [
+        "canonical_spatial_authority",
+        "canonical_geometry_shadow_routing_authority",
+        "human_circulation_authority"
+      ],
+      "canonical": "canonical_spatial_authority.resolve_route",
+      "action": "gap is OG-ROUTE-INT integration"
+    },
+    {
+      "concept": "simulation state",
+      "candidates": [
+        "digital_twin_simulation_state",
+        "dynamic_scene_state_authority",
+        "operational_day_trajectory_scene"
+      ],
+      "canonical": "distinct roles",
+      "action": "keep distinct"
+    },
+    {
+      "concept": "scenario identity",
+      "candidates": [
+        "CanonicalLockdownRecord",
+        "CanonicalWhatIfRecord"
+      ],
+      "canonical": "lockdown_what_if_lineage_authority.py",
+      "action": "gap is OG-WIF-UI product UI"
+    }
+  ],
+  "superseded_fallback_inventory": [
+    {
+      "item": "range-derived clinical room rectangles / BIM_RANGE_APPROXIMATION anchors",
+      "class": "SUPERSEDED_OR_FALLBACK"
+    },
+    {
+      "item": "legacy 2D overlay-only clinical representation",
+      "class": "SUPERSEDED_OR_FALLBACK"
+    },
+    {
+      "item": "RoomPlanDecorator derived room-plan",
+      "class": "VIEW_ONLY_NOT_PHYSICAL_AUTHORITY"
+    },
+    {
+      "item": "uptake01Reconstruction",
+      "class": "TEMPORARY_RECOVERY"
+    },
+    {
+      "item": "decay_engine.py / production_engine.py",
+      "class": "SUPERSEDED_OR_FALLBACK (re-export shims)"
+    }
+  ],
+  "developer_diagnostic_inventory": {
+    "bimContentAudit.ts": "KEEP_DEVELOPER_DIAGNOSTIC",
+    "bentleyPermissionProbe.ts": "KEEP_DEVELOPER_DIAGNOSTIC",
+    "bentleyClinicIngestion.ts": "KEEP_DEVELOPER_DIAGNOSTIC",
+    "clinicalOverlayDiagnostics.ts": "KEEP_DEVELOPER_DIAGNOSTIC",
+    "roomSpatialAuthorityProbe.ts": "KEEP_DEVELOPER_DIAGNOSTIC",
+    "authoritativeRoomGeometryProbe.ts": "KEEP_DEVELOPER_DIAGNOSTIC",
+    "diagnoseClinicalPlanningVolume": "KEEP_DEVELOPER_DIAGNOSTIC",
+    "clinicalPersistenceDiagnostic.ts": "KEEP_DEVELOPER_DIAGNOSTIC",
+    "uptake01Reconstruction.ts": "TEMPORARY_RECOVERY"
+  },
+  "revised_finish_line_workstreams": [
+    {
+      "id": "A",
+      "name": "Authority consolidation",
+      "status": "COMPLETE_THIS_TASK"
+    },
+    {
+      "id": "B",
+      "name": "Complete Clinical Program + Equipment Composition",
+      "priority": "DEMO_CRITICAL"
+    },
+    {
+      "id": "C",
+      "name": "Bentley geometry -> canonical spatial/transport integration",
+      "priority": "DEMO_CRITICAL_SLICE"
+    },
+    {
+      "id": "D",
+      "name": "Candidate Facility Composition Optimizer",
+      "priority": "POST_DEMO_IMPORTANT"
+    },
+    {
+      "id": "E",
+      "name": "Unified Operations Execution",
+      "priority": "POST_DEMO_IMPORTANT"
+    },
+    {
+      "id": "F",
+      "name": "Interactive Simulation / Animation Runtime",
+      "priority": "POST_DEMO_IMPORTANT"
+    },
+    {
+      "id": "G",
+      "name": "NVIDIA Omniverse Runtime",
+      "priority": "OPTIONAL_FUTURE_FIRST_DEMO"
+    },
+    {
+      "id": "H",
+      "name": "Candidate Economics + Calibration Closure",
+      "priority": "COMMERCIAL_CALIBRATION"
+    },
+    {
+      "id": "I",
+      "name": "What-If/Lockdown product integration",
+      "priority": "POST_DEMO_IMPORTANT"
+    },
+    {
+      "id": "J",
+      "name": "UI/UX + Reporting + End-to-End Demo",
+      "priority": "DEMO_CRITICAL_UI"
+    }
+  ],
+  "dependency_order": "A -> (B parallel C) -> D/E/I -> F/G -> J; H parallel (gates commercial completeness only, never first demo)",
+  "authorized_edits": [
+    "MRT_PHARMA_AUTHORITY_INDEX.md",
+    "MRT_PHARMA_OPEN_GAPS.md",
+    "MRT_PHARMA_SEPTEMBER_9_AUTHORITY_RECONCILIATION_REPORT.md",
+    "mrt_pharma_september_9_authority_reconciliation_data.json"
+  ],
+  "checkpoint_state": "HOLD_FOR_AUTHORITY_RECONCILIATION_REVIEW",
+  "files_staged": "NO",
+  "commit_created": "NO",
+  "push_performed": "NO"
+}

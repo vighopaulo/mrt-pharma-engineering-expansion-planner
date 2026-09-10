@@ -859,3 +859,244 @@ boundary** at each layer.
 *This index is a governance/traceability artifact. It intentionally introduces
 no production-engine behavior. When an authority changes, update the relevant row
 here and the corresponding entry in `MRT_PHARMA_OPEN_GAPS.md`.*
+
+---
+
+# September 9 Reconciliation Addendum — Live Bentley / Clinical Program frontend + status re-standardization
+
+**Reconciliation checkpoint:** repository `main`, HEAD
+`bdd2103d7e4e189625a6c725bc81e166754df730` (commit *"MRT Pharma: checkpoint BIM
+spatial and clinical-program foundation"*), divergence `0 0`. Working tree clean
+except the intentionally-unstaged `frontend/.env`.
+**Nature:** GOVERNANCE / TRACEABILITY ONLY — reconciles the Aug 29 authority table
+(sections 1–2.25 above, HEAD `07e861d`) against the **physical September 4–9
+frontend source** now committed. No product-engine or product-UI behavior changed.
+Every classification below was verified against the actual `.ts`/`.tsx` source
+(and the backend `.py` modules), not from report `.md` files or session memory.
+
+> The Aug 29 sections above remain valid for the **backend Python domains** and
+> were re-verified at this checkpoint (see §R.9). This addendum ADDS the frontend
+> spatial/clinical layer that did not exist when they were written, and
+> re-standardizes status terminology (§R.1). Where a backend row and this addendum
+> both describe a concern, this addendum is the September 9 source of truth.
+
+## R.1 Standardized status vocabulary (applies to both authority documents)
+
+To avoid `IMPLEMENTED` overclaiming live integration, the following controlled
+vocabulary is used from this checkpoint onward:
+
+| Status | Meaning |
+|---|---|
+| `IMPLEMENTED_AND_INTEGRATED` | Physically present in code + tests AND wired into a live product surface (the `/viewer` UI, or an executed engine path). |
+| `IMPLEMENTED_DOMAIN_AUTHORITY` | Pure domain/engine authority present + unit-tested; consumed by an integration layer but not itself a live UI surface. |
+| `IMPLEMENTED_ADAPTER_OR_EXPORT` | An export/presentation/adapter layer (e.g. OpenUSD `.usda` generation, ARIA fixture adapter) — not an engineering authority and not a live runtime. |
+| `PARTIAL` | Partially implemented; a specific seam/gap is disclosed. |
+| `PLANNED` | Agreed future behavior; no implementation. |
+| `NOT_MODELED` | Not represented in the repository at all. |
+| `DIAGNOSTIC_ONLY` | Developer/recovery instrument; never a physical authority or product behavior. |
+| `SUPERSEDED_OR_FALLBACK` | Kept for lineage/fallback; no longer the primary authority. |
+| `MANUAL_ACCEPTANCE_PENDING` | Implemented + offline-verified; awaiting a human live-acceptance step. |
+
+The Aug 29 `IMPLEMENTED` label maps to `IMPLEMENTED_DOMAIN_AUTHORITY` for the
+backend engines (they are executed engine paths, not live UI). `CALIBRATED` /
+`NOT_CALIBRATED` / `CONTROLLED_BENCHMARK` continue as calibration-evidence
+qualifiers orthogonal to the status above.
+
+## R.2 Frontend integration hub
+
+- **Canonical Authority:** `frontend/src/components/spatial/spatialAssetOverlay.ts`
+  — the application-owned runtime hub. Owns viewer-mode state, active-product-
+  viewport resolution, decorator registration, the Clinical Program runtime, the
+  ClinicalPlanningVolume runtime, authoritative-footprint caching, and all
+  developer diagnostics. **No Bentley write API is called from this seam.**
+- **Live surface:** `frontend/src/routes/BentleyViewer.tsx` (the `/viewer` page)
+  + `frontend/src/components/viewer/LiveItwinViewer.tsx` (authenticated Auth-Code
+  + PKCE viewer). NORMAL-mode panels (`ProjectBimSelector`, `CameraModeControl`,
+  `ClinicalProgramControl`, `ViewerAssetLibrary`) mount unconditionally; DEV-mode
+  panels (`AuditDiagnosticsPanel`, `ClinicIngestionPanel`, DEV_TOOLS drawer) are
+  gated behind Developer mode.
+- **Status (integration hub module):** the `spatialAssetOverlay.ts` hub + `/viewer`
+  live surface are wired together and functioning. **Aggregate UI/UX status =
+  `PARTIAL`** — `LIVE_BENTLEY_AND_CLINICAL_WORKFLOW_INTEGRATED = YES`;
+  `END_TO_END_PRODUCT_WORKFLOW_INTEGRATED = NO` (the deeper engines — optimization,
+  operations, economics, What-If/Lockdown, simulation — are not yet joined into one
+  coherent customer-facing product workflow). See §R.3 row R and workstream J.
+- **Tests:** 35 frontend test files / **619** cases at this checkpoint.
+
+## R.3 Frontend domain authority table (September 4–9)
+
+Schema: **Concern · Canonical file(s) · Key symbols · Test · Status.**
+
+| Concern | Canonical file(s) | Key symbols | Test | Status |
+|---|---|---|---|---|
+| Project BIM selection + persistence | `lib/projectBim.ts`, `lib/viewerConfig.ts`, `components/spatial/ProjectBimSelector.tsx` | `MEDICAL_CLINIC_DEMO` (clinic `36381ef4-…`), `resolveActiveProjectBim` (URL_OVERRIDE > PERSISTED > PRODUCT_DEFAULT > LEGACY), `ACTIVE_BIM_STORAGE_KEY='mrtpharma.activeProjectBim.v1'`, `isSafePersistedPayload` | `projectBim.test.ts`, `viewerConfigOverride.test.ts` | `IMPLEMENTED_AND_INTEGRATED` |
+| Live Medical Clinic Bentley/iTwin viewer + authenticated opening | `components/viewer/LiveItwinViewer.tsx`, `components/spatial/bentleySpatialAdapter.ts`, `routes/BentleyViewer.tsx`, `lib/viewerAuth.ts`, `lib/authCallbackDecision.ts` | `buildSpatialViewState`, `fitLiveModel`, `setPlanningAppearance`, `wireSelection`, `authReducer` | `bentleyViewer.test.tsx`, `authCallbackDecision.test.ts`, `routing.test.tsx` | `IMPLEMENTED_AND_INTEGRATED` |
+| Clinic IFC ingestion workflow (real Bentley write) | `components/spatial/bentleyClinicIngestion.ts`, `ClinicIngestionPanel.tsx`, `bentleyPermissionProbe.ts` | `startIngestion`, `preflight`, `checkDemoImodelExists`; pure `classifyBentleyPermissionProbe` | `bentleyPermissionProbe.test.ts` (pure classifier) | `MANUAL_ACCEPTANCE_PENDING` (DEV-gated; the pure permission classifier is `IMPLEMENTED_DOMAIN_AUTHORITY`) |
+| Planning / Walkthrough / Bird's-eye / storey cutaway / first-person + collision | pure: `cameraNav.ts`, `walkNav.ts`, `firstPerson.ts`, `planningPlan.ts`, `planningVisuals.ts`, `viewportResolution.ts`, `floatingPanels.ts`; live: `walkthroughController.ts`, `CameraModeControl.tsx`, `RoomPlanDecorator.ts` | `resolveCameraModePolicy`, `resolveWalkCollision`/`slideAlongWall`, `resolveStoreyCutaway`, `resolveFirstPersonOrientation`, `resolveViewportSource`, `resolveFloatingPanelAction`, `applyCameraMode` | `cameraNav.test.ts`, `walkNav.test.ts`, `firstPerson.test.ts`, `planningPlan.test.ts`, `planningVisuals.test.ts`, `floatingPanels.test.ts` | pure seams `IMPLEMENTED_DOMAIN_AUTHORITY`; live controller `IMPLEMENTED_AND_INTEGRATED` (navigation feel `MANUAL_ACCEPTANCE_PENDING`) |
+| Clinical Program: taxonomy, BIM-space assignment, MRT naming, persistence, multi-room | `clinicalProgram.ts`, `clinicalProgramAnchor.ts`, `clinicalProgramOverlay.ts`, `clinicalVolumeCollection.ts`, `ClinicalProgramControl.tsx`, `ClinicalProgramDecorator.ts` | `ClinicalFunction`, `assignClinicalFunction`, `resolveProgramRoomLabel`, `checkProgramCompleteness`, key `'mrtpharma.clinicalProgram.v1.'+iModelId`; `deriveClinicalProgramOverlay`; collection ops | `clinicalProgram.test.ts`, `clinicalProgramAnchor.test.ts`, `clinicalProgramOverlay.test.ts`, `clinicalVolumeCollection.test.ts` | `IMPLEMENTED_AND_INTEGRATED` |
+| Authoritative IfcSpace geometry + true footprint + true 3D parent room volume | pure: `roomSpatialAuthority.ts`, `authoritativeRoomFootprint.ts`; live: `roomSpatialAuthorityProbe.ts`, `authoritativeRoomGeometryProbe.ts` | `classifyRoomSpatialAuthority` (EXACT_SPACE_GEOMETRY > … > RANGE_ONLY_APPROXIMATION > ANCHOR_ONLY), `deriveAuthoritativeRoomFootprint`, `characterizeAuthoritativeRoomVolume`; live `extractAuthoritativeRoomGeometry` (generateElementMeshes) | `roomSpatialAuthority.test.ts`, `authoritativeRoomFootprint.test.ts`, `authoritativeRoomVolume.test.ts` | footprint/volume math `IMPLEMENTED_DOMAIN_AUTHORITY`; live extraction `IMPLEMENTED_AND_INTEGRATED` (runtime, no unit test by design) |
+| True 3D ClinicalPlanningVolume (oriented prism, containment, DRAFT/LOCKED, per-volume visibility, iModel-scoped persistence) | `clinicalPlanningVolume.ts` (+ runtime in `spatialAssetOverlay.ts`) | `buildOrientedPlanningPrism`, `validatePlanningVolumeContainment`/`isPointInsideClosedMesh`, `canLockVolume`, `resolveContainmentStatus` (NOT_EVALUATED≠FAIL), key `'mrtpharma.clinicalVolume.v1.'+iModelId` (FORBIDDEN_KEYS strips mesh/secrets), `seedPrismParamsFromParent` | `clinicalPlanningVolume.test.ts` | `IMPLEMENTED_AND_INTEGRATED` (pure core `IMPLEMENTED_DOMAIN_AUTHORITY`) |
+| Build 2A three-room composition (Uptake 01 + Injection Room 01 + PET/CT 01) | `build2aThreeRoomComposition.test.ts`; `seedPrismParamsFromParent`; `suggestPlanningVolumeSeedForParent` (overlay) | new-volume seed from SELECTED parent footprint centroid + Z; deterministic naming | `build2aThreeRoomComposition.test.ts` (11 cases) | multi-room infrastructure `IMPLEMENTED_AND_INTEGRATED` (offline verified); live composition of the two NEW rooms `MANUAL_ACCEPTANCE_PENDING` |
+| Uptake 01 reconstruction + persistence diagnostic | `uptake01Reconstruction.ts`; pure `clinicalPersistenceDiagnostic.ts` | `reconstructUptake01Baseline` + `UPTAKE_01_BASELINE` (bimSpaceId `0x200000001f1`); `classifyClinicalPersistenceRegression` | `uptake01Reconstruction.test.ts`, `clinicalPersistenceDiagnostic.test.ts` | reconstruction `DIAGNOSTIC_ONLY`/`TEMPORARY_RECOVERY` (explicit one-time button, duplicate-guarded, never auto-runs); classifier `IMPLEMENTED_DOMAIN_AUTHORITY` |
+| Developer diagnostics (BIM content audit, clinical-overlay diagnosis, permission probe, decorator registration) | `bimContentAudit.ts`, `clinicalOverlayDiagnostics.ts`, `decoratorRegistration.ts`, `AuditDiagnosticsPanel.tsx` | live `runBimContentAudit`; pure `classifyClinicalOverlayFailure`, `resolveDecoratorRegistrationAction` | `clinicalOverlayDiagnostics.test.ts`, `decoratorRegistration.test.ts` | `DIAGNOSTIC_ONLY` (pure classifiers `IMPLEMENTED_DOMAIN_AUTHORITY`) |
+| **R. UI/UX / Product Integration (aggregate)** | `BentleyViewer.tsx`, `spatialAssetOverlay.ts`, the live `/viewer` panels | live Bentley viewer + Project BIM + Camera/Planning + Clinical Program panels | (component/route tests above) | **`PARTIAL`** — `LIVE_BENTLEY_AND_CLINICAL_WORKFLOW_INTEGRATED = YES`; `END_TO_END_PRODUCT_WORKFLOW_INTEGRATED = NO` (deeper engines not yet joined into one customer-facing workflow) |
+
+## R.4 Spatial representation authority hierarchy (physical clinical planning)
+
+Single canonical chain for **physical clinical planning geometry**:
+
+1. **Parent BIM spatial authority** = authoritative IfcSpace geometry
+   (`authoritativeRoomGeometryProbe.extractAuthoritativeRoomGeometry` →
+   `authoritativeRoomFootprint.deriveAuthoritativeRoomFootprint` /
+   `characterizeAuthoritativeRoomVolume`). Exact room boundary + closed parent mesh.
+2. **Application-owned physical planning authority** = `ClinicalPlanningVolume`
+   (`clinicalPlanningVolume.ts`) — a true 3D oriented prism, CHILD of the parent
+   IfcSpace, contained by the parent mesh (`validatePlanningVolumeContainment`).
+3. **Range / bbox** = `DIAGNOSTIC_ONLY` fallback metadata (`BIM_RANGE_APPROXIMATION`)
+   used only where exact geometry is not extractable; `roomSpatialAuthority.ts`
+   ranks it below exact geometry.
+4. **Labels** = view annotations only (billboard text); never physical authority.
+5. **Screen space** = NEVER physical authority (`SCREEN_SPACE_AUTHORITY = NO`,
+   asserted by the planning-volume diagnostic).
+
+**SUPERSEDED_OR_FALLBACK inventory (kept, not deleted):** range-derived clinical
+room rectangles / `BIM_RANGE_APPROXIMATION` anchors (superseded by authoritative
+IfcSpace geometry where extractable); legacy 2D overlay-only representations
+(superseded by the true-3D decorator); `RoomPlanDecorator` derived room-plan
+(view-only planning context, not physical authority).
+
+## R.5 Bentley / BIM reconciliation (supersedes the pessimistic seam language)
+
+The Aug 29 backend row §2.17 (`OG-BEN-1 PARTIAL`, "no automated live connection
+exercised") described the **Python** client scaffold. The September 4–9 **frontend**
+now provides a genuinely different, live capability, verified in source:
+
+- **Real Medical Clinic iModel registration:** `projectBim.MEDICAL_CLINIC_DEMO`
+  (`36381ef4-b5f5-4d6d-b64b-2dbd69ba26a4`, role `PRODUCT_DEMO_BIM`), distinct from
+  the `ENGINEERING_REGRESSION_FIXTURE` (`ea9c0558-…`). Roles are separated in code.
+- **Authenticated viewer opening:** `LiveItwinViewer.tsx` (Auth-Code + PKCE, no
+  client secret) opens the live clinic iModel in the browser.
+- **Persistent Project BIM selection:** `mrtpharma.activeProjectBim.v1` localStorage,
+  with the invalid-persisted guard and secret-stripping payload.
+- **Authoritative IfcSpace extraction:** `extractAuthoritativeRoomGeometry` calls
+  `generateElementMeshes` and yields exact footprint + closed parent mesh (Uptake
+  01 verified: 186 vertices / 368 triangles / closed / 1 component).
+- **IFC ingestion workflow:** `bentleyClinicIngestion.ts` exists as a real
+  (DEV-gated) upload/poll workflow — `MANUAL_ACCEPTANCE_PENDING`.
+
+**Reconciled Bentley classification:** the **live viewer + Project BIM + IfcSpace
+geometry read path** is `IMPLEMENTED_AND_INTEGRATED`. What remains open is narrow:
+(a) automated/credentialed CI exercise of the live connection, and (b) generic
+arbitrary-BIM ingestion into the **backend engineering object model** (still the
+Python OG-BEN-1 / OG-FIN-1 seam — geometry read in the viewer is NOT the same as
+parsing arbitrary IFC/Revit into the engineering model). See OG-BEN-1 (reworded)
+and the new OG-FE-* gaps.
+
+## R.6 Clinical Program September 9 state (accurate, non-conflating)
+
+- **Uptake 01** = accepted regression baseline (bimSpaceId `0x200000001f1`,
+  '1AC1 CENTRAL WAITING' → "Uptake 01", UPTAKE_ROOM; DRAFT true-3D volume;
+  containment INSIDE). Authorized reconstruction available as an explicit
+  duplicate-guarded recovery button only.
+- **Build 2A multi-room composition infrastructure** = `IMPLEMENTED_AND_INTEGRATED`
+  + offline-verified (619 tests). Deterministic naming yields "Injection Room 01"
+  and "PET/CT 01"; new volumes seed from the SELECTED parent's own footprint.
+- **Injection Room 01 + PET/CT 01 LIVE composition** = `MANUAL_ACCEPTANCE_PENDING`
+  — the user selects the parent BIM rooms and defines the volumes; no rooms are
+  auto-selected (`AUTO_SELECTED_NEW_PARENT_ROOMS = 0`).
+- **Full PET department (incl. Radiopharmacy + support spaces)** = NOT complete
+  (deferred). `CLINICAL_PROGRAM_FULL_PET_DEPARTMENT_COMPLETE = NO`.
+
+## R.7 Canonical authority owner review (one owner per concept)
+
+| Concept | Canonical owner |
+|---|---|
+| BIM physical room geometry | authoritative IfcSpace geometry (`authoritativeRoomGeometryProbe` + `authoritativeRoomFootprint`) |
+| Clinical planning geometry | `ClinicalPlanningVolume` (`clinicalPlanningVolume.ts`) |
+| Clinical assignment | `ClinicalProgramAssignment` (`clinicalProgram.ts`) |
+| Active project BIM identity | `resolveActiveProjectBim` (`projectBim.ts`) |
+| Transport eligibility | `transport_mode_eligibility_authority.py` (backend) |
+| Scenario baseline | `CanonicalLockdownRecord` (`lockdown_what_if_lineage_authority.py`) |
+| What-If branch | `CanonicalWhatIfRecord` (`lockdown_what_if_lineage_authority.py`) |
+| OpenUSD | presentation/export adapter (`openusd_spatial_adapter.py`) — NOT an engineering authority |
+
+**DUPLICATE_AUTHORITY_CANDIDATE (for later architecture consolidation, do NOT
+refactor now):**
+- *Room geometry (frontend):* `roomSpatialAuthority` classification vs
+  `authoritativeRoomFootprint` derivation vs `RoomPlanDecorator` range-derived
+  plan — clear precedence exists (exact > range), but three modules touch "room
+  geometry"; flag for consolidation.
+- *Clinical volume:* frontend `ClinicalPlanningVolume` (application-owned physical
+  planning) vs backend `interactive_spatial_authoring.py` (engineering authoring)
+  — different products/coordinate authorities today; watch for overlap if the
+  frontend planning volume ever feeds the backend engineering model.
+- *Route/network:* `canonical_spatial_authority.py` vs
+  `canonical_geometry_shadow_routing_authority.py` vs `human_circulation_authority.py`
+  — layered, but multiple "routing" owners; the live-geometry→route seam is the
+  real gap (OG-ROUTE-INT, below), not a second engine.
+- *Simulation state:* `digital_twin_simulation_state.py` vs
+  `dynamic_scene_state_authority.py` vs `operational_day_trajectory_scene.py` —
+  distinct roles (state vs presentation-bridge vs scene), flagged to keep distinct.
+
+## R.8 OpenUSD ≠ NVIDIA, Simulation ≠ Trajectory ≠ Animation (re-verified at this checkpoint)
+
+- `OPENUSD_EXPORT_STATUS = IMPLEMENTED_ADAPTER_OR_EXPORT` — `openusd_spatial_adapter.py`,
+  `openusd_yc_demo_binding.py`, `generate_openusd_hospital_visual_demo.py`,
+  `generate_openusd_hospital_dynamic_foundation_demo.py` generate real Pixar
+  `usd-core` `.usda/.usd`. **Zero `omni` imports** (verified by grep at this
+  checkpoint).
+- `NVIDIA_OMNIVERSE_RUNTIME_STATUS = PLANNED` — no Kit/Nucleus/live-USD/RTX/Isaac
+  runtime. OG-USD-1.
+- `SIMULATION_ENGINE_STATUS = IMPLEMENTED_DOMAIN_AUTHORITY` —
+  `existing_facility_baseline_simulation.py`, `live_operational_state.py`,
+  `operational_day_*`.
+- `TRAJECTORY_GENERATION = IMPLEMENTED_DOMAIN_AUTHORITY` —
+  `production_trajectory_authority.py` + `operational_day_trajectory_scene.py`
+  (RP-PTS sampler still PARTIAL, OG-TRN-2).
+- `INTERACTIVE_ANIMATED_RUNTIME = PLANNED` — no interactive patient/carrier
+  playback runtime (OG-SIM-1, `LOCKED_PRODUCT_DOCTRINE`).
+
+## R.9 Backend re-verification at HEAD `bdd2103`
+
+Spot-checked in source at this checkpoint (unchanged from Aug 29, still accurate):
+What-If/Lockdown domain authority present (`CanonicalLockdownRecord`,
+`CanonicalWhatIfRecord`, `promote_what_if_to_lockdown` in
+`lockdown_what_if_lineage_authority.py`); the four-architecture engine + equal-budget
+search present with **no** free-composition optimizer module (OG-CAP-2 still
+PLANNED); trajectory/simulation/dynamic-scene modules present; OpenUSD adapters
+present with zero `omni` imports. The Aug 29 backend rows (§§2.1–2.25) are carried
+forward unchanged.
+
+## R.10 Revised finish-line master workstreams (source-reconciled)
+
+Ordered, with dependency + demo-criticality (detail in `MRT_PHARMA_OPEN_GAPS.md`):
+
+- **A. Authority consolidation** — THIS TASK (`COMPLETE` at this checkpoint).
+- **B. Complete Clinical Program + Equipment Composition** — finish Build 2B (live
+  Injection Room 01 + PET/CT 01), then Radiopharmacy/support; bind equipment to
+  `ClinicalPlanningVolume` + live room identity. *DEMO_CRITICAL.*
+- **C. Bentley geometry → existing canonical spatial/transport integration** — feed
+  live IfcSpace geometry into the backend routing authority (OG-ROUTE-INT). Not
+  "build routing"; the engine exists. *DEMO_CRITICAL (partial slice).*
+- **D. Candidate Facility Composition Optimizer** — OG-CAP-2. *POST_DEMO_IMPORTANT.*
+- **E. Unified Operations Execution** — OG-OPS-1 long-horizon→one-day seam.
+  *POST_DEMO_IMPORTANT.*
+- **F. Interactive Simulation / Animation Runtime** — OG-SIM-1 (trajectory exists;
+  playback does not). *POST_DEMO_IMPORTANT.*
+- **G. NVIDIA Omniverse Runtime** — OG-USD-1 (OpenUSD export exists). *OPTIONAL_FUTURE
+  for first demo.*
+- **H. Candidate Economics + Calibration Closure** — OG-CYC-1 / OG-SCN-1 /
+  OG-OPEX-1 / OG-GEN-1 economics. *COMMERCIAL_CALIBRATION.*
+- **I. Product Workflow + What-If/Lockdown Integration** — domain authority exists;
+  live product/UI orchestration is the gap (OG-WIF-UI). *POST_DEMO_IMPORTANT.*
+- **J. UI/UX + Reporting + End-to-End Demo** — coherent customer-facing report/export
+  + end-to-end Medical Clinic (+ optional NVIDIA) demonstration. *DEMO_CRITICAL (UI
+  polish) / POST_DEMO (reporting productization).*
+
+**Dependency order:** A → (B, C can proceed in parallel) → D/E/I → F/G → J; H
+(calibration) proceeds in parallel and gates only commercial completeness, never
+the first demo. B and the demo slice of C + J are the first-demo critical path.
+
+**This addendum, together with the September 9 section of `MRT_PHARMA_OPEN_GAPS.md`,
+is the CURRENT repository authority/gap source of truth as of HEAD `bdd2103`.**
+Historical build reports remain provenance and are not retroactively rewritten.
