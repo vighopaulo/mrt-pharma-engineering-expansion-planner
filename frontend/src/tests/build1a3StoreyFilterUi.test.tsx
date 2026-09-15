@@ -42,12 +42,13 @@ vi.mock('../components/spatial/spatialAssetOverlay', () => ({
     loadClinicalProgramForIModel: vi.fn(),
     subscribeClinicalProgram: (fn: () => void) => { listeners.add(fn); return () => listeners.delete(fn) },
     getClinicalProgramSnapshot: () => ({ ...state, assignments: state.assignments }),
-    refreshModelSemantics: vi.fn(async () => {}),
+    refreshModelSemantics: vi.fn(async () => { }),
     getRoomDiscoveryUiStatus: () => {
         const filtered = filterDiscoveredRoomsByStorey(discovered, state.activeStoreyId)
         return { status: 'READY' as const, baseRoomCount: discovered.length, filteredRoomCount: filtered.length, label: roomSelectorLabel({ status: 'READY', filteredRoomCount: filtered.length }) }
     },
     getDiscoveredRoomOptions: () => filterDiscoveredRoomsByStorey(discovered, state.activeStoreyId),
+    getDiscoveredRoomById: (id: string | undefined) => discovered.find((r) => r.bimSpaceId === id),
     isSelectedRoomOutsideActiveStorey: () => {
         if (!state.selectedSpaceId || !state.activeStoreyId) return false
         return !filterDiscoveredRoomsByStorey(discovered, state.activeStoreyId).some((r) => r.bimSpaceId === state.selectedSpaceId)

@@ -30,6 +30,7 @@ vi.mock('../components/spatial/spatialAssetOverlay', () => ({
     refreshModelSemantics: vi.fn(async () => { }),
     getRoomDiscoveryUiStatus: () => ({ status: 'READY' as const, baseRoomCount: 1, filteredRoomCount: 1, label: 'Select a room (1)' }),
     getDiscoveredRoomOptions: () => [{ iModelId: 'im', bimSpaceId: '0xF6', originalBimLabel: '1DC1 WAITING / ACTIVITY AREA', storeyId: 'FIRST', sourceClass: 'S', authorityClass: 'EXACT_SPACE_GEOMETRY', geometryQuality: 'EXACT_SPACE_GEOMETRY', exactMeshAvailable: true, vertexCount: 10, triangleCount: 16, assigned: true, mrtDisplayName: 'Injection Room 01', clinicalFunction: 'INJECTION_ROOM', hasPlanningVolume: true }],
+    getDiscoveredRoomById: (id: string | undefined) => id === '0xF6' ? { iModelId: 'im', bimSpaceId: '0xF6', originalBimLabel: '1DC1 WAITING / ACTIVITY AREA', storeyId: 'FIRST', sourceClass: 'S', authorityClass: 'EXACT_SPACE_GEOMETRY', geometryQuality: 'EXACT_SPACE_GEOMETRY', exactMeshAvailable: true, vertexCount: 10, triangleCount: 16, assigned: true, mrtDisplayName: 'Injection Room 01', clinicalFunction: 'INJECTION_ROOM', hasPlanningVolume: true } : undefined,
     isSelectedRoomOutsideActiveStorey: () => false,
     setClinicalProgramActiveStorey: vi.fn(),
     setClinicalProgramSelectedSpace: (id: string | undefined) => { selectedSpaceId = id; notify() },
@@ -65,8 +66,10 @@ import { ClinicalProgramControl } from '../components/spatial/ClinicalProgramCon
 /** Mount and select the injection room through the real select (drives sync). */
 async function mountAndSelect() {
     render(<ClinicalProgramControl iModelId="im" />)
-    const select = await screen.findByRole('combobox', {}, { timeout: 4000 })
-    await act(async () => { fireEvent.change(select, { target: { value: '0xF6' } }) })
+    // Build 1B added the equipment-inventory <select>; the FIRST combobox is the
+    // BIM room (space) selector this test drives.
+    const selects = await screen.findAllByRole('combobox', {}, { timeout: 4000 })
+    await act(async () => { fireEvent.change(selects[0], { target: { value: '0xF6' } }) })
 }
 
 describe('Build 1A.4 §29 — product containment validation UI (no Developer mode)', () => {

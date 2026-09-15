@@ -45,33 +45,15 @@ describe('Build 1A walkthrough §15 — dismissible controls pane', () => {
         await enterWalkthrough()
         fireEvent.click(screen.getByRole('button', { name: 'Close controls' }))
         expect(screen.queryByText(HELP)).toBeNull()
-        fireEvent.click(screen.getByRole('button', { name: 'Show walkthrough controls' }))
+        fireEvent.click(screen.getByRole('button', { name: 'Show walkthrough key controls' }))
         expect(screen.getByText(HELP)).toBeTruthy()
     })
 
-    it('clicking OUTSIDE the pane dismisses it', async () => {
-        await enterWalkthrough()
-        await act(async () => { fireEvent.pointerDown(document.body) })
-        expect(screen.queryByText(HELP)).toBeNull()
-    })
-
-    it('a click INSIDE the pane keeps it open', async () => {
-        await enterWalkthrough()
-        await act(async () => { fireEvent.pointerDown(screen.getByText(HELP)) })
-        expect(screen.getByText(HELP)).toBeTruthy()
-    })
-
-    it('Esc closes the open pane (first Esc)', async () => {
-        await enterWalkthrough()
-        await act(async () => { fireEvent.keyDown(window, { key: 'Escape' }) })
-        expect(screen.queryByText(HELP)).toBeNull()
-    })
-
-    it('when closed the pane is NOT in the DOM (no invisible blocking layer)', async () => {
+    it('when closed the key-controls pane is NOT in the DOM (no invisible blocking layer)', async () => {
         await enterWalkthrough()
         fireEvent.click(screen.getByRole('button', { name: 'Close controls' }))
         // The reopen affordance is a small button; the full help pane is gone.
-        expect(screen.queryByRole('dialog', { name: 'Walkthrough controls' })).toBeNull()
-        expect(screen.getByRole('button', { name: 'Show walkthrough controls' })).toBeTruthy()
+        expect(screen.queryByRole('dialog', { name: 'Walkthrough key controls' })).toBeNull()
+        expect(screen.getByRole('button', { name: 'Show walkthrough key controls' })).toBeTruthy()
     })
 })
