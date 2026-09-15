@@ -1155,3 +1155,166 @@ NO`; `ANIMATED_SIMULATION_RUNTIME_COMPLETE = NO`; `ECONOMICS_INTEGRATION_COMPLET
   Normal simulation must NOT require the user to manually choose every MRT/PTS
   connection; manual route/mode forcing belongs to future What-If/engineering
   override.
+
+
+---
+
+## PRE-AWS ENGINEERING AUTHORITY RECONCILIATION (Correction Build)
+
+**Nature:** CONTROLLED CORRECTION BUILD. Not an AWS implementation, not a
+Streamlit migration, not Build 1C/2, not a UI redesign, not a refactor. It
+corrects four proven engineering-authority defects found by the final pre-AWS
+audit, strengthens repository-wide regression protection, and synchronizes the
+affected engineering documentation. This section updates the canonical index in
+place (per the maintenance protocol) rather than creating a parallel "FINAL"
+authority document — the objective is ONE CURRENT ENGINEERING STORY.
+
+### A. Four-quantity production invariant (updates §2.4, §2.6, §2.9)
+
+The following four quantities are **distinct** and must never be conflated on any
+authoritative current path:
+
+1. **patient count** (a clinical/administration cohort quantity),
+2. **radioactive activity** (MBq — administered → release → EOB-required),
+3. **physical production capacity** (installed EOB MBq/day),
+4. **production batch/cycle count**.
+
+Dose counts are NOT physical MBq capacity. Production-block percentages are NOT
+physical MBq capacity. The authoritative physical chain is:
+
+> PATIENT REQUIREMENT → ADMINISTERED ACTIVITY → RELEASE ACTIVITY → DECAY/PROCESS
+> LOSSES → EOB-REQUIRED ACTIVITY → PHYSICAL EOB CAPACITY → PRODUCTION WINDOWS/
+> CYCLES → CLINICAL ADMINISTRATION.
+
+**Repository-wide production invariant (regression-locked):** no authoritative
+current production-feasibility, optimization, ranking, capacity or CapEx path may
+derive physical radioactive-production capacity from `current_usable_doses_per_day`,
+`production_blocks`, a `10%`/`0.10` production-block expression, or any equivalent
+synthetic capacity expression. Enforced by:
+
+- **STATIC GUARD:** `test_production_capacity_invariant_guard.py` — inspects the
+  executable source (comments/strings stripped) of `equal_budget.py`,
+  `optimization.py`, `cyclotron_production_estimation_authority.py`,
+  `cycle_relative_production_requirement.py`, `operational_day_orchestrator.py`.
+- **BEHAVIORAL REGRESSIONS:** `test_production_capacity_behavioral_closure.py` —
+  exercises the real Capital Project / equal-budget / optimization / production-
+  chain entry points.
+
+### B. Explicit / calibrated EOB capacity behavior (updates §2.1, §2.6)
+
+When an explicit/calibrated physical EOB capacity exists
+(`PlannerInputs.current_cyclotron_eob_capacity_mbq_per_day`,
+`PlannerAssumptions.cyclotron_eob_capacity_mbq_per_day`, or a calibrated
+`CyclotronFleet`), the engine uses **exactly** that installed physical capacity.
+Physical feasibility is `A_EOB_required <= A_EOB_installed`. Calibrated capacity
+is **never** inflated by 10% dose-count "production blocks". The former
+`equal_budget._cyclotron_eob_capacity_mbq_per_day(..., production_block_multiplier)`
+helper (which multiplied a calibrated base by `1 + blocks*0.1`) is **REMOVED**.
+
+### C. NOT_CALIBRATED production behavior (updates §2.1, §2.6, §2.9)
+
+When physical EOB capacity is NOT calibrated, status stays `NOT_CALIBRATED`. The
+engine still computes and reports `A_EOB_required`, but it does NOT fabricate
+`A_EOB_installed`, impose a synthetic dose-count ceiling, convert dose count into
+MBq capacity, create synthetic production blocks / 10% upgrades, fabricate
+production-upgrade CapEx, or report calibrated physical feasibility. In the
+`equal_budget` batch-cohort engine, uncalibrated production is treated as
+**non-limiting** (throughput bounded only by physical clinical resources +
+unavoidable intra-day decay), which is an operating outcome under unknown
+production — not a physical-capacity claim. Unknown capacity remains unknown.
+
+### D. Removal of the legacy dose-count/10%-block fallback (updates §2.1)
+
+The prohibited `current_usable_doses_per_day * (1 + production_blocks * 0.10)`
+model has been removed from the authoritative Capital Project paths that still
+carried it: `equal_budget._build_mrt_economic_candidate`,
+`equal_budget._mrt_production_block_bound` (now always returns 0),
+`equal_budget._enumerate_mrt_candidates`, the `equal_budget` decision-summary
+reporting path, and `optimization.conventional` / `optimization.mrt` (which had no
+calibration gate at all). `PlannerAssumptions.production_expansion_capex_per_10pct`
+is retained ONLY as a backward-compatibility field; it is charged $0 and does not
+affect capacity/feasibility/ranking/CapEx when production is uncalibrated
+(NONAUTHORITATIVE_COMPATIBILITY). `_conventional_baseline_capacity` still uses
+`current_usable_doses_per_day` strictly as an OBSERVED CURRENT throughput baseline
+reference (no block inflation, never a forward physical-capacity claim).
+
+### E. Physical carrier-concurrency authority (updates §2.11, §2.12)
+
+`shared_mrt_multistream_authority.compute_physical_carrier_peak_concurrency` is the
+single canonical physical carrier-availability authority. A carrier is unavailable
+for its full physical occupation cycle — loaded-outbound leg PLUS empty-return/
+recovery leg — modeled as `duration * (1 + PHYSICAL_CARRIER_RETURN_LEG_MULTIPLIER)`.
+The new module constant `PHYSICAL_CARRIER_RETURN_LEG_MULTIPLIER = 1.0` (a disclosed
+symmetric-transit assumption, not a measured value) is the SINGLE shared value used
+by BOTH fleet sizing (`compute_heterogeneous_shared_carrier_fleet`) and the
+carrier-shortage evaluator, so the two can never diverge into independent
+approximations.
+
+### F. Carrier-shortage evaluation now uses the canonical occupancy doctrine (updates §2.1, §2.11)
+
+`whole_oncology_four_architecture_optimization.evaluate_mrt_dominant_operational_only_carrier_shortage`
+previously bucketed missions round-robin and scheduled each carrier on a
+zero-length segment with a ~1-minute headway, which silently omitted the carrier
+turnaround/return occupancy (a `MISSING_CONSTRAINT`) and bypassed the canonical
+concurrency authority. It is corrected to a multi-server queue in which each
+mission occupies a carrier for the full physical cycle. `CarrierShortageOutcome`
+now reports `physical_peak_carrier_concurrency`. **Corrected physical fleet
+requirement for the common project baseline:** 212 missions, physical peak carrier
+concurrency = **9**. A fleet below 9 incurs queuing wait (7 carriers clears the
+late/unmet service thresholds but is below the physical peak and still queues,
+max wait ≈ 4.56 min); a fleet of 9 has zero carrier-induced queuing. The prior
+"7 carriers → all on-time, zero wait" benchmark was an artifact of the omitted
+return occupancy. Regression-locked by `test_carrier_shortage_physical_occupancy.py`
+and updated cases in `test_full_operational_capital_qualification.py` /
+`test_whole_oncology_four_architecture_optimization.py`.
+
+### G. Current generator catalog = 4 models (updates §2.10)
+
+The authoritative generator catalog contains **four** models: three Mo-99 → Tc-99m
+(`CURIUM_TECHNELITE`, `CURIUM_ULTRA_TECHNEKOW_FM`, `GE_HEALTHCARE_DRYTEC`) and one
+Ge-68 → Ga-68 (`ECKERT_ZIEGLER_GALLIAPHARM`). The stale "3 initial models"
+benchmark was updated (renamed to
+`test_generator_benchmark_uniform_across_current_catalog_models`, asserts 4). The
+fourth generator was NOT removed and the catalog was NOT modified to satisfy the
+old count.
+
+**Generator delivery-cost economic-assumption review:** the `$3,500`
+`CONTROLLED_TC99M_GENERATOR_DELIVERY_COST_USD` is an explicitly **Tc-99m-SPECIFIC**
+controlled assumption. It is applied as a clean controlled assumption ONLY to
+Tc-99m generators. For the Ge-68/Ga-68 GalliaPharm (which has no calibrated
+delivery cost) the same numeric placeholder is reused with a distinct, honest
+basis `CONTROLLED_TC99M_ASSUMPTION_INHERITED_NOT_GENERATOR_SPECIFIC` — no
+GalliaPharm-specific price is fabricated; provenance / `NOT_CALIBRATED` semantics
+are preserved.
+
+### H. Product/UI/platform doctrine (reaffirms §2.18, §2.19; LOCKED_PRODUCT_DOCTRINE)
+
+- **React/TypeScript = the sole customer-facing commercial MRT Pharma UI.**
+- **Streamlit = legacy/internal engineering and validation harness only.**
+  Commercially relevant Streamlit-only capabilities remain
+  `MIGRATION_REQUIRED_TO_REACT` (later in the Build-to-Finish program).
+- **AWS application infrastructure = `PROPOSED_NOT_IMPLEMENTED`** at this
+  checkpoint (no Aurora/S3-app/SQS/Fargate/Cognito/CloudFront/ECR/API Gateway/
+  Bedrock/SageMaker/CDK/Terraform/CloudFormation). NVIDIA runtime likewise remains
+  `PROPOSED_NOT_IMPLEMENTED` (OpenUSD file export only; no Omniverse/Kit/nucleus).
+- **GitHub remains the source-code authority.**
+- **Bentley / iModel remains the geometry authority.**
+
+### Deferred (recorded as PRE_AWS_SCHEMA_REQUIREMENT — NOT implemented here)
+
+- **Catalog version pinning** — `PRE_AWS_SCHEMA_REQUIREMENT`. The future persistent
+  data architecture must allow historical LOCKDOWN states to identify the exact
+  canonical catalog version used for physics/capacity/production/performance/
+  economics. Not bolted onto today's in-memory architecture.
+- **Transport persisted vocabulary** — `PRE_AWS_SCHEMA_REQUIREMENT /
+  DESIGN_DECISION_REQUIRED`. Target persisted business taxonomy:
+  `MANUAL | PTS | RTHS | AGV_AMR | MRT` with explicit configuration/subtype
+  underneath (PTS qualification explicit; AGV/AMR light/heavy configuration
+  explicit; RTHS distinct from floor AGV/AMR; MRT distinct). No broad enum
+  refactoring performed in this correction.
+
+### EVI / frontend (unchanged in this correction)
+
+EVI interaction behavior is unchanged. `manual_acceptance = PENDING`; the
+viewport-darkening issue remains `DIAGNOSTIC_ONLY / MANUAL_ACCEPTANCE_PENDING`
+until live verification proves otherwise (not closed on automated tests).

@@ -484,4 +484,60 @@ pytest 7.4.4). No packages installed.
 
 ---
 
+---
+
+## P. ADDENDUM — Pre-AWS four-quantity production invariant closure (Build 3B correction round)
+
+The final pre-AWS engineering audit proved that the prohibited legacy dose-count
+physical-capacity model — expressions equivalent to
+`current_usable_doses_per_day * (1 + production_blocks * 0.10)` — remained
+**reachable** in authoritative Capital Project paths that the earlier Build 3A/3B
+cleanup had missed: `equal_budget._build_mrt_economic_candidate` (uncalibrated
+branch), `equal_budget._mrt_production_block_bound`, the `equal_budget` candidate
+enumeration/decision-summary paths, and all of `optimization.py`
+(`conventional` / `mrt`, which had no calibration gate at all). This addendum
+records the closure.
+
+### P.1 Four-quantity invariant (now regression-locked repository-wide)
+
+These four quantities are distinct and must never be conflated on any
+authoritative current path: (1) patient count, (2) radioactive activity (MBq),
+(3) physical production capacity (installed EOB MBq/day), (4) production
+batch/cycle count. Dose counts and production-block percentages are NOT physical
+MBq capacity.
+
+### P.2 Calibrated behavior
+
+When explicit/calibrated physical EOB capacity exists it is used **exactly** as
+installed; `A_EOB_required <= A_EOB_installed` is the feasibility test. It is never
+inflated by 10% dose-count blocks. The former `production_block_multiplier`
+capacity-inflation helper was removed.
+
+### P.3 NOT_CALIBRATED behavior
+
+When physical EOB capacity is not calibrated, status stays `NOT_CALIBRATED`.
+`A_EOB_required` is still computed and reported; `A_EOB_installed`, synthetic
+dose-count ceilings, synthetic production blocks/10% upgrades, and
+production-upgrade CapEx are NOT fabricated. Uncalibrated production is treated as
+non-limiting (throughput bounded only by physical clinical resources and
+unavoidable intra-day decay), which is an operating outcome under unknown
+production, never a physical-capacity claim.
+
+### P.4 Compatibility field
+
+`PlannerAssumptions.production_expansion_capex_per_10pct` is retained ONLY for
+backward compatibility. It is explicitly NONAUTHORITATIVE: charged $0 and never
+affecting capacity, feasibility, ranking, optimization, CapEx, OpEx, revenue, or
+architecture selection when production is uncalibrated.
+
+### P.5 Enforcement
+
+- STATIC GUARD: `test_production_capacity_invariant_guard.py` (executable-source
+  inspection across the five authoritative production modules; comments, strings,
+  ledger labels, and migration notes are allowed to retain historical vocabulary).
+- BEHAVIORAL REGRESSIONS: `test_production_capacity_behavioral_closure.py`
+  (calibrated-exact, NOT_CALIBRATED-no-fabrication, monotone required activity,
+  unused-capacity-no-benefit, no-build, and reporting-status propagation, all
+  through real entry points).
+
 *End of CYCLOTRON_PRODUCTION_DATA_AUTHORITY_BUILD_3B.md*
