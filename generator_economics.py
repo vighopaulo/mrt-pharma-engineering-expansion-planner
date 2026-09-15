@@ -26,10 +26,13 @@ from typing import Literal
 from generator_catalog import GeneratorCatalogModel
 
 CONTROLLED_TC99M_GENERATOR_DELIVERY_COST_USD = 3500.0
-"""Section 11: CONTROLLED_TC99M_GENERATOR_DELIVERY_COST_2026 -- a project
-benchmark assumption, applied uniformly to the initial catalog models unless
-a model-specific calibrated value already exists in `generator_catalog.json`
-(none currently does -- all three are honestly NOT_CALIBRATED)."""
+"""Section 11: CONTROLLED_TC99M_GENERATOR_DELIVERY_COST_2026 -- a Tc-99m-SPECIFIC
+project benchmark assumption. It is applied as a clean controlled assumption to
+Tc-99m generators that lack a model-specific calibrated
+`replacement_cost_per_cycle` (none in `generator_catalog.json` currently has one --
+all are honestly NOT_CALIBRATED). Build 3D: for NON-Tc-99m generators (the
+Ge-68/Ga-68 GalliaPharm) the same numeric placeholder is reused only with an
+explicit INHERITED/non-generator-specific basis -- no GalliaPharm price is invented."""
 CONTROLLED_TC99M_GENERATOR_DELIVERY_COST_PROVENANCE = "CONTROLLED_TC99M_GENERATOR_DELIVERY_COST_2026"
 
 SUPPLY_CADENCE_DAYS_PER_YEAR_CONVENTION = 364.0
@@ -38,7 +41,21 @@ distinct from the 365-day calendar year used elsewhere in the repository --
 chosen because it reconciles the weekly (364/7=52) and 14-day (364/14=26)
 controlled examples EXACTLY. Never silently conflated with a 365-day year."""
 
-DeliveryCostBasis = Literal["MODEL_SPECIFIC_CALIBRATED", "USER_OVERRIDE", "CONTROLLED_TC99M_GENERATOR_DELIVERY_COST_2026"]
+DeliveryCostBasis = Literal[
+    "MODEL_SPECIFIC_CALIBRATED",
+    "USER_OVERRIDE",
+    "CONTROLLED_TC99M_GENERATOR_DELIVERY_COST_2026",
+    # Build 3D (pre-AWS audit Defect 3, economic-assumption review): the $3,500 benchmark is
+    # a Tc-99m-SPECIFIC controlled assumption. When it is applied to a NON-Tc-99m generator
+    # (e.g. the Ge-68/Ga-68 GalliaPharm) that lacks its own calibrated delivery cost, the
+    # basis is disclosed as an INHERITED, non-generator-specific placeholder -- the value is
+    # NOT a GalliaPharm-calibrated figure and no GalliaPharm-specific price is fabricated.
+    "CONTROLLED_TC99M_ASSUMPTION_INHERITED_NOT_GENERATOR_SPECIFIC",
+]
+
+# Generators whose daughter product the CONTROLLED_TC99M_GENERATOR_DELIVERY_COST_2026
+# benchmark was actually sourced for. The benchmark is authoritative only for these.
+_TC99M_DAUGHTER = "Tc-99m"
 CadenceBasis = Literal["USER_SUPPLIED", "MODEL_USEFUL_LIFE_DAYS", "CONTROLLED_ASSUMPTION"]
 
 
@@ -56,7 +73,18 @@ def resolve_generator_delivery_cost(
     """Section 11/15: user override first, then a genuinely model-specific
     calibrated `replacement_cost_per_cycle` if one exists, else the
     controlled $3,500 benchmark -- never silently overwrites a real
-    calibrated value with the controlled assumption."""
+    calibrated value with the controlled assumption.
+
+    Build 3D (pre-AWS audit Defect 3 economic-assumption review): the $3,500
+    benchmark is a Tc-99m-SPECIFIC controlled assumption
+    (`CONTROLLED_TC99M_GENERATOR_DELIVERY_COST_2026`). It is applied as a clean
+    controlled assumption ONLY to Tc-99m generators. For a NON-Tc-99m generator
+    (e.g. the Ge-68/Ga-68 GalliaPharm) that lacks its own calibrated delivery
+    cost, the SAME numeric placeholder is returned (no GalliaPharm-specific
+    price is fabricated) but the basis is disclosed as
+    `CONTROLLED_TC99M_ASSUMPTION_INHERITED_NOT_GENERATOR_SPECIFIC` so downstream
+    reporting can see the figure is an inherited Tc-99m placeholder, not a
+    generator-specific calibrated value."""
     if override_usd is not None:
         return GeneratorDeliveryCostResolution(
             catalog_model_id=model.catalog_model_id, delivery_cost_usd=override_usd,
@@ -68,9 +96,19 @@ def resolve_generator_delivery_cost(
                 catalog_model_id=model.catalog_model_id, delivery_cost_usd=float(record.value),
                 basis="MODEL_SPECIFIC_CALIBRATED", provenance=record.source,
             )
+    if model.daughter_radionuclide == _TC99M_DAUGHTER:
+        return GeneratorDeliveryCostResolution(
+            catalog_model_id=model.catalog_model_id, delivery_cost_usd=CONTROLLED_TC99M_GENERATOR_DELIVERY_COST_USD,
+            basis="CONTROLLED_TC99M_GENERATOR_DELIVERY_COST_2026", provenance=CONTROLLED_TC99M_GENERATOR_DELIVERY_COST_PROVENANCE,
+        )
     return GeneratorDeliveryCostResolution(
         catalog_model_id=model.catalog_model_id, delivery_cost_usd=CONTROLLED_TC99M_GENERATOR_DELIVERY_COST_USD,
-        basis="CONTROLLED_TC99M_GENERATOR_DELIVERY_COST_2026", provenance=CONTROLLED_TC99M_GENERATOR_DELIVERY_COST_PROVENANCE,
+        basis="CONTROLLED_TC99M_ASSUMPTION_INHERITED_NOT_GENERATOR_SPECIFIC",
+        provenance=(
+            f"{CONTROLLED_TC99M_GENERATOR_DELIVERY_COST_PROVENANCE}: Tc-99m benchmark applied as an "
+            f"INHERITED placeholder to {model.daughter_radionuclide} generator "
+            f"'{model.catalog_model_id}' (no generator-specific delivery cost calibrated; value NOT fabricated)"
+        ),
     )
 
 

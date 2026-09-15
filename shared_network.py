@@ -424,7 +424,14 @@ def run_shared_network_study(
             transport_min=assumptions.conventional_transport_min,
         )
         conv_plan = conventional(conv_inputs, planner_assumptions, half_life_min)
-        conv_prod_blocks = math.ceil(conv_plan.required_production_increase_pct / 10.0) if conv_plan.required_production_increase_pct > 0 else 0
+        # Build 3B (pre-AWS four-quantity invariant): physical EOB production capacity is NOT
+        # calibrated anywhere in the shared-network study (`_build_inputs` never supplies a
+        # cyclotron EOB capacity). Legacy 10% dose-count "production blocks" are therefore NOT
+        # a physical model here: no production-block CapEx is charged and `usable_doses` is not
+        # inflated by blocks. `required_production_increase_pct` is retained ONLY as a reported
+        # requirement metric. This keeps shared_network consistent with the corrected
+        # `optimization.conventional` (whose `.capex` no longer includes production-block CapEx).
+        conv_prod_blocks = 0
 
         conv_open_scanners = int(conventional_state["scanners"])
         conv_open_injection = int(conventional_state["injection_rooms"])
@@ -450,7 +457,12 @@ def run_shared_network_study(
         conventional_state["scanners"] = conv_open_scanners + conv_plan.additional_scanners
         conventional_state["injection_rooms"] = conv_open_injection + conv_plan.additional_injection_rooms
         conventional_state["uptake_rooms"] = conv_open_uptake + conv_plan.additional_uptake_rooms
-        conventional_state["usable_doses"] = float(conventional_state["usable_doses"]) * (1.0 + conv_prod_blocks * 0.1)
+        # Build 3B: uncalibrated production is non-limiting; the usable-dose baseline is NOT
+        # inflated by legacy 10% dose-count production blocks. The former
+        # `usable_doses *= (1 + conv_prod_blocks * 0.1)` inflation is REMOVED (the baseline
+        # carries forward unchanged); `conv_prod_blocks` is retained only for the
+        # requirement-metric ledger row (always 0 when production is uncalibrated).
+        conventional_state["usable_doses"] = float(conventional_state["usable_doses"])
         conventional_state["current_patients"] = cumulative_target_patients
         if conv_plan.cyclotron_required or forced_conv_cyclotron:
             conventional_state["has_cyclotron"] = True
@@ -621,7 +633,10 @@ def run_shared_network_study(
         new_vertical = required_vertical_total - cumulative_vertical_transitions
         new_building = required_building_total - cumulative_building_connections
 
-        mrt_prod_blocks = math.ceil(mrt_plan_core.required_production_increase_pct / 10.0) if mrt_plan_core.required_production_increase_pct > 0 else 0
+        # Build 3B: same four-quantity invariant as the conventional pathway above --
+        # production EOB capacity is uncalibrated, so no legacy 10% dose-count production
+        # blocks are charged and usable-dose baseline is not inflated by blocks.
+        mrt_prod_blocks = 0
 
         backbone_charged_this_phase = not backbone_installed
         mrt_cyclotron_charge = (mrt_plan_core.cyclotron_required or phase.mrt_new_cyclotron_required) and not bool(mrt_state["has_cyclotron"])
@@ -644,7 +659,9 @@ def run_shared_network_study(
         mrt_state["scanners"] = mrt_open_scanners + scanner_increment
         mrt_state["injection_rooms"] = mrt_open_injection + mrt_plan_core.additional_injection_rooms
         mrt_state["uptake_rooms"] = mrt_open_uptake + mrt_plan_core.additional_uptake_rooms
-        mrt_state["usable_doses"] = float(mrt_state["usable_doses"]) * (1.0 + mrt_prod_blocks * 0.1)
+        # Build 3B: uncalibrated production is non-limiting; the legacy 10% dose-count block
+        # inflation is REMOVED (baseline carries forward unchanged).
+        mrt_state["usable_doses"] = float(mrt_state["usable_doses"])
         mrt_state["current_patients"] = cumulative_target_patients
         if mrt_cyclotron_charge:
             mrt_state["has_cyclotron"] = True

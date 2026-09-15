@@ -3366,45 +3366,81 @@ class CarrierShortageOutcome:
     late: int
     unmet: int
     max_wait_minutes: float
+    # Build 2R2: the physical peak carrier concurrency (loaded-outbound + empty-return)
+    # computed by the SAME authority used for fleet sizing. A fleet below this value
+    # cannot cover the physical peak and will show degraded service; at/above it, service
+    # is not degraded by carrier unavailability.
+    physical_peak_carrier_concurrency: int = 0
 
 
 def evaluate_mrt_dominant_operational_only_carrier_shortage(baseline: WholeOncologyBaseline, *, installed_carriers: int) -> CarrierShortageOutcome:
     """Section 12/44/76: OPERATIONAL_ONLY with a FIXED, insufficient
     installed carrier fleet (never auto-expanded) -- reveals genuine queuing/
-    lateness via `schedule_missions_on_shared_segment`'s single-shared-
-    resource scheduler, rather than assuming the fleet always suffices."""
-    from shared_mrt_multistream_authority import schedule_missions_on_shared_segment, MrtNetworkSegment
+    lateness under the canonical PHYSICAL carrier-occupancy doctrine.
+
+    Build 2R2 carrier-shortage correction (pre-AWS audit Defect 2): the fixed
+    fleet is a multi-server queue of `installed_carriers` PHYSICAL carriers.
+    A carrier assigned a mission is UNAVAILABLE for the full physical
+    occupation cycle -- loaded-outbound leg PLUS the empty-return/recovery leg
+    -- exactly as defined by the repository's canonical fleet-sizing authority
+    `compute_physical_carrier_peak_concurrency` (which extends each window to
+    `duration * (1 + return_leg_multiplier)`). It is NOT freed after a ~1-min
+    headway. The prior implementation bucketed missions round-robin and
+    scheduled each carrier on a zero-length segment with a ~1-min headway,
+    which silently omitted the return/turnaround occupancy (a MISSING_CONSTRAINT)
+    and let 7 carriers appear sufficient when the physical peak concurrency is
+    higher. This corrected evaluator shares the SAME physical occupancy doctrine
+    as fleet sizing rather than a weaker independent approximation.
+    """
+    from shared_mrt_multistream_authority import (
+        PHYSICAL_CARRIER_RETURN_LEG_MULTIPLIER,
+        compute_physical_carrier_peak_concurrency,
+    )
 
     missions_by_stream, _fallback = _general_mrt_missions_and_containers(baseline, mrt_ward_coverage=None)
     windows = tuple(
         build_general_mission_window(m, stream=s, day_start=DAY_START, priority="ROUTINE")
         for s, ms in missions_by_stream.items() for m in ms
     )
-    # A fixed installed fleet is modeled as `installed_carriers` parallel
-    # single-resource segments (never silently expanded) -- missions are
-    # bucketed round-robin across carriers, each carrier scheduled
-    # independently via the existing non-preemptive scheduler.
-    buckets: list[list] = [[] for _ in range(max(1, installed_carriers))]
-    for i, w in enumerate(sorted(windows, key=lambda w: w.start_minutes)):
-        buckets[i % len(buckets)].append(w)
+
+    return_leg_multiplier = PHYSICAL_CARRIER_RETURN_LEG_MULTIPLIER
+    # The physical peak concurrency is the fleet size at/above which no mission
+    # is delayed by carrier unavailability -- the SAME authority used for sizing.
+    physical_peak = compute_physical_carrier_peak_concurrency(
+        windows, return_leg_multiplier=return_leg_multiplier
+    )
+
+    # Multi-server queue: each carrier's next-free time advances by the FULL
+    # physical occupation interval (loaded-outbound + empty-return). A mission
+    # is assigned to the earliest-available carrier; if all carriers are busy
+    # when it is due, it waits (queuing delay).
+    fleet_size = max(1, installed_carriers)
+    carrier_free_at = [float("-inf")] * fleet_size
     on_time = late = unmet = 0
     max_wait = 0.0
-    for bucket in buckets:
-        if not bucket:
-            continue
-        scheduled = schedule_missions_on_shared_segment(tuple(bucket), segment=MrtNetworkSegment(
-            segment_id="MRT-TRUNK-CONSTRAINED", start_node="A", end_node="B", length_m=0.0, orientation="MIXED", minimum_headway_minutes=1.0,
-        ))
-        for s in scheduled:
-            max_wait = max(max_wait, s.wait_minutes)
-            if s.wait_minutes > 60.0:
-                unmet += 1
-            elif s.wait_minutes > 15.0:
-                late += 1
-            else:
-                on_time += 1
+    for w in sorted(windows, key=lambda w: w.start_minutes):
+        earliest_idx = min(range(fleet_size), key=lambda i: carrier_free_at[i])
+        dispatch = max(w.start_minutes, carrier_free_at[earliest_idx])
+        wait = dispatch - w.start_minutes
+        # Full physical occupation: loaded-outbound leg + empty-return/recovery leg.
+        occupation = w.duration_minutes * (1.0 + return_leg_multiplier)
+        carrier_free_at[earliest_idx] = dispatch + occupation
+        max_wait = max(max_wait, wait)
+        if wait > 60.0:
+            unmet += 1
+        elif wait > 15.0:
+            late += 1
+        else:
+            on_time += 1
+
     return CarrierShortageOutcome(
-        installed_carriers=installed_carriers, total_missions=len(windows), on_time=on_time, late=late, unmet=unmet, max_wait_minutes=max_wait,
+        installed_carriers=installed_carriers,
+        total_missions=len(windows),
+        on_time=on_time,
+        late=late,
+        unmet=unmet,
+        max_wait_minutes=max_wait,
+        physical_peak_carrier_concurrency=physical_peak,
     )
 
 

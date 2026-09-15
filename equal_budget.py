@@ -51,6 +51,18 @@ class PathwayBudgetResult:
     # infeasible -- the budget/clinical model may be valid; production is unverified).
     production_capacity_status: str = "not_calibrated"
     production_feasibility_qualified: bool = False
+    # Pre-AWS adjudication (Target B): physical activity fields carried on this result so the
+    # PathwayBudgetResult -> MultiBatchPathwayResult conversion can propagate ONE coherent
+    # calibration story to the API. `cyclotron_activity_capacity_status` mirrors the
+    # `_resolve_physical_eob_capacity_mbq_per_day` status verbatim (e.g.
+    # "input_current_cyclotron_eob_capacity_mbq_per_day"/"schedule_derived_capacity"/
+    # "not_calibrated"). Installed capacity is 0.0 ONLY as an "unknown" sentinel when
+    # uncalibrated (never a calibrated zero). Required EOB activity is the requirement-derived
+    # value; it is reported even when installed capacity is unknown.
+    cyclotron_activity_capacity_status: str = "not_calibrated"
+    cyclotron_activity_capacity_mbq_per_day: float = 0.0
+    activity_required_at_eob_mbq_per_day: float = 0.0
+    cyclotron_utilization_pct: float = 0.0
     # Build 3A.2: candidate identity separates SEARCH PATHWAY (`pathway`) from the
     # SELECTED PHYSICAL CANDIDATE identity. An MRT investment search may legitimately
     # conclude no MRT investment is needed (backbone_charged=False) -> NO_BUILD_BASELINE.
@@ -325,8 +337,14 @@ def _conventional_transport_min(inputs: PlannerInputs) -> float:
 
 
 def _conventional_baseline_capacity(inputs: PlannerInputs, assumptions: PlannerAssumptions, half_life_min: float) -> float:
+    # Build 3B note: `current_usable_doses_per_day` here is the site's OBSERVED CURRENT
+    # usable-dose throughput baseline (a measured operational quantity), used only as the
+    # reference point for `increase_above_current_capacity_per_day`. It is NOT a fabricated
+    # forward physical-production capacity and carries NO 10% dose-count block inflation
+    # (that prohibited model is removed). It never substitutes for physical EOB capacity in
+    # any feasibility, optimization, or CapEx decision.
     retained = retention(_conventional_transport_min(inputs), half_life_min)
-    production_cap = inputs.current_usable_doses_per_day * retained
+    current_observed_baseline_throughput = inputs.current_usable_doses_per_day * retained
     scanner_cap = scanner_capacity(
         inputs.current_scanners,
         assumptions.operating_hours_per_day,
@@ -343,7 +361,7 @@ def _conventional_baseline_capacity(inputs: PlannerInputs, assumptions: PlannerA
         assumptions.operating_hours_per_day,
         assumptions.uptake_cycle_min,
     )
-    return min(scanner_cap, injection_cap, uptake_cap, production_cap)
+    return min(scanner_cap, injection_cap, uptake_cap, current_observed_baseline_throughput)
 
 
 def _safe_gain_per_million(increase: float, capex_used: float) -> float:
@@ -580,32 +598,13 @@ def _synthesis_retention_fraction(assumptions: PlannerAssumptions, half_life_min
     return retention(synthesis_min, half_life_min)
 
 
-def _cyclotron_eob_capacity_mbq_per_day(
-    *,
-    inputs: PlannerInputs,
-    assumptions: PlannerAssumptions,
-    gross_release_doses_per_day_capacity: float,
-    synthesis_retention_fraction: float,
-    synthesis_yield_fraction: float,
-    production_block_multiplier: float,
-) -> tuple[float, str]:
-    multiplier = max(1.0, production_block_multiplier)
-
-    if inputs.current_cyclotron_eob_capacity_mbq_per_day is not None:
-        base = float(inputs.current_cyclotron_eob_capacity_mbq_per_day)
-        return (
-            base * multiplier,
-            "input_current_cyclotron_eob_capacity_mbq_per_day",
-        )
-
-    if assumptions.cyclotron_eob_capacity_mbq_per_day is not None:
-        base = float(assumptions.cyclotron_eob_capacity_mbq_per_day)
-        return (
-            base * multiplier,
-            "assumption_cyclotron_eob_capacity_mbq_per_day",
-        )
-
-    return 0.0, "not_calibrated"
+# Build 3B: the former `_cyclotron_eob_capacity_mbq_per_day(..., production_block_multiplier)`
+# helper was REMOVED. It inflated calibrated physical EOB capacity by a legacy 10%
+# dose-count "production block" multiplier (`base * (1 + blocks*0.1)`), which violates the
+# four-quantity production doctrine (dose counts and production blocks are NOT physical MBq
+# capacity). Physical EOB capacity is now resolved verbatim by
+# `_resolve_physical_eob_capacity_mbq_per_day` -- installed capacity is used exactly as
+# calibrated, and stays NOT_CALIBRATED (never fabricated) otherwise.
 
 
 def _selected_radionuclide(inputs: PlannerInputs) -> str:
@@ -850,6 +849,24 @@ def maximize_conventional_capacity(
     prod_cap_status = eob_status
     prod_feasibility_qualified = use_physical_capacity and not math.isinf(raw_prod_cap)
 
+    # Pre-AWS adjudication (Target B): compute coherent physical-activity fields so the API
+    # never contradicts itself. Required EOB activity is ALWAYS computed (governing chain);
+    # installed capacity + status reflect the SINGLE `_resolve_physical_eob_capacity_mbq_per_day`
+    # verdict -- calibrated -> actual physical value + its status; uncalibrated -> 0.0 sentinel
+    # (unknown, not a calibrated zero) + "not_calibrated".
+    activity_required_at_admin = achieved * prescribed_activity_mbq
+    admin_retention = retention(_conventional_transport_min(inputs) + assumptions.common_administration_wait_min, half_life_min)
+    activity_required_at_release = activity_required_at_admin / max(admin_retention, 1e-12)
+    activity_required_at_eob = activity_required_at_release / synthesis_factor
+    if use_physical_capacity:
+        installed_eob = float(physical_eob_capacity_mbq_per_day)
+        capacity_status_field = eob_status
+        utilization = 0.0 if installed_eob <= 0.0 else 100.0 * activity_required_at_eob / installed_eob
+    else:
+        installed_eob = 0.0
+        capacity_status_field = "not_calibrated"
+        utilization = 0.0
+
     capex_ledger = [
         _ledger_item(
             "Additional scanners",
@@ -917,6 +934,10 @@ def maximize_conventional_capacity(
         capex_ledger=capex_ledger,
         production_capacity_status=prod_cap_status,
         production_feasibility_qualified=prod_feasibility_qualified,
+        cyclotron_activity_capacity_status=capacity_status_field,
+        cyclotron_activity_capacity_mbq_per_day=installed_eob,
+        activity_required_at_eob_mbq_per_day=activity_required_at_eob,
+        cyclotron_utilization_pct=utilization,
         # Build 3A.2: legacy conventional identity; transport basis actually used.
         candidate_identity="GENERIC_LEGACY_CONVENTIONAL",
         transport_minutes_basis=_conventional_transport_min(inputs),
@@ -1112,6 +1133,21 @@ def maximize_mrt_capacity(
     prod_cap_status = eob_status
     prod_feasibility_qualified = use_physical_capacity and not math.isinf(raw_prod_cap)
 
+    # Pre-AWS adjudication (Target B): coherent physical-activity fields (see conventional path).
+    _mrt_transport_basis = float(best_payload["transport_min"])
+    activity_required_at_admin = achieved * prescribed_activity_mbq
+    admin_retention = retention(_mrt_transport_basis + assumptions.common_administration_wait_min, half_life_min)
+    activity_required_at_release = activity_required_at_admin / max(admin_retention, 1e-12)
+    activity_required_at_eob = activity_required_at_release / synthesis_factor
+    if use_physical_capacity:
+        installed_eob = float(physical_eob_capacity_mbq_per_day)
+        capacity_status_field = eob_status
+        utilization = 0.0 if installed_eob <= 0.0 else 100.0 * activity_required_at_eob / installed_eob
+    else:
+        installed_eob = 0.0
+        capacity_status_field = "not_calibrated"
+        utilization = 0.0
+
     capex_ledger = [
         _ledger_item(
             "MRT base infrastructure",
@@ -1191,6 +1227,10 @@ def maximize_mrt_capacity(
         capex_ledger=capex_ledger,
         production_capacity_status=prod_cap_status,
         production_feasibility_qualified=prod_feasibility_qualified,
+        cyclotron_activity_capacity_status=capacity_status_field,
+        cyclotron_activity_capacity_mbq_per_day=installed_eob,
+        activity_required_at_eob_mbq_per_day=activity_required_at_eob,
+        cyclotron_utilization_pct=utilization,
         # Build 3A.2 (D-I1): an MRT investment search that selects a zero-backbone
         # winner did NOT build MRT -> NO_BUILD_BASELINE. A backbone-charged winner is
         # a genuine GENERIC_LEGACY_MRT candidate.
@@ -1311,6 +1351,12 @@ def evaluate_equal_budget_multibatch_pathway(
         binding_constraint_calibration="engineering_assumption",
         production_capacity_status=base.production_capacity_status,
         production_feasibility_qualified=base.production_feasibility_qualified,
+        # Pre-AWS adjudication (Target B): propagate the coherent physical-activity fields so
+        # the API's cyclotron_capacity_status can no longer contradict production_capacity_status.
+        cyclotron_activity_capacity_status=base.cyclotron_activity_capacity_status,
+        cyclotron_activity_capacity_mbq_per_day=base.cyclotron_activity_capacity_mbq_per_day,
+        activity_required_at_eob_mbq_per_day=base.activity_required_at_eob_mbq_per_day,
+        cyclotron_utilization_pct=base.cyclotron_utilization_pct,
         candidate_identity=base.candidate_identity,
     )
 
@@ -1453,6 +1499,90 @@ def _score_components(
     }
 
 
+# ---------------------------------------------------------------------------
+# UNCALIBRATED PRODUCTION: decay-optimal release-level search (Pre-AWS adjudication)
+# ---------------------------------------------------------------------------
+# SEMANTICS (adjudicated): when physical EOB capacity is NOT calibrated, production is
+# treated as NON-LIMITING. Even so, the number of patients actually completed is bounded by
+# radioactive DECAY over the intra-day administration window, not just by clinical resource
+# counts: doses produced at each batch release decay while the cohort waits for
+# scanner/room/guideway service. An operator with unlimited production therefore operates at
+# the RELEASE LEVEL that maximizes decay-limited completions -- producing too little starves
+# the window, producing too much makes each batch huge, pushing mean administration wait (and
+# thus decay) up until surviving usable doses fall (verified: the batch model is genuinely
+# non-monotonic in gross). This function finds that decay-optimal release level, expressed as
+# a dimensionless RATIO of gross release doses to the clinical service ceiling.
+#
+# WHAT THIS RATIO IS: a numerical operating-point for the batch/decay simulation only.
+# WHAT IT IS NOT: it is NOT installed MBq/day capacity; it does NOT come from
+# current_usable_doses_per_day; it does NOT use 10% production blocks; it does NOT set
+# cyclotron_activity_capacity_status (stays NOT_CALIBRATED); it charges NO production-block
+# CapEx; it grants NO production feasibility; it is unreachable from the calibrated branch;
+# and it cannot alter calibrated physical EOB capacity. It only lets the decay-limited
+# clinical throughput be evaluated when installed production is unknown.
+#
+# The optimal ratio depends solely on the intra-day decay dynamics (batches/transport/
+# half-life + clinical cycle/availability), is scale-invariant in the clinical ceiling
+# (verified: identical optimum across scanner/room scales), and is memoized per decay key so
+# the hot enumeration path evaluates it once, not per candidate.
+_UNCALIBRATED_GROSS_MULTIPLIER_CACHE: dict[tuple, float] = {}
+_UNCALIBRATED_GROSS_MULTIPLIER_GRID = (0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 3.5, 4.0)
+
+
+def _uncalibrated_production_gross_multiplier(
+    *,
+    day_minutes: float,
+    batches_per_day: int,
+    transport_minutes: float,
+    half_life_min: float,
+    clinical_service_ceiling: float,
+    scanners_total: int,
+    injection_rooms_total: int,
+    uptake_rooms_total: int,
+    guideway_cap: float,
+    assumptions: PlannerAssumptions,
+) -> float:
+    """Return the decay-optimal gross-release-to-clinical-ceiling RATIO under non-limiting
+    (uncalibrated) production. A pure numerical operating-point for the batch/decay model --
+    NOT a physical capacity. Memoized per decay key; ascends the grid and stops when realized
+    throughput drops (plateau passed / over-decay onset)."""
+    key = (
+        int(batches_per_day),
+        round(float(transport_minutes), 6),
+        round(float(half_life_min), 6),
+        round(float(assumptions.operating_hours_per_day), 6),
+        round(float(assumptions.scanner_cycle_min), 6),
+        round(float(assumptions.injection_cycle_min), 6),
+        round(float(assumptions.uptake_cycle_min), 6),
+        round(float(assumptions.scanner_availability_pct), 6),
+    )
+    cached = _UNCALIBRATED_GROSS_MULTIPLIER_CACHE.get(key)
+    if cached is not None:
+        return cached
+    best_mult = 1.0
+    best_realized = -1.0
+    for gross_multiplier in _UNCALIBRATED_GROSS_MULTIPLIER_GRID:
+        realized = _time_cohort_throughput(
+            day_minutes=day_minutes,
+            batches_per_day=batches_per_day,
+            transport_minutes=transport_minutes,
+            half_life_min=half_life_min,
+            gross_doses_per_day=clinical_service_ceiling * gross_multiplier,
+            scanners_total=scanners_total,
+            injection_rooms_total=injection_rooms_total,
+            uptake_rooms_total=uptake_rooms_total,
+            guideway_cap=guideway_cap,
+            assumptions=assumptions,
+        )[0]
+        if realized > best_realized + 1e-9:
+            best_realized = realized
+            best_mult = gross_multiplier
+        elif realized < best_realized - 1e-9:
+            break
+    _UNCALIBRATED_GROSS_MULTIPLIER_CACHE[key] = best_mult
+    return best_mult
+
+
 def _build_mrt_economic_candidate(
     inputs: PlannerInputs,
     assumptions: PlannerAssumptions,
@@ -1481,11 +1611,6 @@ def _build_mrt_economic_candidate(
     )
     capacity_is_calibrated = available_eob_capacity is not None
 
-    if capacity_is_calibrated:
-        gross_production_per_day = float(available_eob_capacity) * synthesis_factor / max(prescribed_activity_mbq, 1e-12)
-    else:
-        gross_production_per_day = inputs.current_usable_doses_per_day * (1.0 + production_blocks * 0.1)
-
     scanner_cap = scanner_capacity(
         inputs.current_scanners + add_scanners,
         assumptions.operating_hours_per_day,
@@ -1495,11 +1620,75 @@ def _build_mrt_economic_candidate(
     total_injection_rooms = inputs.current_injection_rooms + connected_rooms
     total_uptake_rooms = inputs.current_uptake_rooms + connected_rooms
     guideway_cap = endpoints * (8.0 + 2.0 * infra_units) if backbone_selected else float("inf")
+
     useful_service_window = max(0.0, assumptions.operating_hours_per_day * 60.0 / batches_per_day - transport_minutes)
     if useful_service_window <= 0.0:
         return None
 
     day_minutes = assumptions.operating_hours_per_day * 60.0
+
+    if capacity_is_calibrated:
+        # Physical EOB capacity is calibrated: invert the radioactive-production chain.
+        # gross dose-equivalent throughput = A_EOB_installed * synthesis_factor / A_per_patient.
+        gross_production_per_day = float(available_eob_capacity) * synthesis_factor / max(prescribed_activity_mbq, 1e-12)
+        throughput_bundle = _time_cohort_throughput(
+            day_minutes=day_minutes,
+            batches_per_day=batches_per_day,
+            transport_minutes=transport_minutes,
+            half_life_min=half_life_min,
+            gross_doses_per_day=gross_production_per_day,
+            scanners_total=inputs.current_scanners + add_scanners,
+            injection_rooms_total=total_injection_rooms,
+            uptake_rooms_total=total_uptake_rooms,
+            guideway_cap=guideway_cap,
+            assumptions=assumptions,
+        )
+    else:
+        # Build 3B (Pre-AWS adjudication): physical EOB capacity is NOT calibrated, so installed
+        # production capacity is UNKNOWN and stays NOT_CALIBRATED (never fabricated from dose
+        # counts / 10% blocks). Production is treated as NON-LIMITING: completions are bounded
+        # by clinical resources AND unavoidable intra-day radioactive decay. The decay-limited
+        # throughput requires the batch simulator to be run at the decay-OPTIMAL release level
+        # (see `_uncalibrated_production_gross_multiplier` -- a dimensionless decay-physics
+        # operating-point, proven NOT to be a capacity authority: it never sets installed
+        # capacity/status, charges no CapEx, grants no feasibility, and ignores
+        # current_usable_doses_per_day). Required EOB activity IS still computed and reported
+        # below. This preserves the genuine batch-timing "temporal advantage" (splitting
+        # production over the day reduces per-batch decay) without any physical-capacity claim.
+        clinical_service_ceiling = min(
+            scanner_cap,
+            room_capacity(total_injection_rooms, assumptions.operating_hours_per_day, assumptions.injection_cycle_min),
+            room_capacity(total_uptake_rooms, assumptions.operating_hours_per_day, assumptions.uptake_cycle_min),
+            guideway_cap,
+        )
+        if not math.isfinite(clinical_service_ceiling) or clinical_service_ceiling <= 0.0:
+            clinical_service_ceiling = scanner_cap
+        gross_multiplier = _uncalibrated_production_gross_multiplier(
+            day_minutes=day_minutes,
+            batches_per_day=batches_per_day,
+            transport_minutes=transport_minutes,
+            half_life_min=half_life_min,
+            clinical_service_ceiling=clinical_service_ceiling,
+            scanners_total=inputs.current_scanners + add_scanners,
+            injection_rooms_total=total_injection_rooms,
+            uptake_rooms_total=total_uptake_rooms,
+            guideway_cap=guideway_cap,
+            assumptions=assumptions,
+        )
+        gross_production_per_day = clinical_service_ceiling * gross_multiplier
+        throughput_bundle = _time_cohort_throughput(
+            day_minutes=day_minutes,
+            batches_per_day=batches_per_day,
+            transport_minutes=transport_minutes,
+            half_life_min=half_life_min,
+            gross_doses_per_day=gross_production_per_day,
+            scanners_total=inputs.current_scanners + add_scanners,
+            injection_rooms_total=total_injection_rooms,
+            uptake_rooms_total=total_uptake_rooms,
+            guideway_cap=guideway_cap,
+            assumptions=assumptions,
+        )
+
     (
         achieved,
         usable_doses_total,
@@ -1514,20 +1703,22 @@ def _build_mrt_economic_candidate(
         per_batch_queue_wait_minutes,
         per_batch_transport_minutes,
         binding_constraint,
-    ) = _time_cohort_throughput(
-        day_minutes=day_minutes,
-        batches_per_day=batches_per_day,
-        transport_minutes=transport_minutes,
-        half_life_min=half_life_min,
-        gross_doses_per_day=gross_production_per_day,
-        scanners_total=inputs.current_scanners + add_scanners,
-        injection_rooms_total=total_injection_rooms,
-        uptake_rooms_total=total_uptake_rooms,
-        guideway_cap=guideway_cap,
-        assumptions=assumptions,
-    )
+    ) = throughput_bundle
 
     achieved = min(achieved, scanner_cap, injection_cap, uptake_cap, guideway_cap)
+    if not capacity_is_calibrated and "dose_availability" in binding_constraint.split("/"):
+        # Build 3B: with uncalibrated production, dose availability is a synthetic
+        # non-limiting sentinel, never a physical binding constraint. Re-resolve the
+        # binding label against physical clinical resources only.
+        binding_constraint = _binding_constraint_name(
+            {
+                "scanner": scanner_cap,
+                "injection_rooms": injection_cap,
+                "uptake_rooms": uptake_cap,
+                "guideway_network": guideway_cap,
+            },
+            achieved,
+        )
     administration_retention = 0.0 if gross_production_per_day <= 0.0 else usable_doses_total / gross_production_per_day
     effective_retained = administration_retention
     gross_required_doses_per_day_admin = 0.0 if administration_retention <= 0.0 else achieved / administration_retention
@@ -1606,7 +1797,9 @@ def _build_mrt_economic_candidate(
         total_annual_modelled_opex=total_annual_opex,
         annual_revenue=annual_revenue,
         retained_activity_pct=effective_retained * 100.0,
-        production_expansion_pct=float(production_blocks * 10.0),
+        # Build 3B: production-expansion % is a calibrated-capacity concept only. When
+        # capacity is NOT calibrated there is no physical production upgrade to report.
+        production_expansion_pct=float(production_blocks * 10.0) if capacity_is_calibrated else 0.0,
         production_expansion_capex_charged=charged_production_blocks > 0,
         gross_required_doses_per_day=gross_required_doses_per_day_admin,
         gross_required_doses_per_batch=gross_required_doses_per_batch_admin,
@@ -1667,16 +1860,21 @@ def _build_mrt_economic_candidate(
         synthesis_yield_fraction=synthesis_yield,
         synthesis_processing_time_min=max(0.0, assumptions.synthesis_processing_time_min),
         synthesis_retention_fraction=synthesis_retention,
-        cyclotron_activity_capacity_mbq_per_day=available_eob_capacity,
+        cyclotron_activity_capacity_mbq_per_day=(float(available_eob_capacity) if capacity_is_calibrated else 0.0),
         cyclotron_activity_capacity_status=cyclotron_capacity_status,
         cyclotron_utilization_pct=cyclotron_utilization_pct,
         cyclotron_headroom_mbq_per_day=cyclotron_headroom_mbq,
         production_upgrade_required=production_upgrade_required,
+        # Build 3B: the legacy 10%-block dose-count capacity model is REMOVED from this
+        # authoritative path. When capacity is uncalibrated the honest status is that no
+        # physical production capacity is known -- never a fabricated legacy ceiling.
         legacy_production_capacity_assumption_status=(
-            "legacy_10pct_throughput_blocks_capacity_not_calibrated"
+            "physical_production_capacity_not_calibrated"
             if cyclotron_capacity_status == "not_calibrated"
             else "explicit_cyclotron_activity_capacity"
         ),
+        production_capacity_status=("calibrated" if capacity_is_calibrated else "not_calibrated"),
+        production_feasibility_qualified=capacity_is_calibrated,
         usable_doses_per_day=usable_doses_total,
         batch_release_times_minutes=release_times_minutes,
         per_batch_mean_administration_wait_minutes=per_batch_mean_wait_minutes,
@@ -1929,27 +2127,18 @@ def _mrt_production_block_bound(
     common_budget: float,
     batches_per_day: int,
 ) -> int:
-    available_eob_capacity, _ = _resolve_physical_eob_capacity_mbq_per_day(
+    # Build 3B (Section 3-7): the legacy 10% dose-count production-block model is REMOVED
+    # from this authoritative economic-candidate engine. Physical production capacity is
+    # authoritative only when calibrated (and is then consumed directly as installed MBq
+    # capacity -- never expanded by synthetic blocks), and is NOT_CALIBRATED otherwise
+    # (never fabricated from `current_usable_doses_per_day`). In both cases there are zero
+    # synthetic production blocks to enumerate.
+    _ = _resolve_physical_eob_capacity_mbq_per_day(
         inputs=inputs,
         assumptions=assumptions,
         batches_per_day=batches_per_day,
     )
-    if available_eob_capacity is not None:
-        # Physical capacity is explicit; legacy production blocks are compatibility-only.
-        return 0
-
-    useful_throughput = max(inputs.target_patients_per_day, inputs.maximum_expected_demand_per_day)
-    useful_throughput = max(useful_throughput, 1.0)
-    # `current_usable_doses_per_day` is treated as the usable-dose baseline for
-    # expansion blocks, so bound growth directly to useful throughput demand.
-    required_usable_doses = useful_throughput
-    if inputs.current_usable_doses_per_day <= 0.0:
-        max_prod_blocks = 0
-    else:
-        required_growth = max(0.0, required_usable_doses / inputs.current_usable_doses_per_day - 1.0)
-        max_prod_blocks = math.ceil(required_growth / 0.1)
-    budget_limited_prod_blocks = int(common_budget // max(assumptions.production_expansion_capex_per_10pct, 1e-9))
-    return min(max_prod_blocks, budget_limited_prod_blocks)
+    return 0
 
 
 def _enumerate_mrt_candidates(
@@ -2019,42 +2208,40 @@ def _enumerate_mrt_candidates(
                                 and uptake_cap_total >= uptake_cap_prev
                             ):
                                 continue
-                        max_prod_blocks = _mrt_production_block_bound(
+                        # Build 3B: legacy 10% dose-count production blocks are retired.
+                        # `_mrt_production_block_bound` now always returns 0, so there is a
+                        # single production configuration (no synthetic blocks). Physical
+                        # capacity, when calibrated, is consumed directly by
+                        # `_build_mrt_economic_candidate`; when uncalibrated it stays
+                        # NOT_CALIBRATED and production is non-limiting.
+                        _ = _mrt_production_block_bound(
                             inputs,
                             assumptions,
                             half_life_min,
                             common_budget,
                             batches_per_day,
                         )
-                        for production_blocks in range(0, max_prod_blocks + 1):
-                            retained = retention(transport_minutes, half_life_min)
-                            gross_capacity = inputs.current_usable_doses_per_day * (1.0 + production_blocks * 0.1)
-                            usable_capacity = gross_capacity * retained
-                            if production_blocks > 0:
-                                prev_gross_capacity = inputs.current_usable_doses_per_day * (1.0 + (production_blocks - 1) * 0.1)
-                                prev_usable_capacity = prev_gross_capacity * retained
-                                if prev_usable_capacity >= inputs.maximum_expected_demand_per_day and usable_capacity >= prev_usable_capacity:
-                                    continue
-                            for infra_units in range(1, 5):
-                                guideway_segments = infra_units + max(1, connected_rooms // 4)
-                                endpoints = 2 + connected_rooms
-                                candidate = _build_mrt_economic_candidate(
-                                    inputs,
-                                    assumptions,
-                                    half_life_min,
-                                    common_budget,
-                                    batches_per_day,
-                                    True,
-                                    transport_minutes,
-                                    add_scanners,
-                                    connected_rooms,
-                                    guideway_segments,
-                                    endpoints,
-                                    production_blocks,
-                                    infra_units,
-                                )
-                                if candidate is not None:
-                                    mrt_candidates.append(candidate)
+                        production_blocks = 0
+                        for infra_units in range(1, 5):
+                            guideway_segments = infra_units + max(1, connected_rooms // 4)
+                            endpoints = 2 + connected_rooms
+                            candidate = _build_mrt_economic_candidate(
+                                inputs,
+                                assumptions,
+                                half_life_min,
+                                common_budget,
+                                batches_per_day,
+                                True,
+                                transport_minutes,
+                                add_scanners,
+                                connected_rooms,
+                                guideway_segments,
+                                endpoints,
+                                production_blocks,
+                                infra_units,
+                            )
+                            if candidate is not None:
+                                mrt_candidates.append(candidate)
             else:
                 candidate = _build_mrt_economic_candidate(
                     inputs,
@@ -2576,9 +2763,6 @@ def _conventional_reference_summary(
         admin_retention = max(float(timing["transport_only_retention_fraction"]), 1e-12)
     activity_required_at_release = activity_required_at_admin / max(admin_retention, 1e-12)
     activity_required_at_eob = activity_required_at_release / synthesis_factor
-    production_blocks = 0
-    if isinstance(reference.ledger, dict):
-        production_blocks = int(reference.ledger.get("production_expansion_blocks_10pct", 0))
     estimated_batches = max(1, int(math.ceil(max(reference.required_production_increase_pct, 0.0) / 10.0)))
     resolved_eob_capacity, cyclotron_capacity_status = _resolve_physical_eob_capacity_mbq_per_day(
         inputs=inputs,
@@ -2587,31 +2771,18 @@ def _conventional_reference_summary(
     )
 
     if resolved_eob_capacity is not None:
+        # Physical EOB capacity is calibrated: use exactly the installed physical capacity.
+        # It is NEVER inflated by 10% dose-count production blocks.
         available_eob_capacity = float(resolved_eob_capacity)
         baseline_eob_capacity = float(resolved_eob_capacity)
     else:
-        gross_release_capacity = 0.0
-        if isinstance(reference.ledger, dict):
-            gross_release_capacity = float(reference.ledger.get("expanded_gross_production_capacity_per_day", 0.0))
-        if gross_release_capacity <= 0.0:
-            gross_release_capacity = inputs.current_usable_doses_per_day * (1.0 + 0.1 * production_blocks)
-
-        available_eob_capacity, cyclotron_capacity_status = _cyclotron_eob_capacity_mbq_per_day(
-            inputs=inputs,
-            assumptions=assumptions,
-            gross_release_doses_per_day_capacity=gross_release_capacity,
-            synthesis_retention_fraction=synthesis_retention,
-            synthesis_yield_fraction=synthesis_yield,
-            production_block_multiplier=1.0 + 0.1 * production_blocks,
-        )
-        baseline_eob_capacity, _ = _cyclotron_eob_capacity_mbq_per_day(
-            inputs=inputs,
-            assumptions=assumptions,
-            gross_release_doses_per_day_capacity=inputs.current_usable_doses_per_day,
-            synthesis_retention_fraction=synthesis_retention,
-            synthesis_yield_fraction=synthesis_yield,
-            production_block_multiplier=1.0,
-        )
+        # Build 3B (Section 4): physical EOB capacity is NOT calibrated. Do NOT fabricate a
+        # capacity from `current_usable_doses_per_day`, do NOT apply a 10% block multiplier,
+        # and do NOT synthesize a baseline. Unknown capacity remains unknown; A_EOB_required
+        # is still calculated (above) and reported, but no A_EOB_installed is invented.
+        available_eob_capacity = 0.0
+        baseline_eob_capacity = 0.0
+        cyclotron_capacity_status = "not_calibrated"
 
     capacity_is_calibrated = cyclotron_capacity_status != "not_calibrated"
     cyclotron_utilization_pct = 0.0 if (not capacity_is_calibrated or available_eob_capacity <= 0.0) else 100.0 * activity_required_at_eob / available_eob_capacity

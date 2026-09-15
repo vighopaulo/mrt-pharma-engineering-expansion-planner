@@ -387,7 +387,20 @@ def compute_peak_concurrency(windows: tuple[MrtMissionWindow, ...]) -> int:
     return peak
 
 
-def compute_physical_carrier_peak_concurrency(windows: tuple[MrtMissionWindow, ...], *, return_leg_multiplier: float = 1.0) -> int:
+# Section 40/12 (ONE carrier-concurrency authority): the disclosed symmetric-transit
+# empty-return assumption used for BOTH fleet sizing and carrier-shortage evaluation.
+# `1.0` means the empty-return/recovery leg is assumed to take the same time as the
+# loaded-outbound leg (no separate empty-carrier speed/route model exists in this
+# repository). Fleet sizing (`compute_heterogeneous_shared_carrier_fleet`) and the
+# operational-only shortage evaluator
+# (`whole_oncology_four_architecture_optimization.evaluate_mrt_dominant_operational_only_carrier_shortage`)
+# MUST share this single value so the two never diverge into independent approximations.
+PHYSICAL_CARRIER_RETURN_LEG_MULTIPLIER: float = 1.0
+
+
+def compute_physical_carrier_peak_concurrency(
+    windows: tuple[MrtMissionWindow, ...], *, return_leg_multiplier: float = PHYSICAL_CARRIER_RETURN_LEG_MULTIPLIER
+) -> int:
     """Section 40 (Build 2R correction round): the CORRECTED, physically
     honest fleet-sizing concurrency. `compute_peak_concurrency` sweeps only
     the one-way loaded-outbound window (dispatch -> delivery); it silently
@@ -515,7 +528,8 @@ def compute_heterogeneous_shared_carrier_fleet(
     the instant it delivers."""
     from operational_day_orchestrator import compute_carrier_fleet_capex  # lazy: avoids circular import (see module header note)
 
-    return_leg_multiplier = 1.0
+    # Section 12: sizing and shortage evaluation share ONE physical-occupancy value.
+    return_leg_multiplier = PHYSICAL_CARRIER_RETURN_LEG_MULTIPLIER
     nuclear_outbound_only_peak = compute_peak_concurrency(nuclear_windows)
     general_outbound_only_peak = compute_peak_concurrency(general_windows)
     nuclear_peak = compute_physical_carrier_peak_concurrency(nuclear_windows, return_leg_multiplier=return_leg_multiplier)

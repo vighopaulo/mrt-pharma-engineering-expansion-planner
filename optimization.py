@@ -53,6 +53,37 @@ def _conventional_transport_min(inputs: PlannerInputs) -> float:
     return inputs.conventional_transport_min if inputs.conventional_transport_min is not None else inputs.current_average_transport_min
 
 
+def _resolve_physical_eob_capacity_mbq_per_day(
+    inputs: PlannerInputs,
+    assumptions: PlannerAssumptions,
+) -> float | None:
+    """Return the installed physical EOB activity capacity (MBq/day) or None.
+
+    Build 3B: physical radioactive-production capacity is authoritative ONLY when it comes
+    from an explicit/calibrated physical EOB capacity field. It is NEVER derived from
+    `current_usable_doses_per_day` or 10% dose-count production blocks. When no calibrated
+    physical capacity exists this returns None (NOT_CALIBRATED) and production must be
+    treated as non-limiting rather than fabricated.
+    """
+    if inputs.current_cyclotron_eob_capacity_mbq_per_day is not None:
+        return float(inputs.current_cyclotron_eob_capacity_mbq_per_day)
+    if assumptions.cyclotron_eob_capacity_mbq_per_day is not None:
+        return float(assumptions.cyclotron_eob_capacity_mbq_per_day)
+    return None
+
+
+def _physical_production_capacity_patients_per_day(
+    eob_capacity_mbq_per_day: float,
+    assumptions: PlannerAssumptions,
+    retained: float,
+) -> float:
+    """Invert the radioactive-production chain: installed EOB activity -> dose-equivalent
+    patient throughput at destination. Mirrors equal_budget's calibrated branch."""
+    synthesis_factor = max(assumptions.synthesis_yield_fraction, 1e-12)
+    prescribed = max(assumptions.prescribed_activity_mbq_per_patient, 1e-12)
+    return eob_capacity_mbq_per_day * synthesis_factor / prescribed * retained
+
+
 def _base_day_capacities(
     scanners: int,
     injection_rooms: int,
@@ -153,10 +184,27 @@ def conventional(inputs: PlannerInputs, assumptions: PlannerAssumptions, half_li
         (required_gross_doses_per_day / max(1.0, inputs.current_usable_doses_per_day) - 1.0) * 100.0,
     )
 
-    cyclotron_required = (not inputs.has_existing_cyclotron) and additional_doses_per_day > 0
-    production_expansion_blocks = math.ceil(production_increase_pct / 10.0)
-    expanded_gross_production_capacity = inputs.current_usable_doses_per_day * (1.0 + production_expansion_blocks * 0.1)
-    expanded_usable_capacity_at_destination = expanded_gross_production_capacity * retained
+    # Build 3B: physical production capacity is authoritative ONLY when calibrated.
+    # The legacy `current_usable_doses_per_day * (1 + blocks*0.1)` dose-count model is
+    # removed. When uncalibrated, production is NON-LIMITING (never fabricated) and no
+    # production-block / cyclotron CapEx is charged.
+    physical_eob_capacity = _resolve_physical_eob_capacity_mbq_per_day(inputs, assumptions)
+    capacity_is_calibrated = physical_eob_capacity is not None
+    if capacity_is_calibrated:
+        production_expansion_blocks = math.ceil(production_increase_pct / 10.0)
+        expanded_usable_capacity_at_destination = _physical_production_capacity_patients_per_day(
+            float(physical_eob_capacity), assumptions, retained
+        )
+        cyclotron_required = (not inputs.has_existing_cyclotron) and additional_doses_per_day > 0
+    else:
+        production_expansion_blocks = 0
+        expanded_usable_capacity_at_destination = float("inf")
+        cyclotron_required = False
+    expanded_gross_production_capacity = (
+        expanded_usable_capacity_at_destination / max(retained, 1e-12)
+        if math.isfinite(expanded_usable_capacity_at_destination)
+        else float("inf")
+    )
 
     capex = (
         additional_scanners * assumptions.scanner_capex
@@ -195,8 +243,16 @@ def conventional(inputs: PlannerInputs, assumptions: PlannerAssumptions, half_li
         "growth_factor": growth_factor,
         "required_usable_doses_per_day": required_usable_doses_per_day,
         "required_gross_doses_per_day": required_gross_doses_per_day,
-        "expanded_gross_production_capacity_per_day": expanded_gross_production_capacity,
-        "expanded_usable_capacity_at_destination_per_day": expanded_usable_capacity_at_destination,
+        # Build 3B: when physical EOB capacity is NOT calibrated, production capacity is
+        # unknown (non-limiting sentinel), reported honestly as NOT_CALIBRATED rather than a
+        # fabricated dose-count figure.
+        "physical_production_capacity_status": ("calibrated" if capacity_is_calibrated else "not_calibrated"),
+        "expanded_gross_production_capacity_per_day": (
+            expanded_gross_production_capacity if capacity_is_calibrated else "NOT_CALIBRATED"
+        ),
+        "expanded_usable_capacity_at_destination_per_day": (
+            expanded_usable_capacity_at_destination if capacity_is_calibrated else "NOT_CALIBRATED"
+        ),
         "additional_doses_per_day": additional_doses_per_day,
         "half_life_for_retention": half_life_min,
         "half_life_unit": "minutes",
@@ -304,13 +360,26 @@ def mrt(inputs: PlannerInputs, assumptions: PlannerAssumptions, half_life_min: f
         assumptions.uptake_cycle_min,
     )
 
-    best: MRTPlan | None = None
-    for production_increase_pct in range(0, 401, 10):
-        production_cap = (
-            inputs.current_usable_doses_per_day
-            * (1.0 + production_increase_pct / 100.0)
-            * retained
+    # Build 3B: physical production capacity is authoritative ONLY when calibrated. The
+    # legacy `current_usable_doses_per_day * (1 + pct/100) * retained` dose-count sweep is
+    # removed. When calibrated, production capacity is the installed physical capacity
+    # (a single value, not a synthetic 0-400% sweep). When uncalibrated, production is
+    # non-limiting (float("inf"), never fabricated) and no production/cyclotron CapEx is
+    # charged.
+    physical_eob_capacity = _resolve_physical_eob_capacity_mbq_per_day(inputs, assumptions)
+    capacity_is_calibrated = physical_eob_capacity is not None
+    if capacity_is_calibrated:
+        calibrated_production_cap = _physical_production_capacity_patients_per_day(
+            float(physical_eob_capacity), assumptions, retained
         )
+        production_increase_iter = [0]
+    else:
+        calibrated_production_cap = float("inf")
+        production_increase_iter = [0]
+
+    best: MRTPlan | None = None
+    for production_increase_pct in production_increase_iter:
+        production_cap = calibrated_production_cap
 
         for add_scanners in range(max(0, required_total_scanners - inputs.current_scanners), 8):
             total_scanners = inputs.current_scanners + add_scanners
@@ -343,8 +412,11 @@ def mrt(inputs: PlannerInputs, assumptions: PlannerAssumptions, half_life_min: f
                     if achieved + 1e-9 < inputs.target_patients_per_day:
                         continue
 
-                    cyclotron_required = (not inputs.has_existing_cyclotron) and production_increase_pct > 0
-                    production_blocks = math.ceil(production_increase_pct / 10.0)
+                    # Build 3B: no synthetic 10% production blocks. Physical capacity, when
+                    # calibrated, is consumed as-is; when uncalibrated it is non-limiting.
+                    # No production-block or dose-count-driven cyclotron CapEx is charged.
+                    cyclotron_required = False
+                    production_blocks = 0
 
                     capex = (
                         assumptions.mrt_infrastructure_capex
@@ -456,7 +528,12 @@ def mrt(inputs: PlannerInputs, assumptions: PlannerAssumptions, half_life_min: f
                             "half_life_unit": "minutes",
                             "retained_activity_fraction": retained,
                             "retention_formula": "2^(-transport_min / half_life_min)",
-                            "production_capacity_patients_per_day": production_cap,
+                            "physical_production_capacity_status": (
+                                "calibrated" if capacity_is_calibrated else "not_calibrated"
+                            ),
+                            "production_capacity_patients_per_day": (
+                                production_cap if capacity_is_calibrated else "NOT_CALIBRATED"
+                            ),
                             "scanner_capacity_patients_per_day": scanner_cap,
                             "room_capacity_patients_per_day": room_cap,
                             "guideway_capacity_patients_per_day": guideway_cap,
