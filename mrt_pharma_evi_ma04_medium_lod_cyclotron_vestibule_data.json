@@ -1,0 +1,129 @@
+{
+  "build": "EVI-MA-04",
+  "title": "Standardize Medium-LOD Cyclotron Visual + Adjacent MRT Radiopharmacy Vestibule",
+  "manual_acceptance": "PENDING",
+  "self_accepted": false,
+  "scope": "final bounded equipment-visual refinement before transport routing; replaces ONLY the representative cyclotron visual recipe, adds an adjacent vestibule recipe + pure adjacency/placement, and fixes selection rendering",
+  "honesty_note": "Live 3D appearance cannot be verified headlessly. Recipe, mapping, selection decision, adjacency, tests, typecheck, production build and /viewer HTTP status are verified. Visual acceptance is the manual step.",
+  "visual_families": {
+    "cyclotron_active": "GENERIC_MEDICAL_CYCLOTRON_V2",
+    "cyclotron_legacy_kept": "GENERIC_MEDICAL_CYCLOTRON_V1",
+    "vestibule": "GENERIC_MRT_RADIOPHARMACY_VESTIBULE_V1"
+  },
+  "canonical_to_visual_mapping": {
+    "resolveVisualFamilyForCanonical(CYCLOTRON)": "GENERIC_MEDICAL_CYCLOTRON_V2",
+    "resolveVisualFamilyForAssetFamily(CYCLOTRON)": "GENERIC_MEDICAL_CYCLOTRON_V2",
+    "resolveVisualFamilyForGeometryId(*CYCLOTRON*)": "GENERIC_MEDICAL_CYCLOTRON_V2",
+    "resolveVisualFamilyForAssetFamily(MRT_RADIOPHARMACY_VESTIBULE)": "GENERIC_MRT_RADIOPHARMACY_VESTIBULE_V1",
+    "canonical_identity_mutated": false
+  },
+  "cyclotron_v2_inventory": {
+    "primitive_count": 27,
+    "in_15_30_band": true,
+    "parts": {
+      "CYC_BASE_RING": 1,
+      "CYC_FOOT": 4,
+      "CYC_LOWER_SHELL": 1,
+      "CYC_UPPER_SHELL": 1,
+      "CYC_ACCESS_PANEL": 4,
+      "CYC_PANEL_HANDLE": 4,
+      "CYC_SERVICE_COLUMN": 1,
+      "CYC_UPPER_MODULE": 2,
+      "CYC_CONDUIT": 2,
+      "CYC_BRAND_ACCENT": 1,
+      "CYC_CABINET_BASE": 1,
+      "CYC_CABINET": 1,
+      "CYC_CABINET_VENT": 2,
+      "CYC_CONTROL_SCREEN": 1,
+      "CYC_ESTOP": 1
+    }
+  },
+  "vestibule_v1_inventory": {
+    "compact_caps_m": { "width_max": 1.2, "depth_max": 0.9, "height_max": 1.6 },
+    "parts": [
+      "VEST_BASE",
+      "VEST_HOUSING",
+      "VEST_ACCESS_PANEL",
+      "VEST_TRANSFER_INTERFACE",
+      "VEST_STATUS_LIGHT",
+      "VEST_CONTROL_PANEL",
+      "VEST_TRANSFER_THROAT",
+      "VEST_BRAND_ACCENT"
+    ],
+    "transfer_throat_is_visual_cue_only": true,
+    "no_routing": true
+  },
+  "material_palette": {
+    "principle": "differentiation by part role only; no whole-machine cyan/blue/green",
+    "shared_map": "EQUIPMENT_PART_COLOR in equipmentGeometry.ts imported by both decorators",
+    "samples": {
+      "CYC_LOWER_SHELL": [214, 216, 210],
+      "CYC_UPPER_SHELL": [198, 202, 206],
+      "CYC_BASE_RING": [86, 92, 100],
+      "CYC_FOOT": [70, 74, 80],
+      "CYC_CABINET": [222, 224, 220],
+      "CYC_CABINET_VENT": [44, 48, 54],
+      "CYC_CONTROL_SCREEN": [40, 52, 66],
+      "CYC_ESTOP": [196, 60, 52],
+      "accent_green": [78, 168, 120]
+    }
+  },
+  "selection_fix": {
+    "before": "selection repainted the whole machine solid opaque cyan (the reported defect)",
+    "after": "per-part fills always retained; selected sets only line = EQUIPMENT_SELECTION_OUTLINE plus the pre-existing translucent envelope cue",
+    "EQUIPMENT_SELECTION_OUTLINE": [90, 200, 220]
+  },
+  "envelope_vs_visual": {
+    "envelope": "authoritative calibrated volume for collision + Fit; translucent envelope is the selection cue",
+    "visual": "representative parts regenerated from family+pose; never persisted as a mesh (no vertices/triangles in storage)",
+    "shared_pose": true
+  },
+  "vestibule_adjacency": {
+    "module": "frontend/src/components/spatial/equipmentAdjacency.ts",
+    "pure": true,
+    "functions": ["evaluateAdjacency", "findVestibuleAdjacentRoom", "seedVestibulePoseInAdjoiningRoom"],
+    "invariants": {
+      "different_parent_room_than_cyclotron": true,
+      "wall_adjacent": true,
+      "non_overlapping": true,
+      "separate_identity_label_marker": true
+    },
+    "bounded_delivery_note": "recipe + pure adjacency/pose logic only (spec §13); full EquipmentAssetInstance lifecycle wiring for MRT facility classes deliberately not added (createEquipmentInstance depends on canonicalEquipmentById which excludes MRT facility classes; broadening is out of scope and risky)"
+  },
+  "files": {
+    "new": [
+      "frontend/src/components/spatial/equipmentAdjacency.ts",
+      "frontend/src/tests/eviMa04MediumLodCyclotronVestibule.test.ts"
+    ],
+    "modified": [
+      "frontend/src/components/spatial/equipmentGeometry.ts",
+      "frontend/src/components/spatial/ClinicalProgramDecorator.ts",
+      "frontend/src/components/spatial/SpatialAssetDecorator.ts",
+      "frontend/src/tests/equipmentVisualIntegration.test.ts",
+      "frontend/src/tests/eviMa01LiveEquipmentVisibility.test.ts"
+    ]
+  },
+  "verification": {
+    "typecheck": "PASS (npx tsc -b, 0 errors)",
+    "evi_ma04_and_touched_files": "44 passed (3 files)",
+    "full_suite": { "files": 75, "tests": 1169, "status": "all pass" },
+    "production_build": "PASS (pre-existing INEFFECTIVE_DYNAMIC_IMPORT + chunk-size warnings only)",
+    "viewer_http_status": 200,
+    "dev_server_port": 3000,
+    "test_movement": "6 pre-existing EVI assertions corrected to V2 (deliberate CYCLOTRON V1->V2 mapping) + 15 new EVI-MA-04 tests"
+  },
+  "preserved_do_not_regress": [
+    "canonical equipment identity",
+    "room placement",
+    "persistence",
+    "selection",
+    "hide/show",
+    "lock/unlock",
+    "delete",
+    "collision reservation",
+    "2D marker",
+    "floating SELECTED EQUIPMENT control",
+    "correct Hidden state label + Hide->Show semantics"
+  ],
+  "next_steps_blocked_until_acceptance": ["PTS", "RTHS", "MRT animation", "Build 2"]
+}

@@ -1,0 +1,182 @@
+{
+  "report_id": "MRT_PHARMA_BUILD_1B_CLINICAL_PROGRAM_EQUIPMENT_BINDING_DATA",
+  "build": "BUILD_1B",
+  "title": "Complete clinical program + canonical equipment / resource spatial binding",
+  "generated_from_baseline": {
+    "head": "1de2c5b0d01e3a69e0c5a744b1d58ae1f3526bd3",
+    "origin_main": "1de2c5b0d01e3a69e0c5a744b1d58ae1f3526bd3",
+    "divergence_ahead": 0,
+    "divergence_behind": 0,
+    "build_1a_status": "CLOSED_ACCEPTED_COMMITTED_PUSHED"
+  },
+  "scope_doctrine": {
+    "NEW_UNAUTHORIZED_EQUIPMENT_CLASSES": 0,
+    "FABRICATED_COSTS": "NO",
+    "FABRICATED_CAPACITY": "NO",
+    "FABRICATED_DIMENSIONS": "NO",
+    "ROUTING_STARTED": "NO",
+    "SIMULATION_STARTED": "NO",
+    "OPTIMIZER_STARTED": "NO",
+    "BENTLEY_WRITES": "NONE",
+    "PYTHON_FILES_CHANGED": 0,
+    "SECOND_PLACEMENT_STORE_CREATED": "NO",
+    "NOTES": "The engineering/catalog layer remains the single source of truth. The frontend mirror references catalog_model_id and authority ids by reference only; no engineering value (dimension, capacity, production, cost) is copied into the spatial layer."
+  },
+  "source_first_equipment_audit": {
+    "method": "Read directly from the authoritative backend catalog JSON files this session (not recalled).",
+    "cyclotron": {
+      "catalog_file": "cyclotron_equipment_catalog.json",
+      "schema_version": "1.1",
+      "model_count": 17,
+      "model_ids": [
+        "GE_PETTRACE_840", "GE_PETTRACE_860", "GE_PETTRACE_880", "GE_PETTRACE_890", "GE_PETTRACE_800",
+        "IBA_CYCLONE_KEY", "IBA_CYCLONE_KIUBE", "IBA_CYCLONE_IKON", "IBA_CYCLONE_30XP",
+        "SUMITOMO_CYPRIS_HM_12", "SUMITOMO_CYPRIS_HM_20", "SUMITOMO_CYPRIS_MP_30",
+        "SIEMENS_CTI_ECLIPSE_HP", "SIEMENS_CTI_RDS_111",
+        "ACSI_TR_19", "ACSI_TR_24", "BEST_14P"
+      ],
+      "calibrated_physical_envelope_model_ids": ["IBA_CYCLONE_KEY", "IBA_CYCLONE_KIUBE", "ACSI_TR_24"],
+      "calibrated_envelopes_m": {
+        "IBA_CYCLONE_KEY": { "length": 1.5, "width": 1.4, "height": 1.35, "calibration": "manufacturer_calibrated" },
+        "IBA_CYCLONE_KIUBE": { "length": 1.9, "width": 1.9, "height": 1.8, "calibration": "manufacturer_calibrated" },
+        "ACSI_TR_24": { "length": 1.8, "width": 1.8, "height": 2.5, "calibration": "site_calibrated", "mass_tonnes": 25.0, "power_kw": 180.0 }
+      },
+      "calibrated_production_eob_mbq": {
+        "GE_PETTRACE_840": 240000.0, "GE_PETTRACE_860": 403000.0, "GE_PETTRACE_880": 524000.0, "GE_PETTRACE_890": 648000.0,
+        "IBA_CYCLONE_KEY": 111000.0, "IBA_CYCLONE_KIUBE": 1406000.0
+      },
+      "production_not_calibrated_examples": ["SUMITOMO_CYPRIS_MP_30 (F-18 SUPPORTED but no production record)", "GE_PETTRACE_800", "IBA_CYCLONE_IKON", "IBA_CYCLONE_30XP", "SUMITOMO_CYPRIS_HM_12", "SUMITOMO_CYPRIS_HM_20", "SIEMENS_CTI_ECLIPSE_HP", "SIEMENS_CTI_RDS_111", "ACSI_TR_19", "ACSI_TR_24", "BEST_14P"],
+      "capex_authority": "models.PlannerAssumptions.cyclotron_installation_capex (study-level anchor; CapEx not in catalog)",
+      "facility_instance_location_field": "FacilityCyclotronInstance has NO location field (binding is app-owned in the frontend spatial layer)"
+    },
+    "generator": {
+      "catalog_file": "generator_equipment_catalog.json",
+      "schema_version": "1.0",
+      "model_count": 4,
+      "model_ids": ["CURIUM_TECHNELITE", "CURIUM_ULTRA_TECHNEKOW_FM", "GE_HEALTHCARE_DRYTEC", "ECKERT_ZIEGLER_GALLIAPHARM"],
+      "parent_daughter": {
+        "CURIUM_TECHNELITE": "Mo-99 -> Tc-99m",
+        "CURIUM_ULTRA_TECHNEKOW_FM": "Mo-99 -> Tc-99m",
+        "GE_HEALTHCARE_DRYTEC": "Mo-99 -> Tc-99m",
+        "ECKERT_ZIEGLER_GALLIAPHARM": "Ge-68 -> Ga-68"
+      },
+      "physical_dimensions": "dimensions_cm = null and mass_kg = null for ALL generator models (NOT_CALIBRATED)",
+      "economics": "purchase_capex / replacement_cost_per_cycle / annual_maintenance_opex all NOT_CALIBRATED",
+      "asset_family": "none (no geometry AssetFamily exists for a generator; envelope is a labelled proxy)",
+      "facility_instance_location_field": "FacilityGeneratorInstance.location_object_id EXISTS"
+    },
+    "scanner": {
+      "catalog_file": "scanner_equipment_catalog.json",
+      "schema_version": "1.0",
+      "model_count": 6,
+      "spect_model_ids": ["SIEMENS_SYMBIA_PRO_SPECTA", "GE_NM_CT_870_DR", "GE_NM_CT_860", "PHILIPS_BRIGHTVIEW_XCT"],
+      "pet_model_ids": ["GE_DISCOVERY_MI", "SIEMENS_BIOGRAPH_VISION"],
+      "legacy_installed_base": ["PHILIPS_BRIGHTVIEW_XCT"],
+      "physical_dimensions": "dimensions_footprint_notes = NOT_CALIBRATED for ALL scanner models",
+      "power": "NOT_CALIBRATED",
+      "economics": "purchase_capex NOT_CALIBRATED; generic study-level scanner CapEx anchor applies",
+      "facility_instance_location_field": "FacilityScannerInstance.location_object_id EXISTS"
+    },
+    "total_canonical_equipment_models": 27,
+    "mrt_facility_spatial_classes": {
+      "count": 2,
+      "MRT_RADIOPHARMACY_VESTIBULE": {
+        "cost_authority": "canonical_spatial_authority.MRT_VESTIBULE_CAPEX_USD",
+        "value_usd": 30000.0,
+        "charging_rule": "one per cyclotron interface requiring MRT transfer; never per radiopharmacy/floor/room/endpoint count (Section 37, no double-count)"
+      },
+      "MRT_ENDPOINT": {
+        "cost_authority": "shared_mrt_multistream_authority.LIGHT_MRT_ENDPOINT_CAPEX_PER_UNIT",
+        "value_usd": 1000.0,
+        "distinct_from": "models.PlannerAssumptions.endpoint_capex ($10,000 mainstream) — distinct light-MRT panel, no double-count (Section 37)"
+      }
+    },
+    "equipment_room_compatibility_authority": "DOES_NOT_EXIST -> NOT_CALIBRATED (only geometry-family compatibility exists in the frontend AssetRegistry; the eligibleClinicalFunctions mapping is an informational binding hint only, never enforced)"
+  },
+  "clinical_program_completion": {
+    "clinical_functions_available": 20,
+    "basic_pet_department_required_functions": ["RADIOPHARMACY", "INJECTION_ROOM", "UPTAKE_ROOM", "PET_CT_SCANNER_ROOM"],
+    "multi_instance_functions_supported": true,
+    "required_vs_present_summary": "The Clinical Program panel now surfaces BOTH the three-room proof (Uptake + Injection + PET/CT) and the full basic PET department required-vs-present summary (adds Radiopharmacy). Informational only; never auto-adds a room.",
+    "completion_semantics": "COMPLETENESS_IS_INFORMATIONAL; the actual assigned program depends on the user's assignments in the active iModel."
+  },
+  "automatic_connectivity_doctrine": {
+    "section_42_record_doctrine": "The normal workflow is SIMULATE -> infer missions -> eligible modes -> auto-generate connections.",
+    "NORMAL_SIMULATION_REQUIRES_MANUAL_ROUTE_SELECTION": "NO",
+    "manual_override": "reserved for a future What-If / Engineering-Override; NOT implemented in Build 1B",
+    "build_1b_scope": "Build 1B binds equipment/resources to BIM rooms spatially and records the transport-endpoint spatial authority; it does NOT generate routes, run simulation, or run the optimizer.",
+    "transport_endpoint_spatial_authority": "getMrtFacilitySpatialAuthority(class) returns the canonical MRT facility spatial class + cost-authority reference by reference (vestibule / endpoint); no route is created."
+  },
+  "implementation": {
+    "new_files": [
+      "frontend/src/components/spatial/canonicalEquipmentCatalog.ts",
+      "frontend/src/components/spatial/equipmentInstance.ts",
+      "frontend/src/components/spatial/equipmentValidation.ts",
+      "frontend/src/tests/build1bEquipmentBinding.test.ts",
+      "frontend/src/tests/build1bEquipmentBindingUi.test.tsx"
+    ],
+    "modified_files": [
+      "frontend/src/components/spatial/spatialAssetOverlay.ts",
+      "frontend/src/components/spatial/ClinicalProgramDecorator.ts",
+      "frontend/src/components/spatial/ClinicalProgramControl.tsx",
+      "frontend/src/routes/BentleyViewer.css",
+      "frontend/src/tests/build1a4ContainmentValidationUi.test.tsx"
+    ],
+    "reused_build_1a_primitives": [
+      "buildOrientedPlanningPrism", "validatePlanningVolumeContainment (samples corners+edges+anchor, NOT center-only)",
+      "resolveContainmentStatus (NOT_EVALUATED vs FAIL)", "seedPrismParamsFromParent", "isPointInsideClosedMesh",
+      "authoritativeFootprints mesh cache + ensureAuthoritativeRoomFootprint", "resolvePlanningVolumeValidation UX pattern"
+    ],
+    "capabilities": {
+      "parent_room_binding": true,
+      "parent_derived_floor_aware_placement": true,
+      "envelope_containment_not_center_only": true,
+      "live_validation_product_warning": true,
+      "invalid_visual_cue_not_color_only": "red + dashed (LinePixels.Code2) thick edges + OUTSIDE ROOM label badge",
+      "lock_gate_with_reason": true,
+      "last_known_valid_geometry": true,
+      "restore_valid_position": true,
+      "reset_to_parent_derived": true,
+      "multi_equipment_isolation": true,
+      "per_instance_visibility": true,
+      "persistence_key": "mrtpharma.equipment.v1.<iModelId>",
+      "reload_recompute": true,
+      "imodel_switch_clear": true,
+      "capacity_production_cost_crosswalk_by_reference": true,
+      "transport_endpoint_spatial_authority_accessor": true,
+      "generic_diagnose_selected_equipment": true,
+      "honest_proxy_envelope_labeling": "GENERIC_ENGINEERING_PLACEHOLDER envelopes are labelled '(proxy envelope)'; calibrated envelopes are labelled 'calibrated envelope'"
+    }
+  },
+  "verification": {
+    "typecheck": "PASS",
+    "test_files": 53,
+    "tests_total": 864,
+    "tests_passed": 864,
+    "tests_failed": 0,
+    "build_1a_baseline_files": 51,
+    "build_1a_baseline_tests": 815,
+    "new_tests_added": 49,
+    "build_1a_regressions": 0,
+    "production_build": "PASS",
+    "worker_asset": "dist/scripts/parse-imdl-worker.js head = (()=>{\"use strict\";f (real)",
+    "draco_wasm_asset": "dist/scripts/draco_decoder.wasm magic = 0061 736d (real)",
+    "core_frontend_version": "5.12.5",
+    "viewer_http": 200,
+    "dev_server": "running on http://localhost:3000"
+  },
+  "scope_review": {
+    "python_files_changed": 0,
+    "authority_docs_changed": 0,
+    "env_staged": false,
+    "env_pre_existing_modification": true,
+    "second_placement_store_created": false
+  },
+  "final_report_block": {
+    "BUILD_1B_COMPLETION_GATE": "MANUAL_CONFIRMATION_REQUIRED",
+    "CHECKPOINT": "HOLD_FOR_BUILD_1B_MANUAL_ACCEPTANCE",
+    "NEXT_MAJOR_BUILD": "BUILD_2_AUTOMATIC_FACILITY_CONNECTIVITY",
+    "AUTHORITY_DOCS_UPDATED": "NO (deferred until manual acceptance, Section 73)",
+    "GIT_ACTIONS": "NONE (no stage, no commit, no push)"
+  }
+}

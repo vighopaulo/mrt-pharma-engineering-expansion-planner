@@ -1,0 +1,80 @@
+{
+  "report": "MRT_PHARMA_EVI_MA02D_CONTEXT_MENU_REGRESSION_REPORT",
+  "correction": "EVI-MA-02D",
+  "manual_acceptance": "PENDING",
+  "self_accepted": false,
+  "regression_seam": {
+    "location": "MrtDirectManipulationTool.installEquipmentContextMenuBridge",
+    "problem": "contextmenu listener attached to vp.parentDiv in BUBBLE phase, installed once in onPostInstall; stale target after a view reopen (no listener) and canvas can pre-empt bubble-phase.",
+    "left_click_unaffected": "onDataButtonDown is a Bentley button event, not the DOM listener"
+  },
+  "right_click_fix": {
+    "target": "vp.vpDiv (fallback parentDiv)",
+    "phase": "capture",
+    "reinstall": "idempotent, guarded by target identity, re-invoked on every onDataButtonDown (left-click proven to fire) so the bridge survives view reopen",
+    "pick": "pickEquipmentForContext(ray, equipmentInstances, selectedEquipmentId)",
+    "priority": ["selected equipment when ray hits its volume", "nearest equipment along ray", "none"],
+    "planning_volume_can_win": false,
+    "preventDefault_only_on_equipment_hit": true
+  },
+  "floating_selected_equipment_control": {
+    "file": "frontend/src/components/spatial/ViewerSelectedEquipmentControl.tsx",
+    "shown_when": "selectedEquipmentId != undefined",
+    "title": "exact canonical model (manufacturer + model)",
+    "actions": ["Fit", "Hide/Show", "Lock/Unlock", "Delete (disabled when locked)"],
+    "derives_from": "selectedEquipmentId (subscribeClinicalProgram)",
+    "second_lifecycle": false,
+    "independent_of_right_click_and_panel": true
+  },
+  "one_delete_lifecycle": {
+    "entry_points": ["right-click menu", "floating control", "equipment card", "keyboard Delete"],
+    "function": "deleteEquipment(equipmentInstanceId)",
+    "duplicate_logic": false
+  },
+  "independence": {
+    "panel_independent": true,
+    "view_mode_independent": true,
+    "legacy_asset_count_independent": true,
+    "bentley_reset_independent": true
+  },
+  "files_changed": {
+    "modified": [
+      "frontend/src/components/spatial/equipmentInstance.ts",
+      "frontend/src/components/spatial/MrtDirectManipulationTool.ts",
+      "frontend/src/routes/BentleyViewer.tsx",
+      "frontend/src/routes/BentleyViewer.css"
+    ],
+    "new": [
+      "frontend/src/components/spatial/ViewerSelectedEquipmentControl.tsx",
+      "frontend/src/tests/eviMa02dContextMenuRegression.test.ts"
+    ]
+  },
+  "tests": {
+    "new_file": "frontend/src/tests/eviMa02dContextMenuRegression.test.ts",
+    "new_count": 7,
+    "covers": ["ray_hit_kiube", "empty_none", "prefers_selected_on_overlap", "nearest_wins_no_selection", "selected_fallback_to_nearest_hit", "hidden_never_picked", "planning_volume_never_equipment_id", "canonical_title_convergence"],
+    "baseline_before": { "files": 71, "tests": 1126 },
+    "baseline_after": { "files": 72, "tests": 1133, "result": "PASS" },
+    "tests_weakened": false
+  },
+  "verification": {
+    "typecheck_tsc_b": "PASS",
+    "production_build": "PASS_WITH_PREEXISTING_WARNINGS_ONLY",
+    "viewer_http_status": 200,
+    "wasm_asset": "public/scripts/draco_decoder.wasm",
+    "bentley_worker_asset": "public/scripts/parse-imdl-worker.js",
+    "backend_python_modified": false
+  },
+  "dev_server": { "canonical_port": 3000, "left_running_for_user": true },
+  "untouched": ["equipment_geometry", "room_overlays", "authentication", "collision_exclusivity", "delete_semantics_beyond_wiring", "selection_architecture"],
+  "manual_acceptance_steps": [
+    "Select KIUBE in 3D -> highlights + floating SELECTED EQUIPMENT control appears (title IBA Cyclone KIUBE)",
+    "Right-click KIUBE -> menu at cursor titled IBA Cyclone KIUBE",
+    "Orbit; right-click KIUBE -> menu opens",
+    "Collapse Clinical Program panel; right-click KIUBE -> menu opens",
+    "Right-click Cyclotron 02 planning volume -> NO equipment menu",
+    "Select KIUBE, press Delete (or floating Delete) -> KIUBE deletes",
+    "Refresh -> KIUBE remains absent"
+  ],
+  "stop_condition": "Automated verification passes; dev server on 3000. STOP. Await manual EVI-MA-02D acceptance. Do not start PTS/RTHS/MRT animation/Build 2."
+}

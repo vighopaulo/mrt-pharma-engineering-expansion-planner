@@ -1,0 +1,84 @@
+{
+  "report": "MRT_PHARMA_BUILD_1B_CANDIDATE_ACCEPTANCE_UX_CORRECTION",
+  "checkpoint": "HOLD_FOR_BUILD_1B_CANDIDATE_MANUAL_ACCEPTANCE",
+  "generatedUtc": "2026-08-27",
+  "scope": "frontend-only; Build 1B candidate-room acceptance UX + recommendation calibration; no Build 2; no re-parent of Uptake 01 / Injection Room 01; equipment work preserved and paused",
+  "git": {
+    "head": "1de2c5b0d01e3a69e0c5a744b1d58ae1f3526bd3",
+    "originMain": "1de2c5b0d01e3a69e0c5a744b1d58ae1f3526bd3",
+    "divergenceAheadBehind": [0, 0],
+    "staged": [],
+    "pyFilesChanged": 0,
+    "envStatus": "M (unstaged, untouched by this correction, never staged)",
+    "committed": false,
+    "pushed": false
+  },
+  "defectsCorrected": [
+    {
+      "id": "A",
+      "title": "25/25 rooms scoring RECOMMENDED",
+      "rootCause": "recommended was a binary derivation: recommended = !semantic.rejectedByDefault && eligibility.eligible, collapsing eligible==recommended so every non-rejected, geometrically usable room became RECOMMENDED.",
+      "fix": "Introduced explicit CandidateTier (RECOMMENDED/SUITABLE/NEEDS_REVIEW/REJECTED) via resolveCandidateTier() using data-driven blended-score bands (no fixed quota). recommended is now derived as (tier === 'RECOMMENDED'). UNKNOWN and GENERIC_OCCUPIABLE are capped below RECOMMENDED."
+    },
+    {
+      "id": "B",
+      "title": "'1DC1 WAITING / ACTIVITY AREA' scoring 100% suitability",
+      "rootCause": "The token 'waiting' was classified as ENCLOSED_ROOM, and scoreClinicalSuitability(ENCLOSED_ROOM) returned 1.0, so a waiting/activity area earned full clinical-suitability confidence.",
+      "fix": "Added a GENERIC_OCCUPIABLE semantic kind and moved waiting/activity/lounge/reception/day room/bay/store/storage/bare 'room' into it. GENERIC_OCCUPIABLE scores 0.5 suitability and can never be RECOMMENDED. Dedicated clinical words remain ENCLOSED_ROOM."
+    },
+    {
+      "id": "C",
+      "title": "candidate list overflow + preview re-parenting risk",
+      "rootCause": "Candidate results were an unbounded list; actions were hidden until a card was expanded; concern that preview actions could mutate assignment.",
+      "fix": "Candidate results render in a dedicated bounded scrollable region (max-height 320px, overflow-y auto) with compact cards showing tier + suitability% + fit% + area + storey + authority + concise reasons. Fit to Room / Enter Walkthrough Here / Use This Room are always reachable at the bottom of every card. Preview actions (Fit to Room -> fitViewToClinicalRoom; Enter Walkthrough Here -> enterWalkthroughAtClinicalRoom) are inspection-only and never call reparentClinicalFunction. Only Use This Room re-parents, and rejected/ineligible candidates require an explicit override checkbox first."
+    }
+  ],
+  "calibrationModel": {
+    "semanticKinds": ["ENCLOSED_ROOM", "GENERIC_OCCUPIABLE", "CIRCULATION", "VERTICAL_TRANSPORT", "SHAFT", "SERVICE_SUPPORT", "SANITARY", "OPEN_OR_EXTERIOR", "UNKNOWN"],
+    "clinicalSuitabilityBands": {
+      "ENCLOSED_ROOM_matches_target_function": 1.0,
+      "ENCLOSED_ROOM_other_function": 0.7,
+      "GENERIC_OCCUPIABLE": 0.5,
+      "UNKNOWN": 0.45,
+      "SERVICE_SUPPORT": 0.15,
+      "CIRCULATION_VERTICAL_SHAFT_SANITARY_OPEN": 0.05
+    },
+    "blend": "score = 0.6 * clinicalSuitability + 0.4 * geometricFit (independent axes)",
+    "tierThresholds": {
+      "TIER_RECOMMENDED_MIN": 0.75,
+      "TIER_SUITABLE_MIN": 0.55,
+      "TIER_NEEDS_REVIEW_MIN": 0.30
+    },
+    "nonClinicalCap": "UNKNOWN and GENERIC_OCCUPIABLE best tier is SUITABLE; never RECOMMENDED",
+    "hardReject": "default-rejected host kind OR degenerate/ineligible geometry => REJECTED",
+    "noFabricatedThresholds": true,
+    "geometricFitVsClinicalSuitabilitySeparate": true
+  },
+  "verification": {
+    "typecheck": "PASS (npx tsc -b, exit 0)",
+    "testSuite": { "files": 55, "tests": 930, "failures": 0, "isolated": true },
+    "baselineStated": { "files": 54, "tests": 910, "failures": 0 },
+    "delta": "+1 test file (build1bCandidateAcceptanceUi.test.tsx), +20 tests (tier §18, score-separation §19, UI §20/§21, corrected UNKNOWN + reason-wording assertions)",
+    "productionBuild": "PASS (npm run build; pre-existing chunk-size + INEFFECTIVE_DYNAMIC_IMPORT warnings only, no errors)",
+    "worker": "dist/scripts/parse-imdl-worker.js head == (()=>{\"use strict\";f",
+    "wasm": "dist/scripts/draco_decoder.wasm magic == 0061 736d",
+    "itwinCoreFrontendVersion": "5.12.5",
+    "devServer": { "restarted": true, "url": "http://localhost:3000/viewer", "httpStatus": 200 }
+  },
+  "filesChangedThisCorrection": [
+    "frontend/src/components/spatial/clinicalRoomCandidate.ts",
+    "frontend/src/components/spatial/ClinicalProgramControl.tsx",
+    "frontend/src/routes/BentleyViewer.css",
+    "frontend/src/tests/build1bSpatialCorrection.test.ts",
+    "frontend/src/tests/build1bCandidateAcceptanceUi.test.tsx"
+  ],
+  "preserved": {
+    "equipmentFilesUnmodified": ["canonicalEquipmentCatalog.ts", "equipmentInstance.ts", "equipmentValidation.ts"],
+    "equipmentAcceptance": "paused",
+    "uptake01Reparented": false,
+    "injectionRoom01Reparented": false,
+    "build2Started": false,
+    "authorityDocsUpdated": false
+  },
+  "stop": "No stage, commit, or push performed. Held for Build 1B candidate manual acceptance."
+}

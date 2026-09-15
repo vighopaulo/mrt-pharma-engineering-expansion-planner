@@ -1,0 +1,61 @@
+{
+  "report": "BUILD_1B_SPATIAL_FOUNDATION_CORRECTION_VERIFICATION_CHECKPOINT",
+  "precheck": {
+    "PRECHECK_HEAD": "1de2c5b0d01e3a69e0c5a744b1d58ae1f3526bd3",
+    "PRECHECK_ORIGIN_MAIN": "1de2c5b0d01e3a69e0c5a744b1d58ae1f3526bd3",
+    "PRECHECK_DIVERGENCE": "0 0"
+  },
+  "git_scope": {
+    "BUILD_1A_COMMITTED_BASELINE_PRESERVED": "YES",
+    "CURRENT_BUILD_1B_EQUIPMENT_WORK_PRESERVED": "YES",
+    "BUILD_2_STARTED": "NO",
+    "PYTHON_FILES_CHANGED": 0,
+    "FRONTEND_ENV_STAGED": "NO",
+    "FILES_STAGED": "NO",
+    "COMMIT_CREATED": "NO",
+    "PUSH_PERFORMED": "NO",
+    "modified_frontend": [
+      "frontend/src/components/spatial/CameraModeControl.tsx",
+      "frontend/src/components/spatial/ClinicalProgramControl.tsx",
+      "frontend/src/components/spatial/ClinicalProgramDecorator.ts",
+      "frontend/src/components/spatial/spatialAssetOverlay.ts",
+      "frontend/src/components/spatial/walkthroughController.ts",
+      "frontend/src/components/viewer/LiveItwinViewer.tsx",
+      "frontend/src/routes/BentleyViewer.css",
+      "frontend/src/routes/BentleyViewer.tsx",
+      "frontend/src/tests/build1a4ContainmentValidationUi.test.tsx"
+    ],
+    "new_source": [
+      "frontend/src/components/spatial/canonicalEquipmentCatalog.ts",
+      "frontend/src/components/spatial/clinicalRoomCandidate.ts",
+      "frontend/src/components/spatial/clinicalRoomReparent.ts",
+      "frontend/src/components/spatial/equipmentInstance.ts",
+      "frontend/src/components/spatial/equipmentValidation.ts",
+      "frontend/src/components/spatial/targetedWalkthroughSpawn.ts"
+    ],
+    "new_tests": [
+      "frontend/src/tests/build1bEquipmentBinding.test.ts",
+      "frontend/src/tests/build1bEquipmentBindingUi.test.tsx",
+      "frontend/src/tests/build1bSpatialCorrection.test.ts"
+    ],
+    "excluded_untouched": ["frontend/.env"]
+  },
+  "automated_verification": {
+    "TYPECHECK": "PASS",
+    "OFFLINE_TEST_FILE_COUNT": 54,
+    "OFFLINE_TEST_COUNT": 910,
+    "OFFLINE_TEST_REGRESSIONS": 0,
+    "PRODUCTION_BUILD": "PASS",
+    "CORE_FRONTEND_VERSION": "5.12.5",
+    "WORKER_ASSET_REAL": "YES",
+    "DRACO_WASM_ASSET_REAL": "YES",
+    "VIEWER_HTTP_STATUS": 200,
+    "note": "All values independently re-run in this checkpoint; not taken on faith."
+  },
+  "dev_server": {
+    "DEV_SERVER_TERMINAL": "term_1789074774743_mxxabpf3h5",
+    "DEV_SERVER_STATUS": "RUNNING",
+    "PORT": 3000
+  },
+  "CHECKPOINT": "HOLD_FOR_BUILD_1B_MANUAL_ACCEPTANCE"
+}

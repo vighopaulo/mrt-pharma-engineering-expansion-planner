@@ -1,0 +1,92 @@
+{
+  "report": "MRT_PHARMA_BUILD_1B_TRUE_2D_PLAN_AND_RECOMMENDATION",
+  "generatedContext": "Build 1B Spatial UX continuation — continues from the current working tree; no restart, no revert, no commit/push.",
+  "checkpoint": "HOLD_FOR_BUILD_1B_TRUE_2D_PLAN_AND_RECOMMENDATION_MANUAL_ACCEPTANCE",
+  "completionGate": "MANUAL_CONFIRMATION_REQUIRED",
+  "git": {
+    "head": "1de2c5b0d01e3a69e0c5a744b1d58ae1f3526bd3",
+    "originMain": "1de2c5b0d01e3a69e0c5a744b1d58ae1f3526bd3",
+    "divergenceAheadBehind": [0, 0],
+    "staged": [],
+    "pythonFilesChanged": 0,
+    "envStaged": false,
+    "envTouchedThisTask": false,
+    "authorityDocsUpdated": false
+  },
+  "goalA_recommendationSemanticGuard": {
+    "defect": "RECOMMENDED was semantically too permissive: an ENCLOSED_ROOM for a DIFFERENT function (TECH.OFFICE / PROSTH.LAB / CERAMIC LAB) scored suitability 0.7 with geometric fit ~1.0 -> blended 0.82 >= 0.75 -> RECOMMENDED by geometry alone.",
+    "doctrine": "GEOMETRIC FIT CANNOT BY ITSELF ESTABLISH THAT THE ROOM IS CLINICALLY APPROPRIATE. ELIGIBLE_EQUALS_RECOMMENDED = NO.",
+    "fix": {
+      "file": "frontend/src/components/spatial/clinicalRoomCandidate.ts",
+      "exports": ["roomMatchesFunctionAffinity(label, fn)", "getFunctionAffinityTokens(fn)"],
+      "resolveCandidateTier": "added hasFunctionSemanticEvidence param (fail-closed default false); when false a room is capped at SUITABLE even if score >= TIER_RECOMMENDED_MIN (0.75).",
+      "scoreRoomCandidate": "computes hasFunctionSemanticEvidence + cappedForNoSemanticEvidence; adds honest capped explanation: 'no affirmative <FUNCTION> semantic evidence ... Recommendation capped at SUITABLE.'",
+      "rankedCandidateFields": ["hasFunctionSemanticEvidence", "cappedForNoSemanticEvidence"],
+      "scorePreserved": true,
+      "scoringUnchanged": "0.6*clinicalSuitability + 0.4*geometricFit; the two axes remain independent."
+    },
+    "observedEvidenceResolved": {
+      "1DC1_WAITING_ACTIVITY_AREA": "SUITABLE (GENERIC_OCCUPIABLE; never RECOMMENDED; never 100% suitability) — unchanged, still correct.",
+      "TECH_OFFICE_PROSTH_LAB_CERAMIC_LAB": "now capped at SUITABLE (previously wrongly RECOMMENDED)."
+    }
+  },
+  "goalB_true2dPlan": {
+    "requirement": "A TRUE 2D BIM floor plan visible SIMULTANEOUSLY with the 3D Walkthrough; shared bimSpaceId identities; walker marker from the single walkthrough state; no duplicate stores; NOT a bird's-eye 3D camera reused as a plan.",
+    "constraints": {
+      "BIRDS_EYE_USED_AS_2D_PLAN": "NO",
+      "DUPLICATE_WALKER_POSITION_STORE": "NO",
+      "SECOND_SPATIAL_OR_EQUIPMENT_STORE": "NO"
+    },
+    "walkthroughController": {
+      "file": "frontend/src/components/spatial/walkthroughController.ts",
+      "added": ["WalkthroughState type", "getWalkthroughState()", "subscribeWalkthroughState(listener) -> unsubscribe", "notifyWalkState() internal"],
+      "observability": "notifyWalkState() is called at the end of applyCamera (every movement/look/turn/fov update) and on exitWalkthrough (emits undefined). The rAF step loop calls applyCamera every frame, so continuous updates flow while walking. Single source of truth; no duplicate position store."
+    },
+    "overlay": {
+      "file": "frontend/src/components/spatial/spatialAssetOverlay.ts",
+      "added": ["getWalkthroughState() pass-through", "subscribeWalkthroughState() pass-through", "getBim2dPlanView({storeyId?, selectedBimSpaceId?, candidates?, walker?})"],
+      "getBim2dPlanView": "gathers discovered rooms (+ exact footprint from authoritativeFootprints when cached), program assignments (filtering UNASSIGNED_EXISTING), and equipment envelopes via buildEquipmentEnvelope, then calls the pure projectBim2dPlan. Everything joined by bimSpaceId; no new store."
+    },
+    "projection": {
+      "file": "frontend/src/components/spatial/bim2dPlanProjection.ts",
+      "pure": true,
+      "main": "projectBim2dPlan(input) -> Bim2dPlanView { rooms, equipment, walker, bounds, provenance }",
+      "footprintPreference": "prefers exactOuterLoop (EXACT_ROOM_MESH); falls back to the BIM range rectangle (BIM_RANGE_APPROXIMATION) and tags it honestly; NONE when no geometry.",
+      "helpers": ["computePlanFitTransform", "worldToScreen", "screenToWorld", "pointInRing", "hitTestPlanRoom", "ringCentroid", "headingFromYaw", "polygonAbsArea"]
+    },
+    "component": {
+      "file": "frontend/src/components/spatial/Bim2dPlanPanel.tsx",
+      "mount": "frontend/src/routes/BentleyViewer.tsx as a lazy sibling bar 'viewer-plan-bar' (bottom-left), shown simultaneously with the Walkthrough.",
+      "interaction": "collapsible; Fit/zoom/pan (view-only); click a room -> setClinicalProgramSelectedSpace(sameBimSpaceId) + fitViewToClinicalRoom (NEVER moves the walker); Enter Walkthrough Here -> enterWalkthroughAtClinicalRoom (reuses the safe spawn).",
+      "styles": "frontend/src/routes/BentleyViewer.css (.viewer-plan-bar added to the stage :not() exclusion + full .bim2d-plan* rules).",
+      "walkerMarker": "consumes the single walkthrough read-model via subscribeWalkthroughState; hides when inactive or on a different storey."
+    }
+  },
+  "verification": {
+    "typecheck": "npx tsc -b -> PASS (exit 0)",
+    "tests": { "command": "npm run test (vitest run, isolated)", "files": 57, "tests": 969, "failures": 0, "regressions": 0 },
+    "build": "npm run build -> PASS (exit 0); pre-existing INEFFECTIVE_DYNAMIC_IMPORT chunking warnings (now also for equipmentInstance.ts due to a new static import) — cosmetic, not an error.",
+    "worker": { "path": "dist/scripts/parse-imdl-worker.js", "head": "(()=>{\"use strict\";f" },
+    "wasm": { "path": "dist/scripts/draco_decoder.wasm", "magic": "0061 736d" },
+    "coreFrontendVersion": "5.12.5",
+    "devServer": { "command": "npm run dev -- --port 3000", "viewerHttp": 200, "cleanStart": true }
+  },
+  "testsAdded": {
+    "goalA": "frontend/src/tests/build1bSpatialCorrection.test.ts §A block (10 properties); 2 pre-existing tests updated to reflect the corrected doctrine.",
+    "goalB_pure": "frontend/src/tests/build1bPlan2d.test.ts (19 properties)",
+    "goalB_ui": "frontend/src/tests/build1bPlan2dUi.test.tsx (10 properties)"
+  },
+  "preservedProvenance": {
+    "priorBuilds": "Build 1A / 1A.1 / 1A.2 / 1A.3 / 1A.4 + prior Build 1B (candidate discovery, equipment binding, spatial correction) preserved uncommitted; nothing reverted.",
+    "walkForwardFix": "the earlier walkNav.ts forward-movement fix remains part of the uncommitted working tree.",
+    "noBentleyWrites": true,
+    "noBuild2Routing": true,
+    "noEquipmentAcceptanceResume": true,
+    "noAutoReparentOfUptakeInjection": true
+  },
+  "manualGates": {
+    "FINAL_RECOMMENDATION_CALIBRATION_MANUAL": "MANUAL_CONFIRMATION_REQUIRED",
+    "TRUE_2D_PLAN_MANUAL": "MANUAL_CONFIRMATION_REQUIRED",
+    "status": "STOP — awaiting manual acceptance. No stage/commit/push performed."
+  }
+}

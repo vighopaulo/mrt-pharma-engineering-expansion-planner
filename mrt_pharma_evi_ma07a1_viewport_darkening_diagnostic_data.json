@@ -1,0 +1,107 @@
+{
+  "task": "EVI-MA-07A.1",
+  "title": "Live viewport darkening root-cause diagnostic",
+  "posture": "prove-first; no fix until live cause is proven",
+  "manual_acceptance": "PENDING",
+  "self_accepted": false,
+  "not_started": ["Build 1C", "Build 2"],
+  "did_not": ["change CSS", "rewrite placement state", "modify Bentley display settings"],
+  "repository": {
+    "branch": "main",
+    "head": "1de2c5b0d01e3a69e0c5a744b1d58ae1f3526bd3",
+    "origin_main": "1de2c5b0d01e3a69e0c5a744b1d58ae1f3526bd3",
+    "divergence_ahead": 0,
+    "divergence_behind": 0,
+    "working_tree_preserved": true,
+    "uncommitted_paths": 146
+  },
+  "previous_theory_disproven": {
+    "theory": ".viewer-panel-backdrop (openPanel) was the sole cause",
+    "why_wrong": [
+      ".viewer-panel-backdrop is transparent (background: transparent) so it cannot visually darken",
+      "it is a child of .viewer-stage only and cannot cover the right-side .viewer-inspector grid cell, yet the inspector is reported dark"
+    ]
+  },
+  "static_findings": {
+    "no_placement_or_darkening_css_class": true,
+    "no_global_full_window_darkening_rule": true,
+    "no_imperative_body_or_root_darkening": true,
+    "placement_path_changes_no_bentley_display_state": true,
+    "viewer_stage_background": "#0b0e14 (near-black; shows through when canvas not painting)",
+    "bim2d_plan_backdrop_filter": "blur(4px) + translucent bg (darkens with the scene behind it)"
+  },
+  "diagnostic_instrument": {
+    "module": "frontend/src/components/spatial/placementDarkeningDiagnostic.ts",
+    "exports": [
+      "capturePlacementDarkeningSnapshot",
+      "classifyDarkening",
+      "isDarkeningContributor",
+      "snapshotElement",
+      "formatDarkeningSnapshot"
+    ],
+    "captures": [
+      "placement/application state (read, not inferred)",
+      "viewport host + canvas element + rect + center",
+      "document.elementsFromPoint(center) full stack with darkening styles + canvas relation + coverage",
+      "all full-viewport elements (any name) with styles",
+      "common-ancestor chains of 3D viewport / 2D plan / inspector",
+      "Bentley view state (viewFlags/emphasis/selection/displayStyle/background + canvas CSS opacity+filter)",
+      "pointer receiver (elementFromPoint)"
+    ],
+    "classification_set": [
+      "ORPHANED_DOM_OVERLAY",
+      "COMMON_ANCESTOR_OPACITY",
+      "COMMON_ANCESTOR_FILTER",
+      "POINTER_INTERCEPTION_LAYER",
+      "PLACEMENT_STATE_NOT_IDLE",
+      "BENTLEY_DISPLAY_STATE_NOT_RESTORED",
+      "NO_DARKENING_EVIDENCE"
+    ],
+    "read_only": true,
+    "no_secrets": true,
+    "per_frame_logging": false,
+    "live_readers": {
+      "placement_state": "spatialAssetOverlay.readPlacementStateForDiagnostic()",
+      "bentley_view_state": "LiveItwinViewer.readBentleyViewStateForDiagnostic()"
+    },
+    "dev_buttons": ["DIAGNOSE — NORMAL", "DIAGNOSE — PLACEMENT ACTIVE", "DIAGNOSE — AFTER CANCEL (DARK)"],
+    "developer_only": true,
+    "removable_after_fix": true
+  },
+  "files": {
+    "new": [
+      "frontend/src/components/spatial/placementDarkeningDiagnostic.ts",
+      "frontend/src/tests/placementDarkeningDiagnostic.test.ts"
+    ],
+    "modified": [
+      "frontend/src/components/spatial/spatialAssetOverlay.ts",
+      "frontend/src/components/viewer/LiveItwinViewer.tsx",
+      "frontend/src/routes/BentleyViewer.tsx"
+    ]
+  },
+  "live_capture_procedure": [
+    "Open /viewer, sign in, enable Developer mode",
+    "DIAGNOSE — NORMAL (state A)",
+    "Select Discovery MI -> PLACE IN MODEL -> DIAGNOSE — PLACEMENT ACTIVE (state B)",
+    "Cancel; while dark -> DIAGNOSE — AFTER CANCEL (DARK) (state C)",
+    "Compare A/B/C; read [ROOT-CAUSE CLASSIFICATION] + evidence sections",
+    "If a dimming element is ABOVE_CANVAS covering the viewport, toggle display:none in DevTools to confirm causality (diagnostic only)"
+  ],
+  "root_cause_status": "PENDING_LIVE_CAPTURE",
+  "root_cause_narrowed_to": [
+    "BENTLEY_DISPLAY_STATE_NOT_RESTORED (most consistent with static findings)",
+    "ORPHANED_DOM_OVERLAY / COMMON_ANCESTOR_* (only if live elementsFromPoint/ancestor capture reveals a layer/shared dimmer not present in source)"
+  ],
+  "results": {
+    "diagnostic_tests_passed": 12,
+    "typecheck": "PASS",
+    "full_frontend_suite": {"files": 85, "tests": 1306, "status": "all pass"},
+    "baseline_before": {"files": 84, "tests": 1294},
+    "regressions": 0,
+    "build": "PASS",
+    "viewer_http": 200,
+    "viewer_port": 3000,
+    "live_browser_capture": "REQUIRED_MANUAL"
+  },
+  "next_after_proof": "apply the MINIMUM correction to the proven owner only; add a regression (PLACE -> cancel -> IDLE -> no darkening element/state -> pointer reaches viewport); re-run suite/build/viewer"
+}

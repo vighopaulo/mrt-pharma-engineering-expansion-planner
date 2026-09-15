@@ -1,0 +1,88 @@
+{
+  "report": "MRT_PHARMA_EVI_MA03A_BENTLEY_AUTH_LIFECYCLE_REPORT",
+  "correction": "EVI-MA-03A",
+  "manual_acceptance": "PENDING",
+  "self_accepted": false,
+  "secret_safety": {
+    "token_or_secret_read_logged_tested_committed": false,
+    "inspected_only": ["env key names PRESENT/MISSING", "auth state booleans", "token expiry timestamp (not value)", "getAccessToken success (not value)"]
+  },
+  "root_cause": {
+    "primary": "EVI-MA-03 verified a token before FIRST mount but `ready` was a one-shot boolean never re-evaluated; when the token later expired/went stale the <Viewer> stayed mounted and BaseViewerInitializer rendered raw validTokenNeeded with no recovery path.",
+    "secondary": "silent-failure branch called signInRedirect which can be blocked in the embedded host, dead-ending auth.",
+    "classification": "stale/expired token after TOKEN_READY with no demotion (plus fragile auto-redirect)",
+    "not_client_instance_mismatch": "auth client memoized; same instance drives silent sign-in, getAccessToken, and <Viewer authClient>",
+    "not_callback_race": "SigninCallbackHandler completes handleSignInCallback before returning to /viewer"
+  },
+  "state_machine": {
+    "type": "ViewerAuthState = CONFIG_MISSING | INITIALIZING | AUTHENTICATING | TOKEN_READY | REAUTH_REQUIRED | ERROR",
+    "mount_condition": "viewerMayMount(state) === (state === 'TOKEN_READY')",
+    "token_ready_only_via": "TOKEN_VERIFIED",
+    "token_lost_while_ready": "REAUTH_REQUIRED",
+    "reconnect": "RECONNECT_REQUESTED -> AUTHENTICATING",
+    "pure_reducer": "viewerAuthReducer"
+  },
+  "token_verification": {
+    "after_silent_signin": "getAccessToken() via SAME client -> decideTokenReadiness (authorized + non-empty + not within 30s skew)",
+    "expiry_reverification": "30s interval while TOKEN_READY; on loss dispatch TOKEN_LOST -> REAUTH_REQUIRED (unmounts Viewer)",
+    "skew_ms": 30000,
+    "auto_redirect_on_silent_failure_removed": true
+  },
+  "same_auth_client": true,
+  "callback": { "completes_before_mount": true, "signin_callback_http_status": 200 },
+  "failure_ui": {
+    "raw_validTokenNeeded_as_primary": false,
+    "app_owned_overlay": "3D BIM authentication required + Reconnect Bentley 3D + Developer PRESENT/MISSING diagnostic",
+    "connecting_state_for_initializing_authenticating": true
+  },
+  "reconnect": {
+    "control": "Reconnect Bentley 3D",
+    "drives": "interactive PKCE (reconnectBentleyAuth) + reconnectNonce re-run",
+    "clears_app_state": false
+  },
+  "state_preservation": {
+    "equipment": "preserved (overlay singleton + localStorage)",
+    "hidden_lock_state": "preserved",
+    "clinical_assignments_planning_volumes": "preserved",
+    "2d_plan": "preserved",
+    "reconstruct_on_reconnect": true
+  },
+  "equipment_untouched": true,
+  "files_changed": {
+    "modified": [
+      "frontend/src/lib/viewerAuth.ts",
+      "frontend/src/components/viewer/LiveItwinViewer.tsx",
+      "frontend/src/routes/BentleyViewer.tsx",
+      "frontend/src/routes/BentleyViewer.css"
+    ],
+    "new": ["frontend/src/tests/eviMa03aAuthLifecycle.test.ts"]
+  },
+  "tests": {
+    "new_file": "frontend/src/tests/eviMa03aAuthLifecycle.test.ts",
+    "new_count": 13,
+    "covers": ["mount_only_token_ready", "config_missing_stays", "silent_ok_no_token_reauth", "token_verified_ready", "token_lost_demotes", "reconnect_restores", "auth_error", "expiry_skew", "cached_valid_ready", "stale_reauth_not_raw", "no_token_value_in_output", "states_are_enums"],
+    "baseline_before": { "files": 73, "tests": 1141 },
+    "baseline_after": { "files": 74, "tests": 1154, "result": "PASS" },
+    "tests_weakened": false
+  },
+  "verification": {
+    "typecheck_tsc_b": "PASS",
+    "production_build": "PASS_WITH_PREEXISTING_WARNINGS_ONLY",
+    "viewer_http_status": 200,
+    "signin_callback_http_status": 200,
+    "wasm_asset": "public/scripts/draco_decoder.wasm",
+    "bentley_worker_asset": "public/scripts/parse-imdl-worker.js",
+    "backend_python_modified": false
+  },
+  "dev_server": { "canonical_port": 3000, "left_running_for_user": true },
+  "manual_acceptance_steps": [
+    "Open /viewer; if auth valid, full 3D BIM renders",
+    "Normal refresh -> BIM returns OR Reconnect overlay (never only validTokenNeeded)",
+    "Hard refresh -> same",
+    "Click Reconnect -> complete Bentley PKCE -> BIM renders",
+    "Confirm Clinical Program + 2D plan + equipment state survived",
+    "Select KIUBE -> Hide/Show works; Delete unchanged",
+    "Refresh again -> BIM remains recoverable"
+  ],
+  "stop_condition": "Deterministic auth; Viewer mounts only on verified token readiness; raw validTokenNeeded prevented as normal UI; reconnect exists; refresh/expiry tested; app state survives; regressions pass; /viewer on 3000. STOP. Do not start PTS/RTHS/MRT animation/Build 2."
+}

@@ -1,0 +1,116 @@
+{
+  "report": "MRT_PHARMA_BUILD_1B_TRUE_2D_PLAN_FLOOR_RESTORATION_AND_TRAIL",
+  "checkpoint": "HOLD_FOR_BUILD_1B_MANUAL_ACCEPTANCE",
+  "continuation": "CURRENT_BUILD_1B_WORKING_TREE_ONLY",
+  "doctrine_flags": {
+    "WALKER_SINGLE_SOURCE_OF_TRUTH": "walkthroughController",
+    "PLAN_CAN_MOVE_WALKER": "NO",
+    "DUPLICATE_WALKER_STORE": "NO",
+    "DUPLICATE_ROOM_DISCOVERY_SYSTEM": "NO",
+    "HEADING_EQUALS_TRAIL": "NO",
+    "CROSS_STOREY_FALSE_CONNECTOR": "NO",
+    "ALL_BIM_ROOMS_PERMANENTLY_LABELLED": "NO",
+    "BUILD_1A_AUTHORITY_COMPLETION_DEFERRED": "YES"
+  },
+  "defects": [
+    {
+      "id": "DEFECT_1",
+      "title": "BIM floor geometry regressed to zero",
+      "observed_provenance": "0 rooms · 0 exact · 0 approx (dashed) · walker live",
+      "healthy_provenance": "200 rooms · 2 exact · 198 approx (dashed)",
+      "condition": "CLINICAL_PROGRAM_OFF_DURING_WALKTHROUGH",
+      "root_cause": "getBim2dPlanView reads getDiscoveredRoomVolumes() <- cachedModelSemantics.rooms, only hydrated by refreshModelSemantics() which was driven ONLY by the Clinical Program discovery effect (runs only when enabled). CP Off => semantics never hydrated => 0 rooms.",
+      "secondary_seam": "getBim2dPlanView defaulted storeyId to programState.activeStoreyId (Clinical Program storey) not the walker's active storey (violated storey truth section 8)."
+    },
+    {
+      "id": "DEFECT_2",
+      "title": "Walker shows position + direction but not progression",
+      "root_cause": "Bim2dPlanPanel projected position + heading on each walkthrough state but kept NO trail history; no app-owned trail existed."
+    }
+  ],
+  "changes": {
+    "new_files": [
+      "frontend/src/components/spatial/walkthroughTrail.ts",
+      "frontend/src/tests/build1bWalkthroughTrail.test.ts",
+      "frontend/src/tests/build1bWalkthroughTrailUi.test.tsx"
+    ],
+    "modified_files": [
+      "frontend/src/components/spatial/spatialAssetOverlay.ts",
+      "frontend/src/components/spatial/Bim2dPlanPanel.tsx"
+    ],
+    "defect_1_fix": [
+      "spatialAssetOverlay.ensureBim2dPlanRoomsHydrated(): triggers existing idempotent in-flight-guarded refreshModelSemantics() WITHOUT enabling Clinical Program; no second room registry.",
+      "getBim2dPlanView storey precedence: opts.storeyId ?? (walker.active ? walker.activeStoreyId : undefined) ?? programState.activeStoreyId.",
+      "Bim2dPlanPanel: on 0-room projection, call ensureBim2dPlanRoomsHydrated() once (guarded) then re-project."
+    ],
+    "defect_2_fix": [
+      "walkthroughTrail.ts pure module (emptyTrail/advanceTrail/breakTrailSegment/trailSegmentsForStorey/trailPointCountForStorey).",
+      "Bim2dPlanPanel: app-owned WalkthroughTrail state advanced from authoritative walkthrough samples; renders subdued-green polyline per active-storey segment BEHIND the bright walker marker; heading indicator kept separate."
+    ],
+    "trail_constants": {
+      "WALKTHROUGH_TRAIL_MIN_STEP_M": 0.5,
+      "WALKTHROUGH_TRAIL_JUMP_M": 5
+    },
+    "trail_sampling_rules": [
+      "append only on >= MIN_STEP_M XY translation",
+      "turn/pitch/FOV produce zero XY translation => never extend",
+      "storey change => new segment",
+      "teleport >= JUMP_M => new segment, no connector",
+      "new session (active false->true) => new segment, prior history kept",
+      "session end (active false) => history retained",
+      "breakTrailSegment => new segment at next sample (targeted entry/reset)"
+    ]
+  },
+  "preserved": [
+    "exact-vs-approximate (dashed) footprint provenance and honest counts",
+    "label-density policy (ALL_BIM_ROOMS_PERMANENTLY_LABELLED = NO)",
+    "room click selects same bimSpaceId, never moves walker",
+    "Enter Walkthrough Here safe spawn",
+    "mini-plan UX (no Fit/+/- toolbar, x close -> reopen chip)",
+    "candidate recommendation guard",
+    "equipment binding"
+  ],
+  "tests": {
+    "new_pure": {
+      "file": "build1bWalkthroughTrail.test.ts",
+      "sections": ["25_trail_sampling", "26_trail_segments"]
+    },
+    "new_ui": {
+      "file": "build1bWalkthroughTrailUi.test.tsx",
+      "sections": ["29a_live_trail", "29b_floor_geometry_coexistence_and_defect1_hydration"]
+    },
+    "existing_relied_on": [
+      "build1bPlan2d.test.ts (section 27 2D room pipeline / projection)",
+      "clinicalProgramOverlay.test.ts / build1bPlan2dUi.test.tsx (clinical room overlay coexistence)"
+    ]
+  },
+  "verification": {
+    "typecheck": "PASS",
+    "test_suite": { "files": 61, "tests": 1010, "failures": 0, "baseline_files": 59, "baseline_tests": 989, "added_files": 2, "added_tests": 21 },
+    "production_build": "PASS_with_preexisting_advisories_only",
+    "worker_head": "(()=>{\"use strict\";f",
+    "wasm_magic": "0061 736d",
+    "core_frontend_version": "5.12.5",
+    "dev_server_viewer_http": 200
+  },
+  "git_scope": {
+    "head": "1de2c5b0d01e3a69e0c5a744b1d58ae1f3526bd3",
+    "origin_main": "1de2c5b0d01e3a69e0c5a744b1d58ae1f3526bd3",
+    "divergence_left_right": "0 0",
+    "staged": [],
+    "py_files_changed": 0,
+    "env_file": { "path": "frontend/.env", "status": "MODIFIED_UNSTAGED", "ever_staged": false },
+    "committed": false,
+    "pushed": false
+  },
+  "forward_requirement_recorded_not_implemented": {
+    "build": "1B",
+    "requirement": "Equipment containment: validate equipment envelopes within parent room authoritative geometry and surface a PASS/FAIL cue on the 2D plan, reusing the existing equipment validation authority.",
+    "status": "RECORDED_ONLY"
+  },
+  "deferred_manual_gates": {
+    "BUILD_1A_AUTHORITY_COMPLETION_DEFERRED": "YES",
+    "action": "STOP_FOR_MANUAL_ACCEPTANCE",
+    "no_stage_commit_push": true
+  }
+}

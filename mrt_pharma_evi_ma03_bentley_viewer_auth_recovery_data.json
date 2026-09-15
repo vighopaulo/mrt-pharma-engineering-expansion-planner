@@ -1,0 +1,102 @@
+{
+  "report": "MRT_PHARMA_EVI_MA03_BENTLEY_VIEWER_AUTH_RECOVERY_REPORT",
+  "correction": "EVI-MA-03",
+  "manual_acceptance": "PENDING",
+  "self_accepted": false,
+  "reconcile": {
+    "branch": "main",
+    "head": "1de2c5b",
+    "origin_main": "1de2c5b",
+    "divergence_left_right": "0/0",
+    "env_file": "frontend/.env",
+    "env_tracked": true,
+    "env_modified_in_working_tree": true,
+    "env_overwritten": false,
+    "secret_values_read_or_logged": false,
+    "required_keys_present": true
+  },
+  "symptom": "Bentley 3D viewport shows baseViewerInitializer.validTokenNeeded; React shell + 2D plan render; 3D BIM absent.",
+  "proven_root_cause": {
+    "classification": "E/F/H — token not actually available at Viewer initialization (stale/expired silent session) + Viewer mounted before a verified token existed",
+    "is_code_regression_from_EVI": false,
+    "evidence": "baseViewerInitializer.validTokenNeeded is an @itwin/web-viewer-react i18n string absent from repo source; the only working-tree viewer/auth diff is harmless onDeselect wiring; auth/config/init-order/signin-callback untouched.",
+    "not": ["A_config_missing", "B_not_exposed_to_vite", "C_wrong_var_name", "D_env_not_loaded", "G_wrong_itwin_imodel", "I_wrong_cwd"]
+  },
+  "fix": {
+    "token_readiness_gate": {
+      "pure_fn": "viewerAuth.decideTokenReadiness",
+      "checks": ["isAuthorized", "hasSignedIn", "getAccessToken() non-empty", "accessTokenExpiresAt not past"],
+      "on_not_ready": "signInRedirect('/viewer') (interactive re-auth)",
+      "token_value_logged_or_stored": false,
+      "token_hardcoded": false
+    },
+    "config_diagnostic": {
+      "fn": "viewerConfig.resolveViewerConfigDiagnostic",
+      "required_keys": ["VITE_BENTLEY_SPA_CLIENT_ID", "VITE_BENTLEY_IMODEL_ID"],
+      "optional_keys": ["VITE_BENTLEY_AUTHORITY", "VITE_BENTLEY_SCOPE", "VITE_BENTLEY_REDIRECT_URI", "VITE_BENTLEY_POST_SIGNOUT_REDIRECT_URI", "VITE_BENTLEY_ITWIN_ID"],
+      "reports": "PRESENT/MISSING by name only",
+      "secret_values_in_output": false
+    },
+    "failure_ui": {
+      "message": "3D BIM viewer unavailable — Bentley/iTwin authentication is not ready.",
+      "developer_config_panel": "ViewerConfigDiagnosticPanel (PRESENT/MISSING, no secrets)",
+      "raw_validTokenNeeded_hidden_as_primary": true,
+      "failure_hidden": false
+    }
+  },
+  "files_changed": {
+    "modified": [
+      "frontend/src/lib/viewerAuth.ts",
+      "frontend/src/lib/viewerConfig.ts",
+      "frontend/src/components/viewer/LiveItwinViewer.tsx",
+      "frontend/src/routes/BentleyViewer.tsx",
+      "frontend/src/routes/BentleyViewer.css"
+    ],
+    "new": ["frontend/src/tests/eviMa03ViewerAuthRecovery.test.ts"]
+  },
+  "env_var_names": ["VITE_BENTLEY_SPA_CLIENT_ID", "VITE_BENTLEY_IMODEL_ID", "VITE_BENTLEY_AUTHORITY", "VITE_BENTLEY_SCOPE", "VITE_BENTLEY_REDIRECT_URI", "VITE_BENTLEY_POST_SIGNOUT_REDIRECT_URI", "VITE_BENTLEY_ITWIN_ID"],
+  "viewer_init_sequence": ["getViewerConfig", "construct PKCE BrowserAuthorizationClient", "signInSilent", "verify getAccessToken non-empty + authorized + not-expired (else signInRedirect)", "setReady", "mount <Viewer>", "ViewCreator3d spatial view", "viewport created", "MRTway decorators/tools attach", "equipment overlays render"],
+  "3d_bim_restoration_status": "config PRESENT; /viewer=200; /signin-callback=200; token gate routes unauthenticated/expired sessions through interactive sign-in. Live 3D paint requires the user to complete Bentley sign-in (PKCE redirect) — verified via manual acceptance, not headlessly.",
+  "regression_status": {
+    "equipment_code_modified": false,
+    "walkthrough_code_modified": false,
+    "persisted_state_touched": false
+  },
+  "verification": {
+    "test_baseline_before": { "files": 68, "tests": 1094 },
+    "test_baseline_after": { "files": 69, "tests": 1105, "result": "PASS" },
+    "new_tests": 11,
+    "typecheck_tsc_b": "PASS",
+    "production_build": "PASS_WITH_PREEXISTING_WARNINGS_ONLY",
+    "viewer_http_status": 200,
+    "signin_callback_http_status": 200,
+    "wasm_asset": "public/scripts/draco_decoder.wasm",
+    "bentley_worker_asset": "public/scripts/parse-imdl-worker.js",
+    "bentley_renderability_firewall_tests": { "tests": 28, "result": "PASS" },
+    "backend_python_modified": false,
+    "tests_weakened": false
+  },
+  "dev_server": {
+    "orphans_killed": true,
+    "canonical_port": 3000,
+    "strict_port": true,
+    "left_running_for_user": true,
+    "command": "npm run dev -- --port 3000 --strictPort (cwd frontend/)"
+  },
+  "manual_acceptance_steps": [
+    "Open http://localhost:3000/viewer; complete Bentley sign-in redirect if prompted",
+    "A. Full Bentley BIM geometry visible in main viewport",
+    "B. Clinical Program loads",
+    "C. 2D plan loads",
+    "D. Existing equipment at persisted positions",
+    "E. Cyclotron recognizable geometry",
+    "F. PET/CT recognizable geometry if placed",
+    "G. Walkthrough enters a room with authoritative geometry",
+    "H. Fit to Equipment works",
+    "I. Right-click equipment context menu works",
+    "J. Delete works",
+    "K. Collision rejection works",
+    "If A fails: STOP; the CTA shows an intelligible message + PRESENT/MISSING config (no secrets)"
+  ],
+  "stop_condition": "Automated verification passes; dev server running on 3000. STOP. Await manual EVI-MA-03 acceptance. Do not start PTS/RTHS/MRT animation/Build 2 routing."
+}

@@ -1,0 +1,102 @@
+{
+  "build": "EVI-MA-07",
+  "title": "Final Spatial-Editor UX Correction — persistent selection + exact action targeting + local object menu + Undo/Redo + canonical vestibule + physical wall openings",
+  "manual_acceptance": "PENDING",
+  "self_accepted": false,
+  "boundary": "no Build 1C, no Build 2, no routing/animation",
+  "reconcile": { "branch": "main", "head": "1de2c5b0d01e3a69e0c5a744b1d58ae1f3526bd3", "origin_main": "1de2c5b0d01e3a69e0c5a744b1d58ae1f3526bd3", "divergence": { "ahead": 0, "behind": 0 }, "test_baseline_start": { "files": 80, "tests": 1254 } },
+  "root_causes": {
+    "selection_loss_and_wrong_target": "authoritative selection was already persistent (only explicit click mutates it); the real defect was UI-layer — two family-specific floating controls + no captured-target local menu, and control clicks passing through to the viewport to re-pick. Fixed by construction: one captured-target local menu, handlers never re-raycast + always stopPropagation."
+  },
+  "selected_app_object": {
+    "authority": "getSelectedAppObjectRef (vestibule-then-equipment, mutually exclusive)",
+    "view_model": "getSelectedAppObjectView (title + hidden + locked + objectType/instanceId)",
+    "persists": true,
+    "cleared_only_by": ["select another app object", "deliberate empty-space click", "delete of selected", "Escape"],
+    "never_cleared_on": ["hover", "pointerleave", "mousemove", "cursor over a button"],
+    "anchor": "selectAppObjectWithAnchor captures the click/right-click page point; persists with selection"
+  },
+  "local_menu": {
+    "component": "ViewerAppObjectMenu.tsx",
+    "anchored_near_object": true,
+    "actions": ["Fit", "Hide/Show", "Lock/Unlock", "Delete"],
+    "captured_target": true,
+    "no_re_raycast": true,
+    "stop_propagation": "pointerdown+mousedown+click swallowed so button clicks never reach the viewport",
+    "left_and_right_click_same_menu": true,
+    "locked_delete_disabled_unlock_available": true,
+    "delete_undo_toast": true,
+    "no_window_confirm": true
+  },
+  "undo_redo": {
+    "module": "appEditHistory.ts (bounded <=100)",
+    "command": "AppEditCommand {type, objectType, instanceId, beforeState, afterState, timestamp}",
+    "recorded": ["DELETE", "HIDE", "SHOW", "MOVE", "ROTATE", "LOCK", "UNLOCK"],
+    "undo_delete_restores_same_instance": true,
+    "never_touches_bim_or_camera": true,
+    "keyboard": ["Ctrl/Cmd+Z undo", "Ctrl/Cmd+Shift+Z redo"],
+    "toolbar_disabled_when_empty": true,
+    "cleared_on_imodel_switch": true
+  },
+  "canonical_vestibule": {
+    "asset_id": "MRTWAY_CLINICAL_LOGISTICS_VESTIBULE",
+    "owner": "MRTway Systems",
+    "family": "CLINICAL_LOGISTICS_VESTIBULE",
+    "visual_family": "CLINICAL_LOGISTICS_VESTIBULE_V1",
+    "asset_category": "FACILITY_LOGISTICS_INTERFACE",
+    "not_medical_equipment": true,
+    "configs": ["MRTWAY_CLV_RADIOPHARMACY", "MRTWAY_CLV_PHARMACY", "MRTWAY_CLV_LABORATORY", "MRTWAY_CLV_STERILE_CLEAN_SUPPLY", "MRTWAY_CLV_LAUNDRY_LINEN"],
+    "radiopharmacy_ports": ["MRT", "RADIOPHARMACEUTICAL_QUALIFIED_PTS"],
+    "config_independent_of_visual_family": true,
+    "instance_carries_canonical_ids": ["canonicalAssetId", "canonicalConfigId"],
+    "persistence_backfill_for_pre_canonical_records": true,
+    "no_duplicate_cta": "Select Radiopharmacy Vestibule (select+Fit) shown when one already exists in the room"
+  },
+  "front_face_two_hollow_openings": {
+    "simplified": "shallow wall-flush fascia + door + handle + HMI + tri-status + e-stop + service panel; no room-side manifold clutter",
+    "mrt_opening": { "roles": ["CLV_MRT_OPENING_FRAME", "CLV_MRT_OPENING_VOID"], "shape": "RECTANGULAR", "hollow_void": true },
+    "pts_opening": { "roles": ["CLV_PTS_OPENING_RING", "CLV_PTS_OPENING_VOID"], "shape": "CIRCULAR", "hollow_bore": true },
+    "openings_separate": true,
+    "pts_much_smaller_than_mrt": true,
+    "gated_by_configured_ports": true,
+    "behind_wall_preserved": ["hollow transfer chamber", "MRT rectangular passage -> 4 planar reducer -> trunk", "PTS circular bore OD/ID/pig/clearance"],
+    "part_band": { "was": "15-30", "now": "15-40", "reason": "documented spec-driven: two explicit front openings added" }
+  },
+  "independent_pose": {
+    "drag_one_moves_only_it": true,
+    "source_cyclotron_id_is_provenance_only": true,
+    "no_transform_parenting_or_group_move_or_duct": true,
+    "2d_marker_click_converges_on_same_selection": true,
+    "persists": ["independent poses", "hidden/visible", "canonical identity"]
+  },
+  "files": {
+    "new": [
+      "frontend/src/components/spatial/appEditHistory.ts",
+      "frontend/src/components/spatial/ViewerAppObjectMenu.tsx",
+      "frontend/src/components/spatial/ViewerUndoRedoToolbar.tsx",
+      "frontend/src/tests/eviMa07SpatialEditorHistoryCanonical.test.ts",
+      "frontend/src/tests/eviMa07LocalMenuDom.test.tsx"
+    ],
+    "modified": [
+      "frontend/src/components/spatial/spatialAssetOverlay.ts",
+      "frontend/src/components/spatial/clinicalLogisticsVestibule.ts",
+      "frontend/src/components/spatial/equipmentGeometry.ts",
+      "frontend/src/components/spatial/MrtDirectManipulationTool.ts",
+      "frontend/src/components/spatial/ViewerSelectedEquipmentControl.tsx",
+      "frontend/src/routes/BentleyViewer.tsx",
+      "frontend/src/routes/BentleyViewer.css",
+      "frontend/src/tests/eviMa05ClinicalLogisticsVestibule.test.ts",
+      "frontend/src/tests/eviMa05aLiveVestibuleAndHollowPassages.test.ts"
+    ]
+  },
+  "verification": {
+    "typecheck": "PASS (npx tsc -b, 0 errors)",
+    "evi_ma07_suites": "20 passed (13 history/canonical/openings + 7 DOM menu)",
+    "full_suite": { "files": 82, "tests": 1274, "status": "all pass", "delta_files": 2, "delta_tests": 20 },
+    "production_build": "PASS (pre-existing INEFFECTIVE_DYNAMIC_IMPORT + chunk-size warnings only)",
+    "viewer_http_status": 200,
+    "dev_server_port": 3000
+  },
+  "honesty_note": "Live-browser selection persistence, camera Fit, and undo-delete-restore in the running Bentley viewer are not headlessly verifiable; the authoritative-selection derivation, captured-target dispatch, stopPropagation contract, Undo/Redo stack + exact-snapshot restore, canonical identity, and hollow-opening geometry are test/typecheck/build verified. Live confirmation is the authoritative manual step.",
+  "stop_conditions_respected": ["no Build 1C", "no Build 2", "no PTS routing", "no MRT routing", "no RTHS", "no AGV/AMR", "no carrier/pig animation", "no dispatch/scheduling", "no travel-time"]
+}

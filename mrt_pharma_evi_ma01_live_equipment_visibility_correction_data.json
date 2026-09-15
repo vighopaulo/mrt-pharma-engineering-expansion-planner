@@ -1,0 +1,122 @@
+{
+  "report": "MRT_PHARMA_EVI_MA01_LIVE_EQUIPMENT_VISIBILITY_CORRECTION_REPORT",
+  "correction": "EVI-MA-01",
+  "manual_acceptance": "PENDING",
+  "self_accepted": false,
+  "root_cause": {
+    "primary": "Equipment render block in ClinicalProgramDecorator.decorate() ran AFTER `if(!enabled) return`, `if(mode!=NORMAL_PLANNING) return`, and `if(overlay.length===0) return`, so a validly placed cyclotron was never submitted to Bentley whenever the clinical overlay derived zero rows for the active storey / program state.",
+    "secondary": "computeEquipmentWorldBounds padded a vertical (Z-axis) cylinder's radius on the Z axis, making the cyclotron body bounds extend below the room floor (mis-framed camera + physically wrong)."
+  },
+  "broken_seam": [
+    "frontend/src/components/spatial/ClinicalProgramDecorator.ts (equipment block after overlay early returns)",
+    "frontend/src/components/spatial/equipmentGeometry.ts (extendByCylinder radius padding on axis)"
+  ],
+  "live_chain_trace": {
+    "canonical_to_instance": "PASS",
+    "equipmentInstances_array": "PASS",
+    "getEquipmentForRender": "PASS",
+    "resolveVisualFamily": "PASS",
+    "buildEquipmentParts_nonempty": "PASS",
+    "decorator_submits_to_bentley": { "before": "FAIL_NOT_REACHED", "after": "PASS" },
+    "graphicbuilder_solids": { "before": "NOT_REACHED", "after": "PASS" },
+    "world_z_from_parent_floor": { "before": "BOUNDS_DIPPED_BELOW_FLOOR", "after": "PASS" },
+    "viewport_visible_locatable": { "before": "FAIL", "after": "PASS_VIA_FIT_TO_EQUIPMENT" }
+  },
+  "z_findings": {
+    "zBase_source": "parent room authoritative zLow (seedEquipmentPlacementFromParent / placeEquipmentInParent)",
+    "hardcoded_floor": false,
+    "assumed_ground_floor": false,
+    "second_floor_fixture_zBase_nonzero": true,
+    "visual_bottom_on_floor_after_fix": true
+  },
+  "scale_findings": {
+    "microscopic": false,
+    "oversized": false,
+    "below_floor": false,
+    "degenerate": false,
+    "derives_from_envelope": true,
+    "kiube_envelope": "1.9x1.9x1.8 MANUFACTURER_CALIBRATED (clamped to room footprint)"
+  },
+  "bentley_graphicbuilder_findings": {
+    "box": "Box.createRange (yawed corners)",
+    "cylinder": "Cone.createAxisPoints",
+    "graphic_type": "WorldDecoration",
+    "opaque_equipment_symbology": true,
+    "envelope_more_translucent_when_visual_present": true,
+    "non_degenerate_validated": true
+  },
+  "visual_family_mapping": {
+    "CYCLOTRON": "GENERIC_MEDICAL_CYCLOTRON_V1",
+    "SCANNER": "GENERIC_PET_CT_SCANNER_V1",
+    "HOT_CELL|RADIOPHARMACY_WORKCELL|DISPENSING_UNIT": "GENERIC_RADIOPHARMACY_HOTCELL_V1",
+    "GENERATOR_no_family": "VISUAL_NOT_AVAILABLE"
+  },
+  "equipment_selection": {
+    "authoritative_reference": "selectedEquipmentId",
+    "clicking_kiube_selects_kiube_not_discovery_mi": true,
+    "second_lifecycle_created": false,
+    "highlight_without_identity_change": true
+  },
+  "fit_to_equipment": {
+    "bounds": "computeEquipmentWorldBounds (visual parts UNION envelope)",
+    "reuses": "walkthroughController.fitViewToRoom",
+    "works_in_planning": true,
+    "selects_and_keeps_selected": true,
+    "mutates_pose_parent_assignment_containment": false,
+    "honest_failure": "VISUAL_NOT_AVAILABLE"
+  },
+  "placed_assets_zero_resolution": {
+    "cause": "Legacy ViewerAssetLibrary counted only the older generic AssetInstance store, not clinical EquipmentAssetInstance.",
+    "fix": "Retitled to 'Legacy / Test Assets (N)'; empty message points to Clinical Program panel for clinical equipment.",
+    "stores_merged": false
+  },
+  "diagnostic": {
+    "pure_builder": "buildEquipmentVisualDiagnostic",
+    "overlay_accessor": "getEquipmentVisualDiagnostic(id)",
+    "fields": ["equipmentInstanceId", "canonicalModelId", "canonicalClass", "visualFamily", "parentRoomId", "x", "y", "zBase", "yaw", "envelopeBounds", "visualBounds", "primitiveCount", "renderable"]
+  },
+  "regressions_preserved": {
+    "discovery_mi_intact": true,
+    "radiopharmacy_planning_volume_vs_equipment_distinct": true,
+    "build1b_ma_and_evi_work_preserved": true
+  },
+  "files_changed": {
+    "modified": [
+      "frontend/src/components/spatial/ClinicalProgramDecorator.ts",
+      "frontend/src/components/spatial/equipmentGeometry.ts",
+      "frontend/src/components/spatial/spatialAssetOverlay.ts",
+      "frontend/src/components/spatial/ClinicalProgramControl.tsx",
+      "frontend/src/components/spatial/ViewerAssetLibrary.tsx"
+    ],
+    "new": [
+      "frontend/src/tests/eviMa01LiveEquipmentVisibility.test.ts"
+    ]
+  },
+  "test_baseline": {
+    "before": { "files": 65, "tests": 1053 },
+    "after": { "files": 66, "tests": 1065, "result": "PASS" },
+    "new_tests": 12,
+    "tests_weakened": false,
+    "note": "2 initially-failing new tests exposed the real cylinder-bounds bug; the bug was fixed, not the tests."
+  },
+  "verification": {
+    "typecheck_tsc_b": "PASS",
+    "production_build": "PASS_WITH_PREEXISTING_WARNINGS_ONLY",
+    "viewer_http_status": 200,
+    "wasm_asset": "public/scripts/draco_decoder.wasm",
+    "bentley_worker_asset": "public/scripts/parse-imdl-worker.js",
+    "openusd_firewall_tests": { "tests": 125, "result": "PASS" },
+    "backend_python_modified": false
+  },
+  "manual_acceptance_steps": [
+    "Open /viewer",
+    "Select IBA Cyclone KIUBE from placed clinical equipment",
+    "Confirm card: IBA Cyclone KIUBE / CYCLOTRON",
+    "Press Fit to Equipment -> viewport frames a recognizable cyclotron (body + shielding + service cabinet), not label/marker/box/planning-volume",
+    "Toggle engineering envelope -> cyclotron stays visible",
+    "Enter Walkthrough in parent room -> cyclotron spatially present",
+    "Discovery MI -> Fit to Equipment -> recognizable PET/CT",
+    "Radiopharmacy hot-cell if present -> recognizable hot-cell/workbench/dispensing"
+  ],
+  "stop_condition": "Automated verification green. STOP. Await user Fit-to-Equipment visual confirmation. Do not start PTS/RTHS/MRT animation/Build 2."
+}

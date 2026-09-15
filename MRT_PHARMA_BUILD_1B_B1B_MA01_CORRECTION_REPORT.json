@@ -1,0 +1,86 @@
+{
+  "defect_id": "B1B-MA-01",
+  "title": "Parent-derived ClinicalPlanningVolume containment failure after candidate-room acceptance",
+  "build": "1B",
+  "status": "IMPLEMENTED / AUTOMATED GREEN / MANUAL RETEST REQUIRED",
+  "manual_acceptance": "PENDING",
+  "build_1b_marked_complete": false,
+  "baseline_commit": "1de2c5b0d01e3a69e0c5a744b1d58ae1f3526bd3",
+  "branch": "main",
+  "reproduction_path": "2D18 TECH. OFFICE -> PET/CT Scanner Room -> Use This Room",
+  "root_cause": {
+    "primary": "seedPrismParamsFromParent built an axis-aligned box sized to ~50% of the footprint AABB, centered on the vertex mean; for rotated/irregular rooms the box protruded past the actual polygon and the anchor could fall outside it, so the parent-derived volume genuinely failed containment against its own parent.",
+    "residual": "boxContainedInPolygon verified a box shrunk by the wall-clearance inset while the seed built the full-size box, so built corners could protrude beyond what was verified interior."
+  },
+  "fix": {
+    "seed_center": "proven-interior anchor (resolveRoomInteriorAnchor) when available, else AABB center, else vertex mean",
+    "seed_size": "shrink-to-fit: start ~25% XY extent, x0.7 up to 12 steps until corners+edges+center (plus wall-clearance inset) are inside outer polygon and outside holes",
+    "box_check_corrected": "boxContainedInPolygon now tests halfExtent + inset so the built box is strictly interior with clearance",
+    "z_contract": "preserved Build 1A floor-aware contract: zLow == room floor, no Z inset (horizontal +X containment ray does not require it; equipment zBase derives from this zLow)",
+    "wall_clearance_inset_m": 0.25,
+    "reparent_ux": "reparentClinicalFunction selects the new parent space so Build 1A.4 Restore/Reset recovery controls are reachable"
+  },
+  "geometry_authority": {
+    "exact_vs_approximate_preserved": true,
+    "fail_vs_not_evaluated_preserved": true,
+    "not_evaluated_for_approximate_parent": true,
+    "pass_never_fabricated": true,
+    "fail_never_suppressed": true,
+    "containment_tolerance_unchanged": true
+  },
+  "equipment_gate_unchanged": true,
+  "canonical_identity_preserved": {
+    "ge_discovery_mi_exact_vs_proxy": true,
+    "closed_domains_untouched": true
+  },
+  "before_after_containment": [
+    { "condition": "rotated rectangular parent (2D18-like)", "before": "FAIL", "after": "PASS" },
+    { "condition": "axis-aligned rectangular parent", "before": "PASS", "after": "PASS" },
+    { "condition": "L-shaped / irregular parent", "before": "FAIL", "after": "PASS" },
+    { "condition": "volume deliberately outside parent", "before": "FAIL", "after": "FAIL" },
+    { "condition": "approximate parent (no exact mesh)", "before": "NOT_EVALUATED", "after": "NOT_EVALUATED" }
+  ],
+  "files_changed": [
+    "frontend/src/components/spatial/clinicalPlanningVolume.ts",
+    "frontend/src/components/spatial/spatialAssetOverlay.ts",
+    "frontend/src/tests/build1bB1bMa01ReparentContainment.test.ts"
+  ],
+  "new_test_file": "frontend/src/tests/build1bB1bMa01ReparentContainment.test.ts",
+  "new_tests_count": 8,
+  "verification": {
+    "typecheck": "PASS",
+    "test_files_baseline": 61,
+    "test_files_after": 62,
+    "tests_baseline": 1010,
+    "tests_after": 1018,
+    "test_failures": 0,
+    "production_build": "PASS",
+    "worker_head": "(()=>{\"use strict\";f",
+    "wasm_magic": "0061 736d",
+    "core_frontend_version": "5.12.5",
+    "viewer_http": 200,
+    "dev_server_port": 3000,
+    "dev_server_restarted_clean": true
+  },
+  "scope_review": {
+    "py_or_closed_domain_changes": false,
+    "env_file_modified_by_this_fix": false,
+    "env_file_state": "M (pre-existing, unstaged)",
+    "staged": false,
+    "committed": false,
+    "pushed": false
+  },
+  "limitations": [
+    "Seed is a conservative axis-aligned box; extreme aspect-ratio rotated rooms get a smaller-than-hand-tuned but guaranteed-contained box (user can grow/rotate via editor with live re-evaluation).",
+    "Containment sampling is bounded (corners + edge midpoints + center), robust for planning but not an exact solid-intersection proof.",
+    "Approximate-only rooms remain NOT_EVALUATED by design."
+  ],
+  "manual_retest_steps": [
+    "Load MRTway Medical Clinic Demo; confirm /viewer renders.",
+    "Open candidate-room picker for the PET/CT Scanner Room clinical function.",
+    "Select 2D18 TECH. OFFICE and click Use This Room.",
+    "Confirm regenerated PET/CT volume shows containment PASS and the new parent is selected.",
+    "Confirm equipment placement enabled and Discovery MI identity preserved.",
+    "Negative: move volume outside parent -> honest FAIL, Lock disabled with reason, Restore/Reset recover it."
+  ]
+}

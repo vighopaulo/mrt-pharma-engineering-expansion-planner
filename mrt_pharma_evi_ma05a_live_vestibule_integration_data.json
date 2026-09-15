@@ -1,0 +1,122 @@
+{
+  "build": "EVI-MA-05A",
+  "title": "Live Clinical Logistics Vestibule Placement, Bentley Rendering, Interaction & Persistence (+ supplemental hollow passages)",
+  "manual_acceptance": "PENDING",
+  "self_accepted": false,
+  "boundary": "ends at the transport connection ports; NO routing, NO carrier/capsule animation, NO travel-time physics (Build 2)",
+  "reconcile": {
+    "branch": "main",
+    "head": "1de2c5b0d01e3a69e0c5a744b1d58ae1f3526bd3",
+    "origin_main": "1de2c5b0d01e3a69e0c5a744b1d58ae1f3526bd3",
+    "divergence": { "ahead": 0, "behind": 0 },
+    "prior_failed_session_edits": 0,
+    "test_baseline_start": { "files": 76, "tests": 1196 }
+  },
+  "reused_architecture": {
+    "visual_family": "CLINICAL_LOGISTICS_VESTIBULE_V1",
+    "one_instance_model": "ClinicalLogisticsVestibuleInstance",
+    "no_new_vestibule_model": true,
+    "mirrors_equipment_lifecycle": true
+  },
+  "live_create": {
+    "trigger": "CREATE RADIOPHARMACY VESTIBULE button on the selected-cyclotron floating control (cyclotron only, no scrolling)",
+    "pipeline": ["resolve selected cyclotron", "resolve parent BIM room", "ensureAuthoritativeRoomFootprint", "enumerate defensible walls longest-first", "seed wall-integrated pose", "collision-check reserved volume", "create ONE instance", "persist", "select", "fit"],
+    "same_parent_room_as_cyclotron": true,
+    "honest_outcomes": ["VESTIBULE_ALREADY_EXISTS (select+fit existing)", "NO_DEFENSIBLE_WALL", "VESTIBULE_COLLISION", "ROOM_TOO_SHORT"],
+    "duplicate_guard": "one active RADIOPHARMACY vestibule per production context (same parent room)"
+  },
+  "wall": {
+    "wall_integrated_not_centroid": true,
+    "opposite_wall_acceptable": true,
+    "not_shortest_cyclotron_distance": true,
+    "wallRelationshipStatus": "PROPOSED_WALL_PENETRATION",
+    "bim_wall_immutable": true
+  },
+  "rendering": {
+    "path": "ClinicalProgramDecorator.drawVestibules -> drawEquipmentVisual (shared palette, outline-only selection)",
+    "room_side_roles": ["CLV_WALL_FASCIA", "CLV_TRANSFER_DOOR", "CLV_TRANSFER_APERTURE", "CLV_HANDLE", "CLV_HMI", "CLV_STATUS_GREEN", "CLV_STATUS_AMBER", "CLV_STATUS_RED", "CLV_ESTOP", "CLV_SERVICE_PANEL"],
+    "behind_wall_roles": ["CLV_WALL_SLEEVE", "CLV_REAR_MANIFOLD", "CLV_MRT_MANIFOLD_SECTION", "CLV_MRT_REDUCER_FACE(x4 planar)", "CLV_MRT_TRUNK_STUB", "CLV_MRT_TRUNK_PORT", "CLV_PTS_ADAPTER", "CLV_PTS_TUBE_STUB", "CLV_PTS_PORT"],
+    "distinct_from_cyclotron": true,
+    "not_cyan": true,
+    "part_count_dual": 29,
+    "part_count_in_15_30_band": true
+  },
+  "pick_and_selection": {
+    "one_pickId_per_vestibuleInstanceId": true,
+    "separate_pick_map_from_equipment": true,
+    "vestibule_pick_never_returns_equipment_id": true,
+    "left_click_selects_vestibule": true,
+    "selectEquipment_clears_selectedVestibule": true
+  },
+  "floating_control": {
+    "component": "ViewerSelectedVestibuleControl.tsx",
+    "composite_snapshot": "id|hidden|lifecycle (EVI-MA-02E doctrine)",
+    "buttons": ["Fit", "Hide/Show", "Lock/Unlock", "Delete"],
+    "metadata": ["Service", "Parent room", "MRT status", "PTS qualification + status"],
+    "fit_uses": "computeEquipmentWorldBounds(family + vestibulePorts) view-only"
+  },
+  "lifecycle": {
+    "hide_show": "persists hidden; keeps pose/ports/reserved space; recoverable",
+    "lock": "stays visible/selectable; Fit + Hide/Show work; pose edits blocked",
+    "delete": "removes ONE instance + both ports + reserved space; cyclotron + BIM wall remain; persists; no resurrect"
+  },
+  "two_d_plan": {
+    "one_marker_per_vestibule": true,
+    "shows": ["front-face location against wall", "wall penetration segment", "MRT stub direction", "PTS stub direction"],
+    "hit_test": "hitTestPlanVestibule -> vestibuleInstanceId (select + fit)",
+    "hidden_recoverable_marker": true,
+    "no_separate_mrt_pts_markers": true
+  },
+  "ports": {
+    "persisted_fields": ["portId", "vestibuleInstanceId", "transportFamily", "ptsQualification/mrtConfiguration", "position", "orientation", "crossSection", "innerCrossSection", "carrierEnvelope", "clearance", "centerline", "status", "fabricated"],
+    "mrt": { "shape": "RECTANGULAR reducer/trunk stub", "status": "UNCONNECTED" },
+    "pts": { "shape": "CIRCULAR tube stub", "qualification": "RADIOPHARMACEUTICAL_QUALIFIED", "status": "UNCONNECTED" },
+    "no_auto_nuclear_upgrade": true
+  },
+  "hollow_passages": {
+    "vestibule_chamber": "vestibuleInternalChamber: housing vs wallThickness vs internal free W/H/D (internal < housing); rendered as CLV_CHAMBER_VOID recess",
+    "mrt_tract": {
+      "inner_from_carrier_plus_clearance": "W_inner = W_carrier + 2*C_side ; H_inner = H_carrier + 2*C_vertical",
+      "outer": "inner + 2*wall (outer > inner)",
+      "reducer": "four planar faces surrounding a continuous inner void that narrows toward the trunk (CLV_MRT_INNER_VOID two segments)"
+    },
+    "pts_branch": {
+      "relations": "OD > ID > pig > vial",
+      "bore": "ID = pig_OD + 2*radial_clearance ; OD = ID + 2*wall",
+      "rendered": "CLV_PTS_INNER_BORE dark cylinder inside the tube"
+    },
+    "distinct_scales": "MRT free width >> PTS bore; MRT carrier cannot be a PTS carrier",
+    "collision_vs_clearance": "external collision uses OUTER (reserved volume + outer cross-section); future carrier motion uses INNER free passage + centerline; both persisted",
+    "representative_values_m": {
+      "mrt_carrier": [0.34, 0.34], "mrt_clearance_side": 0.03, "mrt_clearance_vertical": 0.03, "mrt_wall": 0.04,
+      "pts_vial": 0.05, "pts_pig": 0.09, "pts_radial_clearance": 0.008, "pts_wall": 0.012
+    }
+  },
+  "files": {
+    "new": [
+      "frontend/src/components/spatial/ViewerSelectedVestibuleControl.tsx",
+      "frontend/src/tests/eviMa05aLiveVestibuleAndHollowPassages.test.ts"
+    ],
+    "modified": [
+      "frontend/src/components/spatial/clinicalLogisticsVestibule.ts",
+      "frontend/src/components/spatial/equipmentGeometry.ts",
+      "frontend/src/components/spatial/spatialAssetOverlay.ts",
+      "frontend/src/components/spatial/ClinicalProgramDecorator.ts",
+      "frontend/src/components/spatial/MrtDirectManipulationTool.ts",
+      "frontend/src/routes/BentleyViewer.tsx",
+      "frontend/src/routes/BentleyViewer.css",
+      "frontend/src/components/spatial/bim2dPlanProjection.ts",
+      "frontend/src/components/spatial/Bim2dPlanPanel.tsx"
+    ]
+  },
+  "verification": {
+    "typecheck": "PASS (npx tsc -b, 0 errors)",
+    "evi_ma05a_and_evi_ma05_suites": "48 passed",
+    "full_suite": { "files": 77, "tests": 1217, "status": "all pass", "delta_files": 1, "delta_tests": 21 },
+    "production_build": "PASS (pre-existing INEFFECTIVE_DYNAMIC_IMPORT + chunk-size warnings only)",
+    "viewer_http_status": 200,
+    "dev_server_port": 3000
+  },
+  "honesty_note": "Live 3D appearance, camera Fit, and 3D/2D click selection in the running viewer are not headlessly verifiable; domain lifecycle, geometry recipe, port model, hollow/clearance math, projection, and persistence are test/typecheck/build verified.",
+  "stop_conditions_respected": ["no PTS routing", "no MRT routing", "no RTHS", "no AGV/AMR", "no hospital-wide network", "no capsule/carrier animation", "no dispatch/scheduling", "no travel-time calc", "no Build 2"]
+}

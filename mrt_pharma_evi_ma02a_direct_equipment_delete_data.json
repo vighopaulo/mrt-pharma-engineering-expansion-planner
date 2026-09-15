@@ -1,0 +1,106 @@
+{
+  "report": "MRT_PHARMA_EVI_MA02A_DIRECT_EQUIPMENT_DELETE_REPORT",
+  "correction": "EVI-MA-02A",
+  "manual_acceptance": "PENDING",
+  "self_accepted": false,
+  "reconcile": {
+    "branch": "main",
+    "head": "1de2c5b",
+    "origin_main": "1de2c5b",
+    "divergence_left_right": "0/0",
+    "uncommitted_work_preserved": true,
+    "restarted_or_reset": false
+  },
+  "proven_live_root_cause": "MrtDirectManipulationTool (the only handler of left-click select + right-click context menu) was armed ONLY by ViewerAssetLibrary when placed.length>0 (legacy AssetInstances). Clinical EquipmentAssetInstance is a separate store, so a cyclotron-only scene never installed the tool and live right-click never reached the equipment handlers. Unit tests passed because they tested pure resolution, not tool installation.",
+  "fix_tool_arming": {
+    "armed_on": ["placeEquipmentInParent success", "loadEquipmentForIModel hydrate (persisted equipment)", "ClinicalProgramControl effect keyed on equipment.length"],
+    "helper": "ensureDirectManipulationReady (idempotent, IDLE-gated, registers ClinicalProgramDecorator)",
+    "independent_of_legacy_assets": true,
+    "temporary_instrumentation_removed": true
+  },
+  "pick_id_architecture": {
+    "one_stable_pick_id_per_equipmentInstanceId": true,
+    "threaded_into": ["recognizable_geometry", "envelope"],
+    "resolvers": ["testDecorationHit", "equipmentIdForPickId"],
+    "identity": "equipmentInstanceId (never model name, never BIM element id)"
+  },
+  "left_click": "resolve pick -> selectEquipment(id); clears legacy asset selection; card + 2D marker converge; hover never selects",
+  "right_click": "opens equipment context menu for exact instance (selects first)",
+  "context_menu": {
+    "title": "canonicalEquipmentById(canonicalEquipmentId).manufacturer + model (e.g. IBA Cyclone KIUBE / IBA Cyclone KEY)",
+    "commands": ["Fit to Equipment", "Lock/Unlock", "Hide", "Delete"],
+    "delete_disabled_when_locked": true,
+    "unlock_in_same_menu": true,
+    "closes_on": ["delete_success", "hide_success", "click_elsewhere", "escape", "select_other", "target_gone"]
+  },
+  "delete": {
+    "calls": "deleteEquipment(equipmentInstanceId)",
+    "same_lifecycle_as_card": true,
+    "removes": ["3d_geometry", "envelope", "label", "2d_marker", "card", "count", "selection", "persistence"],
+    "delete_key_not_kiube": true,
+    "delete_one_kiube_not_other": true,
+    "bim_cannot_delete": true
+  },
+  "spatial_exclusivity": {
+    "pure_test": "equipmentVolumesIntersect (2D OBB SAT on yawed footprint + Z-range overlap)",
+    "tolerance_m": 0.02,
+    "uses_actual_volume": ["x", "y", "zBase", "yaw", "width", "depth", "height"],
+    "not_based_on": ["center_distance", "room_membership", "2d_marker_overlap", "model_label"],
+    "locked_reserves_space": true,
+    "placement_rejects_creates_nothing": true,
+    "validation_order": ["parent_room", "pose", "volume", "containment", "equipment_collision", "create"],
+    "pose_edits_gated": ["updateEquipmentPlacement", "translate", "rotate", "restore", "reset"],
+    "pose_edit_keeps_last_valid_on_reject": true,
+    "auto_merge": false,
+    "auto_move_or_delete_existing": false
+  },
+  "selection_convergence": {
+    "single_authority": "selectedEquipmentId",
+    "paths": ["3d_left_click", "3d_right_click", "2d_marker_click", "equipment_card"],
+    "2d_plan_updates_on_delete": true
+  },
+  "no_regression": {
+    "recognizable_geometry_preserved": true,
+    "fit_to_equipment_view_only": true,
+    "card_delete_kept": true,
+    "discovery_mi_intact": true
+  },
+  "files_changed": {
+    "modified": [
+      "frontend/src/components/spatial/equipmentInstance.ts",
+      "frontend/src/components/spatial/spatialAssetOverlay.ts",
+      "frontend/src/components/spatial/ClinicalProgramControl.tsx",
+      "frontend/src/components/spatial/ViewerEquipmentContextMenu.tsx"
+    ],
+    "new": ["frontend/src/tests/eviMa02aEquipmentExclusivity.test.ts"]
+  },
+  "tests": {
+    "new_file": "frontend/src/tests/eviMa02aEquipmentExclusivity.test.ts",
+    "new_count": 18,
+    "covers": ["oriented_intersection", "flush_tolerance", "z_disjoint", "rotation_respected", "findEquipmentCollision_first_conflict", "self_exclude", "locked_reserves", "12F_A_first_wins", "12F_B_delete_then_reuse", "12F_C_same_model_duplicate", "12F_D_rotated_collision", "12F_E_non_overlapping", "12F_F_locked_blocks", "move_reject_and_clear", "context_menu_title_canonical"],
+    "baseline_before": { "files": 67, "tests": 1076 },
+    "baseline_after": { "files": 68, "tests": 1094, "result": "PASS" },
+    "tests_weakened": false
+  },
+  "verification": {
+    "typecheck_tsc_b": "PASS",
+    "production_build": "PASS_WITH_PREEXISTING_WARNINGS_ONLY",
+    "viewer_http_status": 200,
+    "wasm_asset": "public/scripts/draco_decoder.wasm",
+    "bentley_worker_asset": "public/scripts/parse-imdl-worker.js",
+    "openusd_firewall_tests": { "tests": 125, "result": "PASS" },
+    "backend_python_modified": false
+  },
+  "manual_acceptance_steps": [
+    "Left-click KIUBE -> selected",
+    "Right-click KIUBE -> menu title 'IBA Cyclone KIUBE'",
+    "Fit to Equipment -> KIUBE framed",
+    "Delete -> KIUBE fully disappears (geometry, envelope, label, 2D marker, card)",
+    "KEY remains",
+    "Right-click KEY -> title 'IBA Cyclone KEY' -> Delete -> KEY disappears; BIM room untouched",
+    "Exclusivity: place KIUBE; attempt KEY partially inside KIUBE volume -> REJECTED (nothing created)",
+    "Delete KIUBE via 3D right-click -> Delete",
+    "Repeat exact KEY placement -> now ACCEPTED"
+  ],
+  "stop_condition": "Automated criteria pass. STOP. Await manual EVI-MA-02A acceptance. Do not start PTS/RTHS/MRT animation/Build 2 routing."
+}

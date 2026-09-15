@@ -1,0 +1,89 @@
+{
+  "build": "EVI-MA-06",
+  "title": "Universal Application-Object Direct Manipulation (unified pick + left-click + drag/drop + right-click + delete)",
+  "manual_acceptance": "PENDING",
+  "self_accepted": false,
+  "manual_testing_authoritative": true,
+  "scope": "final direct-manipulation architecture build before repository/engineering-document reconciliation audit; no Build 2, no transport routing/animation",
+  "reconcile": {
+    "branch": "main",
+    "head": "1de2c5b0d01e3a69e0c5a744b1d58ae1f3526bd3",
+    "origin_main": "1de2c5b0d01e3a69e0c5a744b1d58ae1f3526bd3",
+    "divergence": { "ahead": 0, "behind": 0 },
+    "test_baseline_start": { "files": 78, "tests": 1232 }
+  },
+  "one_interaction_contract": {
+    "module": "appObjectPicking.ts",
+    "objectTypes": ["EQUIPMENT_INSTANCE", "CLINICAL_LOGISTICS_VESTIBULE", "ASSET_INSTANCE"],
+    "AppObjectPickTarget_fields": ["objectType", "instanceId", "distance", "parentBimSpaceId", "draggable", "deletable", "hidden", "locked"],
+    "resolver": "resolveAppObjectPickTarget(ray, candidates, selected?) — selected-preference then nearest; hidden excluded; planning volumes / native BIM never candidates; whole-volume candidate so any subcomponent resolves the one instance",
+    "primitives": ["rayHitAabb", "rayHitObb"],
+    "focus_safety": ["isTextEditingElement", "isTextEditingFocus"]
+  },
+  "unified_overlay_layer": {
+    "buildAppObjectCandidates": "equipment OBB + vestibule full occupied AABB; excludes planning volumes / BIM",
+    "resolveAppObjectAtRay": true,
+    "getSelectedAppObjectRef_selectAppObject": "one selection over per-family authorities (selecting one clears the other)",
+    "deleteAppObject": "ONE dispatcher -> deleteEquipment / deleteVestibule; no duplicate logic; no window.confirm",
+    "deleteSelectedAppObject": true,
+    "moveEquipmentToFloorPoint": "-> updateEquipmentPlacement (collision-checked + persisted; Z pinned to room floor)",
+    "slideVestibuleToWallPoint": "wall-tangent slide (front flush, rear behind wall), room-side collision-checked, persisted, rebuilds only its own ports"
+  },
+  "vestibule_domain": {
+    "slideVestibuleAlongWall": "tangent-only, clamped to usable wall span; front flush; rear behind wall",
+    "evaluateWallSnap": "different defensible wall via explicit threshold + hysteresis; same vestibuleInstanceId"
+  },
+  "tool_routing": {
+    "single_resolver_for": ["left-click select", "right-click bridge (onViewportContextMenu)", "onResetButtonUp", "drag start"],
+    "removed_dead_resolvers": ["locateEquipmentAtClient", "locateVestibuleAtClient", "locateEquipmentTarget", "locateVestibuleTarget"],
+    "right_click_event_delivery": "capture-phase contextmenu bridge on active viewport, idempotent re-install on left-click, independent of Clinical Program panel / cards / prior left-click",
+    "delete_key": "Delete/Backspace deletes selected app object; gesture-safe + focus-safe (not in input/textarea/select/contenteditable); locked refused"
+  },
+  "universal_drag": {
+    "equipment": "floor-plane (ray -> Z=room floor -> X/Y); collision-checked authoritative move per motion; last-valid on rejection; Escape restores pre-drag pose; Z never floats",
+    "vestibule": "wall-tangent slide only (front flush, rear behind wall); clamped to wall span; deliberate wall-snap (threshold/hysteresis); same instanceId",
+    "no_second_pick_after_drag_begins": true,
+    "rotation_preserved": true
+  },
+  "independent_pose_doctrine": {
+    "enforced": true,
+    "moves_mutate_only_own_instance": true,
+    "collision_excludes_self": true,
+    "rejected_move_leaves_mover_and_neighbor_unchanged": true,
+    "escape_restores_only_that_instance": true,
+    "tested": true
+  },
+  "preserved_no_regression": [
+    "wall-integrated vestibule (EVI-MA-05B)",
+    "hollow MRT/PTS passages + clearance seam",
+    "floating SELECTED EQUIPMENT / SELECTED VESTIBULE controls",
+    "per-family context menus (opened via the one resolver)",
+    "oriented collision/exclusivity (hidden+locked reserve space)",
+    "persistence",
+    "2D markers",
+    "Bentley auth",
+    "Clinical Program",
+    "native BIM immutable + non-manipulable"
+  ],
+  "files": {
+    "new": [
+      "frontend/src/components/spatial/appObjectPicking.ts",
+      "frontend/src/tests/eviMa06UniversalDirectManipulation.test.ts"
+    ],
+    "modified": [
+      "frontend/src/components/spatial/spatialAssetOverlay.ts",
+      "frontend/src/components/spatial/clinicalLogisticsVestibule.ts",
+      "frontend/src/components/spatial/MrtDirectManipulationTool.ts"
+    ]
+  },
+  "verification": {
+    "typecheck": "PASS (npx tsc -b, 0 errors)",
+    "evi_ma06_suite": "14 passed",
+    "full_suite": { "files": 79, "tests": 1246, "status": "all pass", "delta_files": 1, "delta_tests": 14 },
+    "production_build": "PASS (pre-existing INEFFECTIVE_DYNAMIC_IMPORT + chunk-size warnings only)",
+    "viewer_http_status": 200,
+    "dev_server_port": 3000
+  },
+  "honesty_note": "Live browser pointer-drag, right-click event delivery, and camera-relative picking are not headlessly verifiable; the unified picker, delete dispatcher, focus-safety, equipment floor-move + collision, vestibule wall-slide/snap, and the independent-pose invariant are test/typecheck/build verified. Live interaction is the authoritative manual acceptance step.",
+  "stop_conditions_respected": ["no PTS routing", "no MRT routing", "no RTHS", "no AGV/AMR", "no hospital-wide network", "no capsule/carrier animation", "no dispatch/scheduling", "no travel-time calc", "no Build 2"]
+}

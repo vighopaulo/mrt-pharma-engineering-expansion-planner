@@ -1,0 +1,186 @@
+{
+  "build": "MRT_PHARMA_BUILD_2A_CANONICAL_TRANSPORT_AND_AUTOMATIC_CONNECTIVITY",
+  "checkpoint": "HOLD_FOR_BUILD_2A_TRANSPORT_FOUNDATION_MANUAL_ACCEPTANCE",
+  "generated_from_actual_working_tree": true,
+  "git": {
+    "head": "1de2c5b0d01e3a69e0c5a744b1d58ae1f3526bd3",
+    "head_equals_origin_main": true,
+    "divergence_ahead_behind": [0, 0],
+    "python_files_changed": 2,
+    "python_files_changed_detail": [
+      {"path": "transport_connectivity_composition_authority.py", "status": "NEW_UNTRACKED"},
+      {"path": "test_transport_connectivity_composition_authority.py", "status": "NEW_UNTRACKED"}
+    ],
+    "existing_python_files_modified": 0,
+    "frontend_files_modified_by_this_build": 0,
+    "env_file_staged": false,
+    "env_file_untouched_by_this_build": true,
+    "preserved_uncommitted_work": ["BUILD_1A", "BUILD_1B", "WALKTHROUGH_PRIOR_TURN_EDITS"]
+  },
+  "governing_flags": {
+    "MRT_VESTIBULE_EQUALS_ROOM_ENDPOINT": "NO",
+    "MRT_FORCED_AS_DEFAULT_WINNER": "NO",
+    "CONNECTIVITY_SEPARATE_FROM_CAPACITY": "YES",
+    "SHARED_RIGHT_OF_WAY_EQUALS_SHARED_PHYSICAL_NETWORK": "NO",
+    "AUTOMATIC_CONNECTIVITY_IDEMPOTENT": "YES",
+    "SYNTHETIC_TRANSPORT_CAPEX": "NO",
+    "RGHT_EQUALS_AGV_AMR": "NO",
+    "TRUE_FLOOR_AGV_AMR_STATUS": "IMPLEMENTED",
+    "TRANSPORT_ANIMATION_STARTED": "NO",
+    "DISCRETE_EVENT_TRANSPORT_SIMULATION_STARTED": "NO",
+    "BUILD_2B_STARTED": "NO",
+    "WALKTHROUGH_STATUS": "IMPLEMENTED_BUT_MANUAL_ACCEPTANCE_FAILED_DEFERRED",
+    "TRUE_2D_PLAN_STATUS": "IMPLEMENTED_BUT_MANUAL_ACCEPTANCE_FAILED_DEFERRED"
+  },
+  "source_authority_found": {
+    "mode_taxonomy": {
+      "status": "SOURCE_AUTHORITY_FOUND",
+      "module": "transport_technology_authority.py",
+      "notes": "RAIL_GUIDED_HOSPITAL_TRANSPORT='RGHT'; ACTIVE_TRANSPORT_TECHNOLOGY_CLASSES=(MRT,RGHT,PNEUMATIC_TUBE,MANUAL_PORTER); normalize_transport_technology('AGV_AMR')->'RGHT'. FLOOR_AGV_AMR_IMPLEMENTATION_STATUS committed value at HEAD = 'IMPLEMENTED'."
+    },
+    "transport_mode_eligibility": {
+      "status": "SOURCE_AUTHORITY_FOUND",
+      "module": "transport_mode_eligibility_authority.py",
+      "reused_symbols": ["evaluate_transport_eligibility", "allowed_modes_for_payload", "is_allowed", "TransportModeFamily", "ALL_TRANSPORT_MODE_FAMILIES", "CanonicalStream", "EligibilityStatus"]
+    },
+    "mode_neutral_optimizer_mission": {
+      "status": "SOURCE_AUTHORITY_FOUND_BUT_THIN",
+      "module": "generalized_transport_optimizer.py",
+      "notes": "OptimizerMission carries stream + payload mass/volume + specimen_sensitivity + patient_ids only; no radioactive/nuclear flag, endpoint object ids, priority, demand frequency, or SLA. Build 2A LogisticsMission ENRICHES it (does not replace it)."
+    },
+    "routing_connectivity": {
+      "status": "SOURCE_AUTHORITY_FOUND",
+      "modules": ["canonical_spatial_authority.resolve_route", "transport_mission_route_bridge.resolve_mission_route"],
+      "notes": "Mode-aware BFS over ConnectivityGraph; honest ROUTE_CALIBRATED / ROUTE_NOT_CALIBRATED / SPATIAL_NETWORK_NOT_CALIBRATED / ROUTE_UNAVAILABLE. Reused verbatim; no new routing engine."
+    },
+    "endpoint_semantics": {
+      "status": "SOURCE_AUTHORITY_FOUND",
+      "module": "payload_endpoint_authority.py",
+      "reused_symbols": ["default_endpoints", "validate_endpoints", "radiopharmaceutical_transport_origin", "PayloadStream", "ServiceNodeRole", "MovementModeId"],
+      "notes": "Radiopharmaceutical TRANSPORT origin = RADIOPHARMACY_RELEASE (not cyclotron production)."
+    },
+    "unit_equipment_builders": {
+      "status": "SOURCE_AUTHORITY_FOUND",
+      "modules": {
+        "MRT": "canonical_spatial_authority.build_mrt_trunk/branch/segment/junction/endpoint/vestibule",
+        "PTS": "pts_spatial_network_authority.build_pts_station/junction/tube_segment/vertical_segment/capsule + compute_pts_infrastructure_quantities + classify_pts_endpoint_model",
+        "RGHT": "rght_spatial_network_authority.build_rght_station/switch/track_segment/vertical_segment/vehicle + compute_rght_infrastructure_quantities + classify_rght_endpoint_model",
+        "CONVENTIONAL": "conventional_transport_authority.CartClass/DEFAULT_LINEN_CART/DEFAULT_GENERAL_CART/DEFAULT_AGV_MODEL"
+      }
+    },
+    "cost_authorities": {
+      "status": "SOURCE_AUTHORITY_FOUND",
+      "constants": {
+        "MRT_VESTIBULE_CAPEX_USD": 30000.0,
+        "LIGHT_MRT_ENDPOINT_CAPEX_PER_UNIT": 1000.0
+      },
+      "computers": ["canonical_spatial_authority.compute_mrt_transport_only_capex", "study_scope existing_* installed-vs-existing mechanism"]
+    }
+  },
+  "not_implemented_upstream": {
+    "pts_network_contention": {
+      "status": "NOT_IMPLEMENTED",
+      "authority": "pts_spatial_network_authority.PTS_NETWORK_CONTENTION_STATUS",
+      "notes": "No multi-capsule/tube-occupancy/junction-contention/queue/priority model exists in the repository. Build 2A did NOT invent one (CONNECTIVITY is separate from CAPACITY)."
+    }
+  },
+  "new_build_2a_implementation": {
+    "module": "transport_connectivity_composition_authority.py",
+    "kind": "ADDITIVE_COMPOSITION_ONLY",
+    "duplicated_any_existing_authority": false,
+    "seams": [
+      {
+        "seam": "LogisticsMission",
+        "status": "NEW_BUILD_2A_IMPLEMENTATION",
+        "adds": ["is_radioactive (forced True for RADIOPHARMACEUTICAL)", "nuclear_qualification_present", "origin_object_id", "destination_object_id", "priority(ROUTINE/URGENT/STAT)", "demand_missions_per_day", "sla_max_transit_minutes", "eligibility_stream crosswalk"],
+        "honesty": "None-valued attributes remain NOT_CALIBRATED; never fabricated."
+      },
+      {
+        "seam": "resolve_mission_endpoint_objects",
+        "status": "NEW_BUILD_2A_IMPLEMENTATION",
+        "notes": "Composes payload_endpoint_authority.default_endpoints roles with mission-supplied canonical object ids; endpoints_resolved=False when object ids absent (never invents ids)."
+      },
+      {
+        "seam": "SharedClinicalLogisticsEndpoint + SharedClinicalLogisticsEndpointRegistry",
+        "status": "NEW_BUILD_2A_IMPLEMENTATION",
+        "one_room_one_endpoint": true,
+        "keyed_by": "room canonical object id",
+        "reuse_before_create": true,
+        "refuses_non_room_like_and_production_objects": true,
+        "unit_capex_usd": 1000.0,
+        "unit_capex_crosswalk": "shared_mrt_multistream_authority.LIGHT_MRT_ENDPOINT_CAPEX_PER_UNIT",
+        "existing_room_new_capex_usd": 0.0,
+        "mrt_vestibule_equals_room_endpoint": false
+      },
+      {
+        "seam": "derive_mrt_vestibule_requirement",
+        "status": "NEW_BUILD_2A_IMPLEMENTATION",
+        "unit_capex_usd": 30000.0,
+        "unit_capex_crosswalk": "canonical_spatial_authority.MRT_VESTIBULE_CAPEX_USD",
+        "existing_vestibule_not_charged": true
+      },
+      {
+        "seam": "TransportConnectivityCandidate + evaluate_transport_connectivity",
+        "status": "NEW_BUILD_2A_IMPLEMENTATION",
+        "chain": ["eligibility gate", "endpoint object resolution", "route bridge", "validate_endpoints", "vertical connectivity"],
+        "statuses": ["FEASIBLE", "INFEASIBLE", "NOT_CALIBRATED", "NO_NETWORK_PATH", "MISSING_ORIGIN_INTERFACE", "MISSING_DESTINATION_INTERFACE", "MISSING_VERTICAL_CONNECTIVITY", "PAYLOAD_INCOMPATIBLE", "MODE_INELIGIBLE"],
+        "connectivity_separate_from_capacity": true,
+        "ranks_or_picks_winner": false
+      },
+      {
+        "seam": "evaluate_mission_connectivity",
+        "status": "NEW_BUILD_2A_IMPLEMENTATION",
+        "notes": "Deterministic per-mode verdicts in ALL_TRANSPORT_MODE_FAMILIES order; MRT never forced as winner."
+      },
+      {
+        "seam": "compose_transport_infrastructure_bom",
+        "status": "NEW_BUILD_2A_IMPLEMENTATION",
+        "reuses": ["compute_pts_infrastructure_quantities", "compute_rght_infrastructure_quantities", "MRT edge length + object counts", "canonical AssetStatus EXISTING/PROPOSED split"],
+        "synthetic_transport_capex": false,
+        "network_capex_status": {"PTS": "NOT_CALIBRATED", "RGHT": "NOT_CALIBRATED", "MRT": "CROSSWALK"}
+      }
+    ]
+  },
+  "out_of_scope_production_units": {
+    "status": "OUT_OF_SCOPE",
+    "count": 7,
+    "units": ["HOT_CELL", "DISPENSING_QC_HOT_CELL", "DOSE_CALIBRATOR_BENCH", "FUME_HOOD", "ISOLATOR", "SHIELDED_STORAGE", "WASTE_DECAY_STORE"],
+    "notes": "Radiopharmacy production/handling units; NOT transport-unit equipment. Not created, costed, or endpointed by Build 2A. Protected by is_out_of_scope_production_unit + the shared-endpoint registry refusing non-room-like objects."
+  },
+  "deterministic_proof": {
+    "rght_cross_floor_route": {"origin": "RGHT-STN-RP", "destination": "RGHT-STN-SCN", "status": "FEASIBLE", "route_distance_m": 25.029197689295053, "requires_vertical_connectivity": true, "vertical_connectivity_satisfied": true},
+    "rght_proof_network_object_split": {"existing": 3, "new_required": 7}
+  },
+  "verification": {
+    "python_runner": ".venv/bin/python -m pytest",
+    "new_test_file": "test_transport_connectivity_composition_authority.py",
+    "new_tests_passed": 26,
+    "new_tests_failed": 0,
+    "regression_suites_run": [
+      "test_transport_connectivity_composition_authority.py",
+      "test_generalized_transport_optimizer.py",
+      "test_build3c_transport_authority.py",
+      "test_transport_spatial_authority_build1.py",
+      "test_transport_spatial_authority_build2.py",
+      "test_transport_spatial_authority_build3.py",
+      "test_transport_spatial_authority_build4.py",
+      "test_dedicated_rp_pts_authority.py",
+      "test_floor_agv_amr_authority.py",
+      "test_shared_mrt_multistream_authority.py",
+      "test_canonical_spatial_authority_closure.py",
+      "test_transport_mode_parity.py"
+    ],
+    "aggregate_passed": 541,
+    "aggregate_failed": 4,
+    "regressions_introduced_by_build_2a": 0,
+    "pre_existing_failures": [
+      {"test": "test_transport_spatial_authority_build1.py::test_6_floor_agv_amr_remains_not_implemented", "cause": "PRE_EXISTING_AT_HEAD", "detail": "asserts FLOOR_AGV_AMR_IMPLEMENTATION_STATUS=='NOT_IMPLEMENTED' but committed baseline value is 'IMPLEMENTED'"},
+      {"test": "test_transport_spatial_authority_build2.py::test_3_floor_agv_amr_remains_distinct", "cause": "PRE_EXISTING_AT_HEAD", "detail": "same superseded FLOOR_AGV assertion"},
+      {"test": "test_transport_spatial_authority_build3.py::test_35_floor_agv_amr_remains_not_implemented", "cause": "PRE_EXISTING_AT_HEAD", "detail": "same superseded FLOOR_AGV assertion"},
+      {"test": "test_transport_spatial_authority_build4.py::test_50_floor_agv_amr_remains_not_implemented", "cause": "PRE_EXISTING_AT_HEAD", "detail": "same superseded FLOOR_AGV assertion"}
+    ],
+    "pre_existing_failure_proof": "transport_technology_authority.py is NOT modified vs HEAD (git diff --stat empty); none of the 4 failing test files import transport_connectivity_composition; temporarily removing both Build 2A files reproduced build1::test_6 failure identically.",
+    "frontend_verification_required": false,
+    "frontend_verification_reason": "no frontend files modified by Build 2A"
+  }
+}

@@ -1,0 +1,138 @@
+{
+  "report_id": "MRT_PHARMA_BUILD_1B_COMPLETION_DATA",
+  "build": "BUILD_1B",
+  "title": "Complete clinical program + canonical equipment / engineering-authority binding (consolidating completion record)",
+  "completion_gate": "MANUAL_CONFIRMATION_REQUIRED",
+  "checkpoint": "HOLD_FOR_BUILD_1B_MANUAL_ACCEPTANCE",
+  "next_major_build": "BUILD_2_LIVE_SPATIAL_ROUTING",
+  "baseline": {
+    "head": "1de2c5b0d01e3a69e0c5a744b1d58ae1f3526bd3",
+    "origin_main": "1de2c5b0d01e3a69e0c5a744b1d58ae1f3526bd3",
+    "divergence_ahead": 0,
+    "divergence_behind": 0,
+    "branch": "main",
+    "frontend_env_staged": false,
+    "frontend_env_pre_existing_modification": true,
+    "build_1a_status": "COMPLETE_MANUALLY_ACCEPTED_COMMITTED_PUSHED",
+    "build_1a_reopened": false,
+    "build_2_started": false
+  },
+  "scope_doctrine": {
+    "NEW_UNAUTHORIZED_EQUIPMENT_CLASSES": 0,
+    "FABRICATED_COSTS": "NO",
+    "FABRICATED_CAPACITY": "NO",
+    "FABRICATED_DIMENSIONS": "NO",
+    "ROUTING_STARTED": "NO",
+    "SIMULATION_STARTED": "NO",
+    "OPTIMIZER_STARTED": "NO",
+    "BENTLEY_WRITES": "NONE",
+    "PYTHON_FILES_CHANGED": 0,
+    "AUTHORITY_DOCS_CHANGED": 0,
+    "SECOND_PLACEMENT_STORE_CREATED": "NO"
+  },
+  "reuse_not_second_system": {
+    "app_owned_binding_object": "EquipmentAssetInstance (frontend/src/components/spatial/equipmentInstance.ts)",
+    "reuses_planning_volume_primitives": ["buildOrientedPlanningPrism", "validatePlanningVolumeContainment", "resolveContainmentStatus", "seedPrismParamsFromParent"],
+    "reuses_domain_assets_types": ["AssetFamily", "DimensionProvenance"],
+    "identity_by_reference": "canonicalEquipmentId == backend catalog_model_id; no numeric canonical value copied into the spatial layer",
+    "distinct_from_preexisting_assetinstance": "The pre-existing domain/assets AssetInstance + SpatialAssetStore is project-scoped generic-geometry placement, not bound to ClinicalPlanningVolume or the canonical clinical equipment catalogs. EquipmentAssetInstance is the integration layer, not a competing placement engine."
+  },
+  "canonical_equipment_audit": {
+    "cyclotron_model_count": 17,
+    "generator_model_count": 4,
+    "scanner_model_count": 6,
+    "total_canonical_equipment_models": 27,
+    "mrt_facility_spatial_class_count": 2,
+    "new_unauthorized_equipment_classes": 0,
+    "calibrated_envelope_model_ids": ["IBA_CYCLONE_KEY", "IBA_CYCLONE_KIUBE", "ACSI_TR_24"],
+    "not_calibrated_preserved_example": "SUMITOMO_CYPRIS_MP_30 supports F-18 but has no calibrated production record -> production crosswalk NOT_CALIBRATED (never borrowed)",
+    "crosswalk_is_by_reference": true,
+    "crosswalk_carries_numeric_values": false,
+    "crosswalk_makes_backend_http_call": false
+  },
+  "gate_24_assessment": {
+    "clinical_program_spatial": "IMPLEMENTED",
+    "clinical_planning_volume_authoritative": "IMPLEMENTED",
+    "equipment_parented_to_clinical_space": "IMPLEMENTED",
+    "parent_bim_room_identity_preserved": "IMPLEMENTED",
+    "exact_canonical_identity_preserved": "IMPLEMENTED",
+    "generic_geometry_visualization_only": "IMPLEMENTED",
+    "containment_enforced_not_center_only": "IMPLEMENTED",
+    "invalid_placement_not_lockable": "IMPLEMENTED",
+    "engineering_crosswalk_by_reference": "IMPLEMENTED",
+    "not_calibrated_preserved": "IMPLEMENTED",
+    "no_synthetic_values": "IMPLEMENTED",
+    "persistence_and_reload": "IMPLEMENTED",
+    "imodel_isolation": "IMPLEMENTED",
+    "lifecycle_draft_locked": "IMPLEMENTED",
+    "invalid_visual_cue_not_color_only": "IMPLEMENTED",
+    "lock_disabled_with_reason": "IMPLEMENTED",
+    "restore_valid_position_and_reset": "IMPLEMENTED",
+    "honest_proxy_and_approximate_parent_labeling": "IMPLEMENTED",
+    "transport_endpoint_spatial_authority_recorded": "IMPLEMENTED",
+    "no_bentley_write": "IMPLEMENTED",
+    "no_build2_routing_simulation_optimizer": "HELD_CORRECT",
+    "not_developer_gated": "IMPLEMENTED",
+    "diagnostic_asserts_no_fabrication": "IMPLEMENTED",
+    "manual_acceptance_section_21": "MANUAL_CONFIRMATION_REQUIRED"
+  },
+  "verification": {
+    "typecheck": "PASS",
+    "test_files": 61,
+    "tests_total": 1010,
+    "tests_passed": 1010,
+    "tests_failed": 0,
+    "build_1b_equipment_pure_tests": 42,
+    "build_1b_equipment_ui_tests": 7,
+    "section_20_baseline_files": 51,
+    "section_20_baseline_tests": 815,
+    "hidden_or_weakened_tests": "NONE",
+    "production_build": "PASS",
+    "production_build_advisories": ["chunk_size_over_500kb (benign)", "ineffective_dynamic_import (benign)"],
+    "worker_asset": "dist/scripts/parse-imdl-worker.js head = (()=>{\"use strict\";f (real)",
+    "draco_wasm_asset": "dist/scripts/draco_decoder.wasm magic = 0061 736d (valid)",
+    "core_frontend_version": "5.12.5",
+    "viewer_http": 200,
+    "dev_server": "restarted cleanly on http://localhost:3000; Vite ready; no errors",
+    "python_files_changed": 0,
+    "backend_test_run": "NOT_WARRANTED (crosswalk is reference-only; 0 .py changed)"
+  },
+  "deferred_ux_addons": {
+    "note": "Separate later Build 1B UX increments; NOT part of the equipment/engineering-binding completion gate.",
+    "walkthrough_navigation": "IMPLEMENTED_AND_AUTOMATED_TESTED_BUT_MANUAL_ACCEPTANCE_FAILED",
+    "true_2d_plan": "IMPLEMENTED_AND_AUTOMATED_TESTED_BUT_MANUAL_ACCEPTANCE_FAILED",
+    "walkthrough_trail": "IMPLEMENTED_AND_AUTOMATED_TESTED_BUT_MANUAL_ACCEPTANCE_FAILED",
+    "deferred_open_gaps": [
+      "GAP_WALKTHROUGH_NAVIGATION_RELIABILITY",
+      "GAP_TRUE_2D_PLAN_RUNTIME_ROOM_HYDRATION",
+      "GAP_WALKTHROUGH_TRAIL_PRODUCT_USABILITY"
+    ],
+    "these_are_not_authorities_for": ["simulation", "transport_routing", "optimization"],
+    "preserved_not_rolled_back": true
+  },
+  "authority_doc_disposition": {
+    "authority_index_updated": false,
+    "open_gaps_updated": false,
+    "build_ledger_updated": false,
+    "reason": "Engineering binding is implemented + automated-test complete, but section 21 manual acceptance is browser-only / user-performed and cannot be self-certified; sibling Build 1B UX add-ons failed manual acceptance and remain deferred. Flipping the ledger to BUILD 1B COMPLETE now would overstate completion. Flip is available upon your manual acceptance."
+  },
+  "provenance_preservation": {
+    "prior_build_1b_reports_rewritten": false,
+    "consolidating_report_added": "MRT_PHARMA_BUILD_1B_COMPLETION_REPORT.md",
+    "prior_reports_remain_historical_record": true
+  },
+  "git_safety": {
+    "files_staged": "NO",
+    "commit_created": "NO",
+    "push_performed": "NO",
+    "git_config_modified": "NO"
+  },
+  "final_report_block": {
+    "BUILD_1B_ENGINEERING_BINDING": "IMPLEMENTED_AND_AUTOMATED_TESTED",
+    "BUILD_1B_COMPLETION_GATE": "MANUAL_CONFIRMATION_REQUIRED",
+    "CHECKPOINT": "HOLD_FOR_BUILD_1B_MANUAL_ACCEPTANCE",
+    "NEXT_MAJOR_BUILD": "BUILD_2_LIVE_SPATIAL_ROUTING",
+    "AUTHORITY_DOCS_UPDATED": "NO",
+    "GIT_ACTIONS": "NONE"
+  }
+}

@@ -1,0 +1,97 @@
+{
+  "correction": "EVI-MA-07A",
+  "title": "Placement-mode escape / backdrop recovery",
+  "scope": "placement-state lifecycle only",
+  "manual_acceptance": "PENDING",
+  "self_accepted": false,
+  "not_started": ["Build 1C", "Build 2", "physics/economics audit", "routing", "animation"],
+  "repository": {
+    "branch": "main",
+    "head": "1de2c5b0d01e3a69e0c5a744b1d58ae1f3526bd3",
+    "origin_main": "1de2c5b0d01e3a69e0c5a744b1d58ae1f3526bd3",
+    "divergence_ahead": 0,
+    "divergence_behind": 0,
+    "working_tree_preserved": true,
+    "uncommitted_paths": 141
+  },
+  "root_cause": {
+    "single_source_of_truth_placement": "SpatialAssetStore.intent (placementModeActive / placementIntent) in frontend/src/domain/assets/spatialAssetStore.ts",
+    "full_viewport_blocker": {
+      "element": ".viewer-panel-backdrop",
+      "file": "frontend/src/routes/BentleyViewer.tsx",
+      "css": "frontend/src/routes/BentleyViewer.css",
+      "style": "position:absolute; inset:0; z-index:1200; background:transparent; pointer-events:auto",
+      "driven_by": "openPanel (open floating tool panel) ONLY",
+      "placement_specific_backdrop_exists": false
+    },
+    "decoupling": "placementModeActive (store intent) and openPanel (React panel visibility) were fully decoupled; entering placement never set openPanel and cancelling placement never cleared openPanel",
+    "orphan_trap": "if a floating panel was open around placement, cancel showed 'Placement cancelled' but left the transparent backdrop mounted (openPanel still set) with pointer-events:auto, blocking the Bentley canvas; the only Escape handler that could dismiss it was gated on openPanel and unaware of placement"
+  },
+  "fix": {
+    "authoritative_state": "unchanged single source of truth (SpatialAssetStore.intent); no competing boolean introduced",
+    "app_stable_escape": "window-level capture-phase keydown handler in BentleyViewer.tsx, always mounted post-auth, not gated on openPanel, not dependent on Bentley active tool; single Escape cancels placement AND closes any open panel atomically; guarded against text-field editing",
+    "backdrop_never_orphaned": "backdropMayMount gates .viewer-panel-backdrop to (open panel AND not placing); shouldCloseFloatingPanelOnPlacementArmed closes any open panel the moment placement arms",
+    "backdrop_ux": "no dim during placement; BIM stays visible; subtle .mrt-placement-status guidance banner retained",
+    "cancel_atomic": "one cancelPlacement() clears intent + exits Bentley tool; no partial-cleanup functions",
+    "existing_assets_untouched": true
+  },
+  "helper_module": {
+    "path": "frontend/src/components/spatial/placementEscapeRecovery.ts",
+    "exports": ["decideEscapeRecovery", "backdropMayMount", "shouldCloseFloatingPanelOnPlacementArmed"],
+    "bentley_free": true,
+    "pure": true
+  },
+  "files": {
+    "new": [
+      "frontend/src/components/spatial/placementEscapeRecovery.ts",
+      "frontend/src/tests/placementEscapeRecovery.test.ts",
+      "frontend/src/tests/placementEscapeRecoveryDom.test.tsx"
+    ],
+    "modified": [
+      "frontend/src/routes/BentleyViewer.tsx"
+    ]
+  },
+  "dom_tests": {
+    "file": "frontend/src/tests/placementEscapeRecoveryDom.test.tsx",
+    "real_keydown_escape": true,
+    "cases": {
+      "A": "PLACE IN MODEL -> ARMED -> placement UI visible",
+      "B": "Escape -> IDLE -> backdrop gone",
+      "C": "cancelPlacement() called (all temporary placement state cleared)",
+      "D": "'Placement cancelled' leaves no dim/block layer",
+      "E": "Escape works with no Bentley tool active (window-level, tool-independent)",
+      "F": "Escape while focus over Asset Library still cancels",
+      "G": "Escape while focus over viewport (no text field) still cancels",
+      "H": "re-enter placement after cancel works 3x, no orphaned state/backdrop",
+      "I": "existing placed assets unchanged by cancel"
+    }
+  },
+  "results": {
+    "typecheck": "PASS",
+    "new_tests_passed": 20,
+    "pure_decision_tests": 12,
+    "dom_tests": 8,
+    "full_frontend_suite": {"files": 84, "tests": 1294, "status": "all pass"},
+    "baseline_before": {"files": 82, "tests": 1274},
+    "regressions": 0,
+    "build": "PASS",
+    "build_warnings": "pre-existing (chunk size + ineffective-dynamic-import), unrelated to this change",
+    "viewer_http": 200,
+    "viewer_port": 3000,
+    "dev_server_process": "term_1789324313590_4582g2z3rx4",
+    "live_browser_confirmation": "MANUAL"
+  },
+  "manual_sequence": [
+    "Select Discovery MI",
+    "Click PLACE IN MODEL",
+    "Confirm viewer remains clearly visible",
+    "Press Escape",
+    "Placement UI disappears immediately",
+    "Viewer returns to normal brightness",
+    "Orbit/pan works immediately",
+    "Start placement again",
+    "Cancel again",
+    "No refresh required",
+    "Repeat 3 times to prove no orphaned listener/state"
+  ]
+}

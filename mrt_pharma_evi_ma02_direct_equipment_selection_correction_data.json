@@ -1,0 +1,109 @@
+{
+  "report": "MRT_PHARMA_EVI_MA02_DIRECT_EQUIPMENT_SELECTION_CORRECTION_REPORT",
+  "correction": "EVI-MA-02",
+  "manual_acceptance": "PENDING",
+  "self_accepted": false,
+  "root_cause": "ClinicalProgramDecorator drew recognizable equipment geometry + envelope with the NON-pickable 2-arg createGraphicBuilder(GraphicType.WorldDecoration), so equipment carried no pickable transient id and a 3D click/right-click resolved to no application target — visible but not directly selectable/deletable.",
+  "doctrine": {
+    "single_lifecycle_object": "EquipmentAssetInstance",
+    "representations_share_id": ["recognizable_3d_geometry", "containment_envelope", "label", "2d_plan_marker", "clinical_program_card"],
+    "second_lifecycle_created": false,
+    "bim_modified": false,
+    "delete_by_model_name": false
+  },
+  "fixes": {
+    "pickable_equipment": {
+      "file": "frontend/src/components/spatial/ClinicalProgramDecorator.ts",
+      "maps": ["equipmentPickIdToInstance", "instanceToEquipmentPickId"],
+      "methods": ["testDecorationHit", "equipmentIdForPickId", "equipmentPickIdFor", "dropStaleEquipmentPickIds"],
+      "threaded_into": ["drawEquipmentVisual", "drawEquipmentEnvelope"],
+      "one_pick_id_per_instance": true
+    },
+    "overlay_api": {
+      "file": "frontend/src/components/spatial/spatialAssetOverlay.ts",
+      "context_menu_state": ["EquipmentContextMenuState", "subscribeEquipmentContextMenu", "getEquipmentContextMenu", "openEquipmentContextMenu", "closeEquipmentContextMenu"],
+      "open_also_selects": true,
+      "accessors": ["getClinicalProgramDecorator", "equipmentIdForPickId"],
+      "single_selection_authority": "selectedEquipmentId"
+    },
+    "tool_routing": {
+      "file": "frontend/src/components/spatial/MrtDirectManipulationTool.ts",
+      "locateEquipmentTarget_first": true,
+      "left_click_selects_equipment": true,
+      "right_click_opens_equipment_menu": true,
+      "filterHit_accepts_asset_or_equipment": true,
+      "bim_rejected": true,
+      "escape_closes_equipment_menu": true
+    },
+    "context_menu": {
+      "file": "frontend/src/components/spatial/ViewerEquipmentContextMenu.tsx",
+      "commands": ["Fit to Equipment", "Lock/Unlock", "Hide", "Delete"],
+      "identifies_model": true,
+      "delete_disabled_when_locked": true,
+      "delete_calls": "deleteEquipment",
+      "auto_close_on_gone_or_select_other": true,
+      "mounted_in": "frontend/src/routes/BentleyViewer.tsx"
+    },
+    "two_d_convergence": {
+      "files": ["frontend/src/components/spatial/bim2dPlanProjection.ts", "frontend/src/components/spatial/Bim2dPlanPanel.tsx"],
+      "hitTestPlanEquipment": true,
+      "equipment_before_rooms": true,
+      "marker_click_selects_same_id": true
+    },
+    "duplicate_usability": {
+      "files": ["frontend/src/components/spatial/spatialAssetOverlay.ts", "frontend/src/components/spatial/ClinicalProgramControl.tsx"],
+      "new_instance_selected": true,
+      "duplicate_in_room_flag": true,
+      "non_blocking_note": true,
+      "merged": false,
+      "rejected": false
+    },
+    "card_delete_kept": true,
+    "shared_delete_lifecycle": "deleteEquipment"
+  },
+  "delete_removes_all_representations": ["recognizable_3d_geometry", "envelope", "3d_label", "2d_marker", "card", "selection_reference", "persisted_reconstruction"],
+  "delete_does_not": ["hide_only", "leave_ghost_envelope", "leave_stale_marker", "delete_other_same_model_instance", "modify_bim"],
+  "selection_after_delete": {
+    "selected_deleted_clears_selectedEquipmentId": true,
+    "delete_key_keeps_kiube": true,
+    "delete_nonselected_preserves_selection": true
+  },
+  "overlapping_equipment": {
+    "resolves_stable_instance_id_not_model_name": true,
+    "distinct_ids_and_pick_ids": true,
+    "deterministic_smallest_footprint_2d": true
+  },
+  "tests": {
+    "file": "frontend/src/tests/eviMa02DirectEquipmentSelection.test.ts",
+    "count": 11,
+    "covers": ["pick_id_resolves_stable_id", "bim_unknown_pick_undefined", "two_identical_kiubes_distinct", "left_click_selects_exact", "delete_key_not_kiube_and_render_removed", "delete_selected_clears_selection", "delete_nonselected_preserves", "locked_selectable", "locked_delete_rejected", "2d_marker_convergence", "duplicate_persist_distinct"]
+  },
+  "verification": {
+    "test_baseline_before": { "files": 66, "tests": 1065 },
+    "test_baseline_after": { "files": 67, "tests": 1076, "result": "PASS" },
+    "new_tests": 11,
+    "typecheck_tsc_b": "PASS",
+    "production_build": "PASS_WITH_PREEXISTING_WARNINGS_ONLY",
+    "viewer_http_status": 200,
+    "wasm_asset": "public/scripts/draco_decoder.wasm",
+    "bentley_worker_asset": "public/scripts/parse-imdl-worker.js",
+    "openusd_firewall_tests": { "tests": 125, "result": "PASS" },
+    "backend_python_modified": false,
+    "tests_weakened": false,
+    "prior_work_preserved": true
+  },
+  "manual_acceptance_steps": [
+    "Place KIUBE",
+    "Place KEY",
+    "Confirm both exist",
+    "Right-click KEY physical 3D geometry",
+    "Context menu identifies IBA Cyclone KEY",
+    "Click Delete",
+    "KEY disappears completely (geometry, envelope, label, 2D marker, card)",
+    "KIUBE remains",
+    "Right-click KIUBE -> Fit to Equipment -> KIUBE framed",
+    "Delete KIUBE -> all KIUBE representations disappear",
+    "Bentley room remains untouched"
+  ],
+  "stop_condition": "Automated criteria pass. STOP. Await manual EVI-MA-02 acceptance. Do not start PTS/RTHS/MRT animation/Build 2 routing."
+}

@@ -1,0 +1,168 @@
+{
+  "build": "1B.9",
+  "title": "MRT Pharma Physics & Economics Integrity Audit",
+  "not_build": ["1C", "2"],
+  "audit_posture": "AUDIT_FIRST_CLASSIFY_AND_REPORT",
+  "invent_missing_physics": false,
+  "manual_acceptance": "PENDING",
+  "self_accepted": false,
+  "repository": {
+    "name": "mrt-pharma-engineering-expansion-planner",
+    "branch": "main",
+    "head": "1de2c5b0d01e3a69e0c5a744b1d58ae1f3526bd3",
+    "origin_main": "1de2c5b0d01e3a69e0c5a744b1d58ae1f3526bd3",
+    "divergence_ahead": 0,
+    "divergence_behind": 0
+  },
+  "date": "2026-09-12",
+  "headless_proof": {
+    "status": "CONFIRMED",
+    "engine_imports_forbidden_deps": false,
+    "forbidden_dependencies_checked": ["bentley", "itwin", "IModelApp", "@itwin/*", "WebGL/GPU", "viewer decorators", "animation/frame loop"],
+    "forbidden_clock_primitives_absent": ["requestAnimationFrame", "performance.now", "playbackSpeed", "frame-loop authority"],
+    "determinism": "byte-identical on repeated evaluation",
+    "encoded_in_test": "test_build1b9_physics_economics_integrity_audit.py"
+  },
+  "visualization_decoupling": {
+    "engine": "python (root .py)",
+    "consumer": "frontend/ TypeScript Bentley/iTwin viewer",
+    "dependency_direction": "engine -> viewer (one-way)",
+    "viewer_performs_computation": false,
+    "removing_frontend_changes_engine_result": false
+  },
+  "maturity_matrix": [
+    {"domain": "Manual porter transport", "module": "conventional_transport_authority.py", "maturity": "L1_KINEMATIC", "basis": "T=dispatch+load+L/speed+transitions*elevator_wait+wait+unload+symmetric_return; speeds 1.4/1.1/0.9 m/s", "provenance": "CONTROLLED_ENGINEERING_ASSUMPTION"},
+    {"domain": "Conventional PTS", "module": "finance.py:PneumaticTubeNetwork", "maturity": "L1_KINEMATIC", "basis": "speed 6.0 m/s, dispatch 1.0, station_handling 1.5"},
+    {"domain": "RP-qualified PTS", "module": "dedicated_rp_pts_authority.py", "maturity": "L1_KINEMATIC", "basis": "radiopharmaceutical-qualified dedicated tube; distinct from conventional PTS"},
+    {"domain": "Rail-guided hospital transport (RGHT / legacy AGV)", "module": "conventional_transport_authority.AgvModelClass", "maturity": "L1_KINEMATIC", "basis": "rail-guided; RGHT != FLOOR_AGV_AMR invariant"},
+    {"domain": "Free-roaming floor AGV/AMR", "module": "floor_agv_amr_authority.py", "maturity": "L1_KINEMATIC_IMPLEMENTED", "basis": "light 1.2 m/s + heavy 1.0 m/s profiles; route/mission physics; CapEx/OpEx", "note": "upgraded from NOT_IMPLEMENTED by KIRO Super-Build 1"},
+    {"domain": "MRT transport", "module": "shared_mrt_multistream_authority.py / canonical_spatial_authority.py", "maturity": "L1_KINEMATIC_ONLY", "basis": "kinematic time-of-flight + CapEx/OpEx", "no_electromagnetic_solver": true},
+    {"domain": "Radionuclide decay (F-18)", "module": "f18_decay_model.py / radionuclides.json", "maturity": "L1_DECAY", "basis": "retention = 2^(-t/T_half); F-18 T_half = 109.8 min", "independently_verified": true},
+    {"domain": "Production / end-of-batch activity", "module": "production authorities", "maturity": "L1_DECAY_BASED", "basis": "decay-driven yield"},
+    {"domain": "Clinical capacity / scheduling", "module": "clinical scheduling authorities", "maturity": "L1_ANALYTIC", "basis": "deterministic capacity + intraday scheduling"},
+    {"domain": "Radiation exposure", "module": "exposure authorities", "maturity": "L1_ANALYTIC", "basis": "dose/exposure algebra; no Monte-Carlo"},
+    {"domain": "CapEx", "module": "finance.py / models.py / equal_budget.py / canonical_spatial_authority.py / operational_day_orchestrator.py", "maturity": "L1_ACCOUNTING", "basis": "unit-cost x quantity ledgers"},
+    {"domain": "OpEx", "module": "finance.py / equal_budget.py / infrastructure opex", "maturity": "L1_ACCOUNTING", "basis": "annual recurring ledgers"},
+    {"domain": "Payback", "module": "finance.py:incremental_financials / lifecycle_economics.py:_payback_year", "maturity": "L1_ACCOUNTING", "basis": "payback = CapEx / annual_net_cash_flow else inf"},
+    {"domain": "NPV / IRR / ROI", "module": "finance.py:incremental_financials", "maturity": "L1_ACCOUNTING", "basis": "NPV = -CapEx + sum CF/(1+r)^y"},
+    {"domain": "Network contention / directionality", "module": "disclosed gap", "maturity": "DOCUMENTED_NOT_IMPLEMENTED"},
+    {"domain": "Routed MRT guideway length", "module": "canonical_spatial_authority.build_mrt_trunk", "maturity": "NOT_CALIBRATED", "note": "never substituted with $0 cost"}
+  ],
+  "f18_decay_verification": {
+    "half_life_min": 109.8,
+    "half_life_source": "radionuclides.json",
+    "engine_formula": "retention_at_delay_minutes(delay) = 2^(-delay/109.8)",
+    "independent_reproduction": "MATCH_TO_FLOATING_POINT_TOLERANCE",
+    "retention_at_one_half_life": 0.5,
+    "monotonic_decreasing": true,
+    "result": "VERIFIED"
+  },
+  "economic_integrity": {
+    "endpoint_capex": {
+      "classification": "TERMINOLOGY_MULTIPLE_AUTHORITY",
+      "action": "NO_CHANGE_REPORT_ONLY",
+      "concepts": [
+        {"name": "LIGHT_MRT_ENDPOINT_CAPEX_PER_UNIT", "location": "shared_mrt_multistream_authority.py:176", "value_usd": 1000.0, "meaning": "ordinary light-MRT endpoint; docstring states same $1,000/endpoint used elsewhere"},
+        {"name": "MRT_ENDPOINT_PANEL_UNIT_CAPEX_USD", "location": "operational_day_orchestrator.py:516", "value_usd": 1000.0, "meaning": "per-room MRT exit/delivery I/O panel; distinct from vestibule capex"},
+        {"name": "endpoint_capex", "location": "models.py:30 / models.py:210", "value_usd": 10000.0, "meaning": "generic optimizer guideway-network endpoint/junction; different line item"}
+      ],
+      "prompt_reference": "$1,000 per endpoint (prompt section 25)",
+      "prompt_value_present_in_engine": true,
+      "note": "Supersedes earlier provisional finding that no $1,000 endpoint existed; it exists in two concepts. The $10,000 value is a separately-named optimizer junction cost, not a conflicting value for the same endpoint."
+    },
+    "vestibule_capex": {
+      "classification": "NO_DOUBLE_COUNT_CONFIRMED",
+      "value_usd": 30000.0,
+      "location": "canonical_spatial_authority.py:992 MRT_VESTIBULE_CAPEX_USD",
+      "provenance": "USER_SUPPLIED_CONTROLLED_SCENARIO_ASSUMPTION",
+      "scope": "per vestibule, vestibule-specific only",
+      "charged_as": "cyclotron_count * MRT_VESTIBULE_CAPEX_USD (one vestibule per cyclotron interface requiring MRT transfer)",
+      "never_tied_to": ["radiopharmacy count", "floor count", "room count", "endpoint count"],
+      "one_vestibule_multiple_ports_single_charge": true,
+      "superseded_prior_figure_usd": 43000.0,
+      "related_once_per_system_charges": {
+        "MRT_CONTROLS_CAPEX_USD": 100000.0,
+        "MRT_INSTALLATION_COMMISSIONING_CAPEX_USD": 300000.0,
+        "non_regressing_on_length_only_change": true
+      }
+    },
+    "payback_npv_irr": {
+      "payback_formula": "CapEx / annual_net_cash_flow else inf",
+      "npv_formula": "-CapEx + sum_y CF_y/(1+r)^y",
+      "independently_verified": true,
+      "edge_cases_covered": ["zero cash flow", "negative cash flow", "CapEx monotonicity"]
+    }
+  },
+  "defect_classifications": {
+    "total_preexisting_failures": 7,
+    "caused_by_audit": 0,
+    "stale_benchmark_corrected": {
+      "count": 5,
+      "root_cause": "transport_technology_authority.py:52 FLOOR_AGV_AMR_IMPLEMENTATION_STATUS = IMPLEMENTED (genuine L1 kinematic model in floor_agv_amr_authority.py, upgraded by KIRO Super-Build 1)",
+      "invariant_preserved": "RGHT != FLOOR_AGV_AMR",
+      "edits": [
+        {"file": "test_transport_spatial_authority_build1.py", "test": "test_6_floor_agv_amr_remains_not_implemented", "from": "NOT_IMPLEMENTED", "to": "IMPLEMENTED"},
+        {"file": "test_transport_spatial_authority_build2.py", "test": "test_3_floor_agv_amr_remains_distinct", "from": "NOT_IMPLEMENTED", "to": "IMPLEMENTED"},
+        {"file": "test_transport_spatial_authority_build3.py", "test": "test_35_floor_agv_amr_remains_not_implemented", "from": "NOT_IMPLEMENTED", "to": "IMPLEMENTED"},
+        {"file": "test_transport_spatial_authority_build4.py", "test": "test_50_floor_agv_amr_remains_not_implemented", "from": "NOT_IMPLEMENTED", "to": "IMPLEMENTED"},
+        {"file": "test_build3c1_spatial_route_authority.py", "test": "test_5_rght_lane_identity", "from": "NOT_IMPLEMENTED", "to": "IMPLEMENTED"}
+      ],
+      "post_fix_verification": "200 passed in 0.60s"
+    },
+    "report_only_left_failing": [
+      {
+        "test": "test_conventional_economic_calibration_and_intraday_scheduling.py::test_generator_benchmark_uniform_across_initial_models",
+        "line": 215,
+        "assertion": "len(rows) == 3",
+        "actual": 4,
+        "classification": "SUSPECTED_STALE_BENCHMARK",
+        "cause": "generator catalog grew from 3 to 4 models (4th = Sodium chloride eluate, variable CapEx)",
+        "auto_corrected": false,
+        "reason_not_corrected": "touches economic catalog; requires engineering authority to ratify 4th model"
+      },
+      {
+        "test": "test_full_operational_capital_qualification.py::test_mrt_carrier_shortage_shows_degraded_service",
+        "line": 255,
+        "assertion": "constrained.late + constrained.unmet > 0",
+        "actual": {"installed_carriers": 7, "total_missions": 212, "on_time": 212, "late": 0, "unmet": 0, "max_wait_minutes": 2.564564500000074},
+        "classification": "ENGINEERING_AUTHORITY_CONFLICT",
+        "cause": "7 MRT carriers now satisfy the 212-mission day within timing tolerance; companion test_mrt_carrier_shortage_never_auto_expands still passes (no silent fleet expansion)",
+        "auto_corrected": false,
+        "reason_not_corrected": "requires engineering ruling on whether shortfall should manifest"
+      }
+    ],
+    "environment_conditional_exclusions": [
+      {"file": "test_capital_project_api.py", "reason": "fastapi not installed", "classification": "ENVIRONMENT_CONDITION"},
+      {"file": "test_bim_itwin_phase2b_live_bentley_binding.py", "reason": "requires live Bentley/iTwin binding", "classification": "ENVIRONMENT_CONDITION"},
+      {"selector": "-k live_bentley / test_bentley_live_imodel_proofs.py", "reason": "requires live Bentley/iTwin binding", "classification": "ENVIRONMENT_CONDITION"}
+    ]
+  },
+  "engineering_document_update_required": [
+    "Ratify the 4th generator model (Sodium chloride eluate, variable CapEx) and update generator benchmark row count 3 -> 4.",
+    "Rule on whether 7-carrier sufficiency (0 late/0 unmet) is intended (retire shortage benchmark) or a regression.",
+    "Confirm the three-way endpoint-CapEx naming ($1,000 light-MRT / $1,000 room panel / $10,000 optimizer junction) is intentional and align docs to code.",
+    "Decide whether/when to calibrate routed MRT guideway length and network-contention models; keep NOT_CALIBRATED / DOCUMENTED_NOT_IMPLEMENTED until a canonical source exists."
+  ],
+  "test_build_viewer_results": {
+    "headless_engineering_suite": {"passed": 5103, "failed": 7, "skipped": 10, "duration": "~16m41s", "exclusions": ["test_capital_project_api.py", "test_bim_itwin_phase2b_live_bentley_binding.py", "-k not live_bentley"]},
+    "post_audit_expected": {"passed": 5108, "failed": 2, "note": "5 stale-benchmark corrected; 2 report-only remain by design"},
+    "focused_subsets": {
+      "decay_transport_production_clinical_infra_lifecycle_equalbudget": "430 passed",
+      "architecture_optimizer_fourarch_transportparity_dedicatedrppts": "293 passed +1 skip",
+      "corrected_agv_status_files": "200 passed",
+      "new_audit_suite": "13 passed"
+    },
+    "frontend_baseline_unchanged": {"test_files": 82, "tests": 1274, "tsc": "PASS", "build": "PASS", "viewer_http": 200, "port": 3000, "modified_by_this_audit": false, "live_reconfirmation": "MANUAL"}
+  },
+  "new_audit_test_file": "test_build1b9_physics_economics_integrity_audit.py",
+  "new_audit_test_count": 13,
+  "new_audit_test_status": "13 passed",
+  "unresolved_gaps": [
+    "No electromagnetic/maglev field solver for MRT (kinematic L1 only).",
+    "No CFD, no Monte-Carlo particle transport, no dynamic multi-body trajectory integration, no network-contention queueing solver (DOCUMENTED_NOT_IMPLEMENTED).",
+    "Routed MRT guideway length NOT_CALIBRATED (no $0 substitution).",
+    "Two report-only test failures pending engineering authority.",
+    "Live browser confirmation of viewer is a manual step not exercised by this headless audit."
+  ],
+  "not_started": ["Build 1C", "Build 2", "transport-network routing", "animation"]
+}

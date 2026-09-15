@@ -1,0 +1,102 @@
+{
+  "defect_id": "B1B-MA-02",
+  "title": "Upper-storey \"Enter Walkthrough Here\" spawns the camera below / intersecting the floor slab",
+  "build": "1B",
+  "status": "IMPLEMENTED / AUTOMATED GREEN / MANUAL RETEST REQUIRED",
+  "manual_acceptance": "PENDING",
+  "build_1b_marked_complete": false,
+  "baseline_commit": "1de2c5b0d01e3a69e0c5a744b1d58ae1f3526bd3",
+  "branch": "main",
+  "reproduction_path": "2C17 PROSTH. LAB -> Radiopharmacy (Second Floor) -> Enter Walkthrough Here",
+  "observed_defect": "The targeted walkthrough spawn dropped the camera at (or below) the whole-model band datum (~ground/first floor) instead of the selected upper-storey room floor + eye height, so the camera started below / passing through the second-floor slab.",
+  "root_cause": {
+    "pipeline_correct_end_to_end": "resolveClinicalRoomWalkthroughSpawn uses the room's authoritative floor (fp.volume?.zLow ?? fp.floorZ) + WALKTHROUGH_EYE_HEIGHT_M and rejects wrong-storey rooms via programStoreyRanges; resolveTargetedWalkthroughSpawn returns spawn.z = roomFloorZ + eyeHeight; enterWalkthrough sets the initial camera position (start) to the override correctly.",
+    "primary": "In walkthroughController.enterWalkthrough the per-session floorElevation (the Z the camera is pinned to) was derived from the whole-model STOREY-BAND datum (chosen.zLow from loadStoreys Z-banding), not from the supplied targeted spawn. applyCamera re-derives the eye Z every frame via eyeZForFloor(floorElevation, WALKTHROUGH_EYE_HEIGHT_M), so the correct upper-storey spawn.z was overwritten on the first frame by the low band datum, dropping the camera below/through the slab.",
+    "why_only_upper_storeys": "For a ground/first-floor room the band datum ~= the room floor, so the eye Z was approximately correct and the defect was invisible. On an upper storey the band datum is far below the room floor, so the clobbered eye Z landed below the slab."
+  },
+  "fix": {
+    "location": "frontend/src/components/spatial/walkthroughController.ts (enterWalkthrough)",
+    "change": "Renamed the storey-band datum to storeyFloorZ and derived the per-session floorElevation from a new pure helper resolveWalkthroughFloorElevation(): when a finite targeted spawn override is supplied, floorElevation = spawnOverride.z - WALKTHROUGH_EYE_HEIGHT_M (reconstructs the selected room's own floor using the SAME canonical eye height the resolver applied); otherwise falls back to storeyFloorZ (generic entry unchanged).",
+    "seam_extracted": "frontend/src/components/spatial/walkNav.ts::resolveWalkthroughFloorElevation (pure, @itwin-free, unit-testable). The controller imports and calls it so runtime and tests share one implementation.",
+    "post_spawn_floor_constraint": "Because floorElevation now equals the room floor, applyCamera's eyeZForFloor(floorElevation, eye) reproduces spawn.z EXACTLY on entry and stays pinned there through forward/strafe/turn (no vertical drift, no snap to first floor, no slab pass-through). The floor constraint remains ACTIVE.",
+    "authorities_reused": {
+      "room_floor_authority": "fp.volume?.zLow ?? fp.floorZ (authoritative room footprint floor), reconstructed exactly via spawnOverride.z - eye",
+      "eye_height_authority": "cameraNav.WALKTHROUGH_EYE_HEIGHT_M (single shared constant used by resolver AND camera; no second eye-height authority introduced)",
+      "storey_membership_authority": "programStoreyRanges storey-band rejection in resolveClinicalRoomWalkthroughSpawn (unchanged)"
+    },
+    "graceful_fail": "When no targeted spawn is supplied or the override is non-finite, the helper returns the storey-band datum (prior generic-entry behavior). The targeted resolver itself still returns NO_SAFE_WALKTHROUGH_SPAWN honestly when no defensible interior floor point exists.",
+    "no_free_flight": "No vertical-fly controls added; pitch continues to rotate the view only. The walkthrough remains a floor-constrained pedestrian.",
+    "resolver_unchanged": "targetedWalkthroughSpawn.ts and its 16 sub-property behavior are unchanged (it was already correct)."
+  },
+  "spawn_calc_before_after": {
+    "before": "start = spawnOverride (correct); floorElevation = chosen.zLow (whole-model band datum); eyeZ_per_frame = eyeZForFloor(band_datum, eye)  => below the upper-storey slab",
+    "after": "start = spawnOverride (correct); floorElevation = spawnOverride.z - eye (room floor); eyeZ_per_frame = eyeZForFloor(roomFloor, eye) == spawnOverride.z  => pedestrian eye height inside the room"
+  },
+  "tests_added": {
+    "new_test_file": "frontend/src/tests/build1bB1bMa02WalkthroughSpawn.test.ts",
+    "new_tests_count": 9,
+    "cases": [
+      "(a) upper-storey targeted spawn.z ~= roomFloorZ + eyeHeight AND the old storey-band pin is proven to land below the second-floor slab",
+      "(b) same-XY rooms on different storeys yield DISTINCT camera Z separated by the storey gap (fails if both collapse to one global Z)",
+      "(c) irregular/concave (L-shaped) upper-storey room: resolved interior XY is inside the footprint and Z sits on the correct storey",
+      "(d) post-spawn floor constraint is invariant across simulated XY movement: eye Z stays == spawn.z, above the slab, zero vertical drift",
+      "(e) spawn point in-room AND a representative equipment envelope in-room (containment sanity; spawn is room-derived, equipment is not the authority)",
+      "seam: override path uses spawnOverride.z - eye",
+      "seam: no-override falls back to storey-band datum",
+      "seam: non-finite override / non-finite eye falls back to storey-band datum",
+      "seam: eyeZForFloor(resolveFloor(spawnZ), eye) round-trips to spawnZ exactly"
+    ]
+  },
+  "regression_preserved": {
+    "b1b_ma01_reparent_containment": "PASS (build1bB1bMa01ReparentContainment.test.ts unchanged and green)",
+    "scanner_acceptance": "PASS (no changes to acceptance / equipment gate / canonical identity)",
+    "all_prior_walkthrough_tests": "PASS (walkNav, firstPerson, cameraNav, build1a walkthrough suites green)"
+  },
+  "files_changed": [
+    "frontend/src/components/spatial/walkNav.ts",
+    "frontend/src/components/spatial/walkthroughController.ts",
+    "frontend/src/tests/build1bB1bMa02WalkthroughSpawn.test.ts"
+  ],
+  "verification": {
+    "typecheck": "PASS",
+    "test_files_baseline": 62,
+    "test_files_after": 63,
+    "tests_baseline": 1018,
+    "tests_after": 1027,
+    "test_failures": 0,
+    "new_tests_count": 9,
+    "production_build": "PASS",
+    "worker_head": "(()=>{\"use strict\";f",
+    "wasm_magic": "0061 736d",
+    "core_frontend_version": "5.12.5",
+    "viewer_http": 200,
+    "dev_server_port": 3000,
+    "dev_server_restarted_clean": true
+  },
+  "scope_review": {
+    "changes_confined_to_frontend": true,
+    "py_or_closed_domain_changes_by_this_fix": false,
+    "preexisting_untracked_py_files_unrelated": [
+      "transport_connectivity_composition_authority.py",
+      "test_transport_connectivity_composition_authority.py"
+    ],
+    "env_file_modified_by_this_fix": false,
+    "env_file_state": "M (pre-existing, unstaged)",
+    "staged": false,
+    "committed": false,
+    "pushed": false
+  },
+  "limitations": [
+    "The room floor is reconstructed as spawnOverride.z - eye; this is exact because the resolver and the camera share the single WALKTHROUGH_EYE_HEIGHT_M constant. If a future change gave the resolver a different eye height, the shared-constant invariant (covered by the round-trip test) would need to hold.",
+    "Generic (non-targeted) walkthrough entry still uses the storey-band datum, which is correct for whole-model entry and out of scope for B1B-MA-02.",
+    "Storey membership for the targeted spawn is still decided upstream by programStoreyRanges; this fix only ensures the controller honors the room floor the resolver already validated."
+  ],
+  "manual_retest_steps": [
+    "Load MRTway Medical Clinic Demo; confirm /viewer renders at http://localhost:3000/viewer.",
+    "Select the 2C17 PROSTH. LAB clinical function and its Radiopharmacy room on the Second Floor.",
+    "Click Enter Walkthrough Here.",
+    "Confirm the camera starts at standing eye height INSIDE the room, on top of the second-floor slab (not below/through it).",
+    "Walk forward/back/strafe and turn: the eye height must stay constant on the second-floor plane with no drop to the first floor and no slab pass-through.",
+    "Regression: repeat B1B-MA-01 (2D18 TECH. OFFICE -> PET/CT Scanner Room -> Discovery MI) and a ground-floor Enter Walkthrough Here to confirm both still behave correctly."
+  ]
+}

@@ -1,0 +1,81 @@
+{
+  "report": "MRT_PHARMA_EVI_MA02C_AUTHORITATIVE_DELETE_REPORT",
+  "correction": "EVI-MA-02C",
+  "manual_acceptance": "PENDING",
+  "self_accepted": false,
+  "defect": "Delete-only: right-click menu, exact-model title, and Hide all work; Delete from the same menu did not remove the equipment.",
+  "root_cause": {
+    "exact_location": "frontend/src/components/spatial/ViewerEquipmentContextMenu.tsx onDelete",
+    "failing_line": "if (!window.confirm(...)) return;  // ran before deleteEquipment(id)",
+    "explanation": "window.confirm is suppressed (returns false) in the embedded Bentley viewer host, so the early return fired and deleteEquipment was never called. The menu was also closed before the never-reached delete. Hide has no confirm gate, so Hide worked and Delete did not.",
+    "deleteEquipment_itself_was_correct": true
+  },
+  "hide_vs_delete": {
+    "hide": "setEquipmentVisibility(id,false) -> mutate -> persist -> notify (reached)",
+    "delete_before": "window.confirm gate -> deleteEquipment (NOT reached)",
+    "store_mutation_identical": true
+  },
+  "fix": {
+    "menu_onDelete": "calls deleteEquipment(id) FIRST (no window.confirm); ok -> close menu; failure -> keep menu open + show result.message",
+    "deleteEquipment_result_type": "DeleteEquipmentResult = {ok:true,deletedId,canonicalModelId} | {ok:false,reason:NOT_FOUND|LOCKED|PERSISTENCE_FAILED|INVALID_STATE,message}",
+    "deletes_strictly_by_id": true,
+    "decrement_by_one_asserted": true,
+    "clears_selected_if_deleted": true,
+    "clears_context_menu_if_target": true,
+    "persists_new_collection": true,
+    "notifies": true,
+    "no_silent_returns": true
+  },
+  "derived_state_clears": ["3d_geometry", "envelope", "3d_label", "2d_marker", "equipment_card", "collision_reservation"],
+  "persistence": {
+    "key": "mrtpharma.equipment.v1.<iModelId>",
+    "reseed_on_empty": false,
+    "empty_stays_empty": true,
+    "reload_resurrects_deleted": false,
+    "only_reconstruction_path": "manual duplicate-guarded Uptake 01 clinical baseline (assignment+planning volume, NOT equipment; never triggered by delete/reload)"
+  },
+  "convergent_delete_entry_points": {
+    "card": "ClinicalProgramControl.deleteEquipmentRow -> deleteEquipment(id)",
+    "right_click_menu": "ViewerEquipmentContextMenu.onDelete -> deleteEquipment(id)",
+    "keyboard": "BentleyViewer keydown -> deleteEquipment(getSelectedEquipmentId())",
+    "single_lifecycle": true,
+    "duplicate_logic": false
+  },
+  "files_changed": {
+    "modified": [
+      "frontend/src/components/spatial/spatialAssetOverlay.ts",
+      "frontend/src/components/spatial/ViewerEquipmentContextMenu.tsx",
+      "frontend/src/routes/BentleyViewer.css"
+    ],
+    "new": ["frontend/src/tests/eviMa02cAuthoritativeDelete.test.ts"]
+  },
+  "tests": {
+    "new_file": "frontend/src/tests/eviMa02cAuthoritativeDelete.test.ts",
+    "new_count": 9,
+    "covers": ["hide_not_remove", "delete_removes_exact", "delete_key_leaves_kiube_and_pettrace", "decrement_once", "selection_clears_only_if_deleted", "context_menu_target_clears", "not_found_reason", "unlocked_deletes_locked_rejected", "persist_delete_reload_absent", "delete_releases_collision_volume", "result_shape"],
+    "baseline_before": { "files": 70, "tests": 1117 },
+    "baseline_after": { "files": 71, "tests": 1126, "result": "PASS" },
+    "tests_weakened": false
+  },
+  "verification": {
+    "typecheck_tsc_b": "PASS",
+    "production_build": "PASS_WITH_PREEXISTING_WARNINGS_ONLY",
+    "viewer_http_status": 200,
+    "wasm_asset": "public/scripts/draco_decoder.wasm",
+    "bentley_worker_asset": "public/scripts/parse-imdl-worker.js",
+    "backend_python_modified": false
+  },
+  "dev_server": { "canonical_port": 3000, "left_running_for_user": true },
+  "untouched": ["3d_picking", "right_click_bridge", "ray_picking", "context_menu_event_delivery", "equipment_geometry", "collision_exclusivity", "bentley_authentication", "walkthrough", "2d_room_logic"],
+  "manual_acceptance_steps": [
+    "Right-click IBA Cyclone KEY -> Hide -> hides",
+    "Unhide",
+    "Right-click KEY -> Delete -> KEY disappears from 3D, 2D plan, equipment cards",
+    "KIUBE remains",
+    "Refresh -> KEY still absent",
+    "Delete KIUBE",
+    "Refresh -> KIUBE still absent",
+    "Place equipment in the released space -> succeeds if no other collision"
+  ],
+  "stop_condition": "Automated verification passes; dev server on 3000. STOP. Await manual EVI-MA-02C acceptance. Do not start PTS/RTHS/MRT animation/Build 2."
+}

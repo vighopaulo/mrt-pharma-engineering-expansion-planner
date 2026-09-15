@@ -1,0 +1,158 @@
+{
+  "report": "MRT_PHARMA_BUILD_1B_TRUE_2D_PLAN_AND_WALKTHROUGH_UX_CORRECTION",
+  "checkpoint": "HOLD_FOR_BUILD_1B_UX_MANUAL_ACCEPTANCE",
+  "continued_from": "CURRENT Build 1B working tree (no restart, no revert)",
+  "git": {
+    "head": "1de2c5b0d01e3a69e0c5a744b1d58ae1f3526bd3",
+    "origin_main": "1de2c5b0d01e3a69e0c5a744b1d58ae1f3526bd3",
+    "divergence_ahead_behind": [0, 0],
+    "staged_anything": false,
+    "python_files_changed": 0,
+    "frontend_env_staged": false,
+    "frontend_env_note": "frontend/.env is modified in the working tree from prior Build 1B state (11 added lines); it was NOT touched or staged by this correction",
+    "committed": false,
+    "pushed": false
+  },
+  "terminology": {
+    "PLANNING_EQUALS_PLAN_VIEW": "NO",
+    "PLANNING_IS_WORKFLOW": "YES",
+    "TWO_D_PLAN_IS_REPRESENTATION": "YES",
+    "WALKTHROUGH_IS_NAVIGATION_MODE": "YES"
+  },
+  "observed_defects": {
+    "label_mass": "The active storey (~200 BIM spaces) rendered a permanent text label for EVERY room with a label anchor, producing an unreadable label mass (screenshot provenance: 200 rooms / 2 exact / 198 approx dashed / walker live).",
+    "mini_plan_toolbar": "The mini-plan carried a Fit / + / - / arrow (up/down/left/right) control row plus zoom/pan/autoFit state; the plan should auto-fit only.",
+    "mini_plan_close": "The mini-plan offered only a collapse toggle that hid the body but kept the panel; there was no proper close, and no compact reopen.",
+    "walkthrough_card_obstruction": "The ENTIRE Walkthrough control card rendered unconditionally on mode==='WALKTHROUGH'; only the small key-controls help subsection was dismissible, so the card obstructed the 3D scene with no way to clear it."
+  },
+  "root_cause": {
+    "label_mass": "Bim2dPlanPanel rendered a <text> for every room that had a labelAnchor; there was no label-density policy.",
+    "walkthrough_card": "In CameraModeControl the whole mode==='WALKTHROUGH' JSX branch was unconditional; controlsHelpOpen governed ONLY the .camera-mode-help subsection, never the card."
+  },
+  "changes": {
+    "pure_layer": {
+      "file": "frontend/src/components/spatial/bim2dPlanProjection.ts",
+      "added": [
+        "PlanLabelKind ('CLINICAL' | 'SELECTED' | 'HOVERED' | 'NONE')",
+        "isProgramClinicalFunction(fn) — UNASSIGNED_EXISTING and undefined are NOT program assignments",
+        "clinicalBadge(fn) — [U]/[I]/[P]/[S]/[R]/[C]",
+        "PlanRoomLabelDecision { show, kind, text }",
+        "resolvePlanRoomLabel(room, hoveredId?) — CLINICAL always permanent, SELECTED always permanent, HOVERED transient, else NONE",
+        "countPermanentPlanLabels(view) — permanent (clinical+selected) only; excludes hover"
+      ],
+      "purity": "No @itwin, no DOM, no viewport; deterministic."
+    },
+    "mini_plan_panel": {
+      "file": "frontend/src/components/spatial/Bim2dPlanPanel.tsx",
+      "removed": [
+        ".bim2d-plan-toolbar Fit / + / - / up / down / left / right buttons",
+        "zoom / panPx / autoFit state and fit/zoomBy/panBy handlers"
+      ],
+      "changed": [
+        "Labels now decided by resolvePlanRoomLabel (Clinical Program permanent + badge; selected permanent; hovered transient; rest unlabelled with identity on hover/click)",
+        "Transform always auto-fits the active storey bounds into the compact canvas",
+        "VIEW_W/VIEW_H shrunk from 360x300 to 260x200; CSS width clamp(200px,22vw,280px)",
+        "Collapse toggle replaced by a proper x close -> compact '2D Plan' reopen chip; while closed only the chip renders (no panel body / no SVG / no blocking layer)",
+        "Added hover identity (transient, no store write) via onMouseMove/onMouseLeave"
+      ],
+      "preserved": [
+        "Room click selects the SAME bimSpaceId (setClinicalProgramSelectedSpace + fitViewToClinicalRoom) and NEVER moves the walker",
+        "Enter Walkthrough Here uses enterWalkthroughAtClinicalRoom (safe spawn; no teleport-on-click)",
+        "Walker marker from the single walkthrough read-model via subscribeWalkthroughState",
+        "Exact vs approximate (dashed) provenance and honest counts"
+      ]
+    },
+    "walkthrough_card": {
+      "file": "frontend/src/components/spatial/CameraModeControl.tsx",
+      "added": [
+        "walkthroughCardOpen state collapsing the WHOLE walkthrough control block (storeys/FOV/turn/reset/exit/key-controls) to a compact 'Walkthrough Controls' reopen chip",
+        "x collapse button (Collapse walkthrough controls)",
+        "Esc-first collapse in the CAPTURE phase with stopPropagation (one Esc = one action); once collapsed, Esc falls through to the controller's pointer-release",
+        "Outside-click collapse via window pointerdown + target.closest('.camera-mode') test (NO full-screen invisible blocker)",
+        "Fresh full card on each walkthrough entry (setWalkthroughCardOpen(true))"
+      ],
+      "preserved": [
+        "EXIT WALKTHROUGH remains reachable in the collapsed state",
+        "Controller pointer-release semantics untouched when the card is already collapsed",
+        "The inner key-controls help pane keeps its own x/reopen (renamed to 'Walkthrough key controls')"
+      ]
+    },
+    "css": {
+      "file": "frontend/src/routes/BentleyViewer.css",
+      "changed": [
+        "Removed .bim2d-plan.collapsed / .bim2d-plan-collapse / .bim2d-plan-toolbar rules; shrank .bim2d-plan width and .bim2d-plan-svg height",
+        "Added .bim2d-plan-close, .bim2d-plan-reopen, and label-kind styles (--clinical/--selected/--hovered)",
+        "Added .camera-mode-walkthrough (+ head), .camera-mode-card-close, .camera-mode-walkthrough-collapsed, .camera-mode-card-reopen"
+      ]
+    }
+  },
+  "tests": {
+    "new_files": [
+      "frontend/src/tests/build1bLabelDensity.test.ts",
+      "frontend/src/tests/build1bWalkthroughCardUi.test.tsx"
+    ],
+    "updated_files": [
+      "frontend/src/tests/build1bPlan2dUi.test.tsx (retargeted to 260x200; replaced toolbar/collapse tests with §PB5 UX-correction assertions)",
+      "frontend/src/tests/build1aWalkthroughControlsPaneUi.test.tsx (retargeted inner help pane aria-labels to 'Walkthrough key controls'; card-level Esc/outside-click moved to the new §25 suite)"
+    ],
+    "coverage": {
+      "22_label_density": "A 200-room floor yields only 2 permanent labels (clinical), 3 when one ordinary room is selected; hover is transient and excluded from countPermanentPlanLabels; UNASSIGNED_EXISTING is not a program label; badges verified.",
+      "23_floor_plan_geometry": "All 200 rooms project a polygon regardless of labelling; the label policy never alters ring/footprintSource/labelAnchor; exact vs approximate preserved.",
+      "24_walker_immutability": "Resolving labels for every room does not mutate the walker read-model and label density is independent of walker presence.",
+      "25_mini_plan_ui": "No Fit/+/-/arrow toolbar; only the Clinical Program room is permanently labelled ([U] Uptake 01); selecting adds exactly one SELECTED label; x closes to a compact '2D Plan' chip with no panel body/SVG and reopen restores the walker; click selects same bimSpaceId and never moves the walker.",
+      "25_walkthrough_card_ui": "x collapses the whole card (EXIT still reachable, not an exit); first Esc collapses (not exit to PLANNING); outside-click collapses (inside keeps open); reopen restores; EXIT works from collapsed state."
+    }
+  },
+  "verification": {
+    "typecheck": "npx tsc -b -> exit 0",
+    "test_suite": {
+      "command": "npm run test -- --run (isolated, not concurrent with build)",
+      "files": 59,
+      "tests": 989,
+      "result": "all passed"
+    },
+    "production_build": "npm run build -> built OK (pre-existing chunk-size + ineffective-dynamic-import advisories only; no errors)",
+    "assets": {
+      "worker_head": "(()=>{\"use strict\";f",
+      "wasm_magic": "0061 736d",
+      "itwin_core_frontend_version": "5.12.5"
+    },
+    "dev_server": {
+      "command": "npm run dev -- --port 3000",
+      "viewer_http": 200,
+      "clean_start": true
+    }
+  },
+  "flags": {
+    "ALL_BIM_ROOMS_PERMANENTLY_LABELLED": "NO",
+    "CLINICAL_PROGRAM_ROOMS_ALWAYS_LABELLED": "YES",
+    "SELECTED_ROOM_ALWAYS_LABELLED": "YES",
+    "HOVERED_ROOM_LABELLED_TRANSIENTLY": "YES",
+    "BIRDS_EYE_USED_AS_2D_PLAN": "NO",
+    "MINI_PLAN_CONTROL_ROW_REMOVED": "YES",
+    "MINI_PLAN_AUTO_FITS_ACTIVE_STOREY": "YES",
+    "MINI_PLAN_DISMISSIBLE_WITH_REOPEN": "YES",
+    "MINI_PLAN_BLOCKS_VIEWPORT_WHEN_CLOSED": "NO",
+    "PLAN_ROOM_CLICK_SELECTS_SAME_BIMSPACEID": "YES",
+    "PLAN_ROOM_CLICK_TELEPORTS": "NO",
+    "WALKTHROUGH_CONTROL_CARD_DISMISSIBLE": "YES",
+    "WALKTHROUGH_CARD_ESC_COLLAPSE": "YES",
+    "FIRST_ESC_EXITS_WALKTHROUGH": "NO",
+    "WALKTHROUGH_CARD_INVISIBLE_BLOCKER": "NO",
+    "WALKTHROUGH_EXIT_REACHABLE_WHEN_COLLAPSED": "YES",
+    "CANDIDATE_RECOMMENDATION_GUARD_PRESERVED": "YES",
+    "EQUIPMENT_BINDING_WORK_PRESERVED": "YES",
+    "WALKER_SINGLE_SOURCE_OF_TRUTH": "walkthroughController",
+    "ROOM_PIPELINE_REGRESSED_TO_ZERO": "NO"
+  },
+  "preserved_prior_work": {
+    "candidate_guard": "clinicalRoomCandidate.ts (roomMatchesFunctionAffinity, hasFunctionSemanticEvidence, recommendation cap, RECOMMENDED/SUITABLE/NEEDS_REVIEW/REJECTED) unchanged",
+    "equipment_binding": "canonicalEquipmentCatalog.ts, equipmentInstance.ts, equipmentValidation.ts unchanged",
+    "room_pipeline": "projectBim2dPlan room projection unchanged (200 rooms / 2 exact / 198 approx preserved); label policy is additive"
+  },
+  "scope": {
+    "backend_domain_economics_simulation_routing_changed": false,
+    "python_changed": false,
+    "frontend_only": true
+  }
+}

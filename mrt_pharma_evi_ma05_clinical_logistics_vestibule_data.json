@@ -1,0 +1,142 @@
+{
+  "build": "EVI-MA-05 FINAL",
+  "title": "Common Clinical Logistics Vestibule Family + Radiopharmacy Dual MRT/PTS Interface + Origin-Service Foundation",
+  "supersedes": ["EVI-MA-05 (earlier)", "EVI-MA-05R"],
+  "manual_acceptance": "PENDING",
+  "self_accepted": false,
+  "scope": "physical interfaces only; establishes ONE reusable wall-integrated clinical logistics vestibule family, service-class taxonomy, transport-port policy, and the fully demonstrated Radiopharmacy dual-port instance",
+  "stop_before": ["PTS network routing", "PTS carrier/capsule animation", "MRT backbone routing", "MRT carrier animation", "RTHS routing", "AGV/AMR simulation", "Build 2 transport optimization"],
+  "reconcile": {
+    "branch": "main",
+    "head": "1de2c5b0d01e3a69e0c5a744b1d58ae1f3526bd3",
+    "origin_main": "1de2c5b0d01e3a69e0c5a744b1d58ae1f3526bd3",
+    "divergence": { "ahead": 0, "behind": 0 },
+    "uncommitted_paths_preserved": 106,
+    "test_baseline": { "files": 75, "tests": 1169 }
+  },
+  "superseded_doctrines_not_implemented": [
+    "cyclotron -> dedicated duct across cyclotron room -> vestibule",
+    "cyclotron room -> wall -> vestibule in ADJOINING BIM room",
+    "one MRT vestibule + one separate PTS vestibule for the same service point",
+    "vestibule mandatorily beside the cyclotron"
+  ],
+  "visual_family": "CLINICAL_LOGISTICS_VESTIBULE_V1",
+  "service_classes": ["RADIOPHARMACY", "PHARMACY", "LABORATORY", "STERILE_CLEAN_SUPPLY", "LAUNDRY_LINEN"],
+  "future_service_classes": ["CENTRAL_SUPPLY", "MATERIALS_MANAGEMENT", "BLOOD_BANK", "WASTE_SOILED_MATERIAL", "KITCHEN_NUTRITION"],
+  "port_policy": {
+    "no_auto_nuclear_upgrade": true,
+    "RADIOPHARMACY": { "mrt": "STANDARD (fabricated)", "pts": "RADIOPHARMACEUTICAL_QUALIFIED (fabricated)" },
+    "PHARMACY": { "mrt": "STANDARD (fabricated)", "pts": "CONVENTIONAL_CLINICAL (fabricated)" },
+    "LABORATORY": { "mrt": "STANDARD (fabricated)", "pts": "CONVENTIONAL_CLINICAL (fabricated)" },
+    "STERILE_CLEAN_SUPPLY": { "mrt": "STANDARD (fabricated)", "pts": "none", "reserved": ["RTHS"] },
+    "LAUNDRY_LINEN": { "mrt": "HEAVY_GENERAL (fabricated)", "pts": "none", "reserved": ["AGV_AMR", "RTHS"] }
+  },
+  "radiopharmaceutical_upstream_abstraction": "RADIOPHARMACEUTICAL_PRODUCT_AVAILABLE_AT_VESTIBULE_INPUT",
+  "no_cyclotron_to_vestibule_duct": true,
+  "geometry": {
+    "not_manufacturer_cad": true,
+    "wall_integrated_atm_like": true,
+    "part_counts": {
+      "front_face_plus_wall_plus_manifold_always": 15,
+      "mrt_branch": 7,
+      "pts_branch": 3,
+      "radiopharmacy_pharmacy_lab_dual": 25,
+      "sterile_mrt_only": 22,
+      "laundry_mrt_heavy_only": 22,
+      "in_15_30_band": true
+    },
+    "front_face_roles": ["CLV_WALL_FASCIA", "CLV_HOUSING", "CLV_TRANSFER_DOOR", "CLV_TRANSFER_APERTURE", "CLV_HANDLE", "CLV_HMI", "CLV_STATUS_GREEN", "CLV_STATUS_AMBER", "CLV_STATUS_RED", "CLV_ESTOP", "CLV_SERVICE_PANEL", "CLV_SERVICE_LABEL", "CLV_BASE"],
+    "wall_and_manifold_roles": ["CLV_WALL_SLEEVE", "CLV_REAR_MANIFOLD"],
+    "mrt_branch": {
+      "roles": ["CLV_MRT_MANIFOLD_SECTION", "CLV_MRT_REDUCER_FACE (x4 planar boxes)", "CLV_MRT_TRUNK_STUB", "CLV_MRT_TRUNK_PORT"],
+      "reducer_is_rectangular_planar_not_cone": true,
+      "reducer_face_count": 4
+    },
+    "pts_branch": {
+      "roles": ["CLV_PTS_ADAPTER", "CLV_PTS_TUBE_STUB (cylinder)", "CLV_PTS_PORT (circular)"],
+      "reads_as_circular_tube": true
+    }
+  },
+  "color_standard": {
+    "distinct_from_cyclotron": true,
+    "no_whole_machine_cyan": true,
+    "not_neon_green": true,
+    "shared_map": "EQUIPMENT_PART_COLOR (equipmentGeometry.ts) — both decorators",
+    "samples": {
+      "CLV_HOUSING": [178, 196, 182],
+      "CLV_TRANSFER_DOOR": [166, 172, 178],
+      "CLV_HMI": [34, 40, 48],
+      "CLV_BASE": [72, 78, 84],
+      "CLV_REAR_MANIFOLD": [140, 148, 156],
+      "CLV_STATUS_GREEN": [86, 190, 120],
+      "CLV_STATUS_AMBER": [216, 170, 66],
+      "CLV_STATUS_RED": [196, 66, 58]
+    },
+    "selection_preserves_materials": true,
+    "selection_outline_only": [90, 200, 220]
+  },
+  "radiopharmacy_dual_port": {
+    "one_vestibule_two_ports": true,
+    "mrt_port": { "connection_port": "MRT_TRUNK_CONNECTION_PORT", "cross_section": "RECTANGULAR", "status": "UNCONNECTED", "fabricated": true },
+    "pts_port": { "connection_port": "PTS_CONNECTION_PORT", "cross_section": "CIRCULAR", "qualification": "RADIOPHARMACEUTICAL_QUALIFIED", "status": "UNCONNECTED", "fabricated": true },
+    "ports_share_conduit": false,
+    "same_parent_room_as_cyclotron": true,
+    "wall_integrated_not_centroid": true
+  },
+  "instance_model": {
+    "type": "ClinicalLogisticsVestibuleInstance",
+    "fields": ["vestibuleInstanceId", "iModelId", "serviceClass", "parentBimSpaceId", "sourceClinicalContextId", "displayLabel", "visualFamily", "wallReference", "pose", "frontFacePlane", "reservedVolume", "hidden", "lifecycleState", "wallRelationshipStatus", "transportPorts"],
+    "wallRelationshipStatus": "PROPOSED_WALL_PENETRATION",
+    "bim_wall_immutable": true,
+    "persistence": {
+      "key": "mrtpharma.vestibule.v1.<iModelId>",
+      "key_allowlist": true,
+      "forbidden_keys_rejected": ["mesh", "vertices", "triangles", "token-like"],
+      "no_mesh_stored": true,
+      "round_trip_deterministic": true
+    }
+  },
+  "wall_placement": {
+    "enumerate_wall_candidates_longest_first": true,
+    "never_room_centroid": true,
+    "min_wall_width_m": 1.4,
+    "min_room_height_m": 2.0,
+    "honest_failures": ["NO_DEFENSIBLE_WALL", "ROOM_TOO_SHORT", "NO_PARENT_ROOM"]
+  },
+  "files": {
+    "new": [
+      "frontend/src/components/spatial/clinicalLogisticsVestibule.ts",
+      "frontend/src/tests/eviMa05ClinicalLogisticsVestibule.test.ts"
+    ],
+    "modified": [
+      "frontend/src/components/spatial/equipmentGeometry.ts"
+    ],
+    "decorators_unchanged_reason": "drawEquipmentVisual already renders any family via the shared palette + outline-only selection; EQUIPMENT_PART_COLOR now covers all CLV_* roles"
+  },
+  "verification": {
+    "typecheck": "PASS (npx tsc -b, 0 errors)",
+    "evi_ma05_suite": "27 passed",
+    "full_suite": { "files": 76, "tests": 1196, "status": "all pass", "delta_files": 1, "delta_tests": 27 },
+    "production_build": "PASS (pre-existing INEFFECTIVE_DYNAMIC_IMPORT + chunk-size warnings only)",
+    "viewer_http_status": 200,
+    "dev_server_port": 3000
+  },
+  "deferred_intentionally": {
+    "live_overlay_instance_wiring": "dedicated vestibule overlay store, selection card, pick ids, BentleyViewer persistence sync — deferred per physical-interfaces-only scope; family is render-ready via existing drawEquipmentVisual path"
+  },
+  "preserved_do_not_regress": [
+    "EVI-MA-04 cyclotron V2",
+    "equipment canonical identities",
+    "equipment selection",
+    "Fit",
+    "Hide/Show",
+    "Lock/Unlock",
+    "Delete",
+    "persistence",
+    "equipment collision exclusivity",
+    "2D plan",
+    "walkthrough",
+    "Bentley authentication lifecycle",
+    "Clinical Program state"
+  ]
+}

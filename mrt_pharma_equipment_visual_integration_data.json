@@ -1,0 +1,119 @@
+{
+  "report": "MRT_PHARMA_EQUIPMENT_VISUAL_INTEGRATION_REPORT",
+  "build": "EQUIPMENT_VISUAL_INTEGRATION",
+  "status": "AUTOMATED_SUCCESS_AWAITING_MANUAL_ACCEPTANCE",
+  "baseline": {
+    "branch": "main",
+    "head_commit": "1de2c5b",
+    "uncommitted_build1b_work_preserved": true,
+    "restarted_from_github_or_zip": false
+  },
+  "regression": {
+    "typecheck_tsc_b": "PASS",
+    "frontend_vitest": { "files": 65, "tests": 1053, "result": "PASS", "new_tests_included": 17 },
+    "production_build": "PASS_WITH_PREEXISTING_WARNINGS_ONLY",
+    "dev_server": "STARTED_PORT_3000",
+    "viewer_http_status": 200,
+    "root_http_status": 200,
+    "wasm_asset": "public/scripts/draco_decoder.wasm",
+    "bentley_worker_asset": "public/scripts/parse-imdl-worker.js",
+    "openusd_tests": { "suites": ["test_openusd_spatial_adapter.py", "test_openusd_yc_demo_binding.py", "test_bim_itwin_phase2a1_bentley_renderability.py"], "tests": 165, "result": "PASS" },
+    "backend_python_modified": false
+  },
+  "asset_inventory": [
+    { "path": "openusd_visual_assets/representative_cyclotron.usda", "type": "OPENUSD", "primitives": ["Cylinder Body", "Cylinder Shielding", "Cube ServiceCabinet"], "provenance": "REPRESENTATIVE_ASSET/NON_AUTHORITATIVE", "used_by_bentley": false, "used_by_openusd_export": true },
+    { "path": "openusd_visual_assets/representative_scanner.usda", "type": "OPENUSD", "primitives": ["Cylinder Gantry", "Cube Table", "Cube Base"], "provenance": "REPRESENTATIVE_ASSET", "used_by_bentley": false, "used_by_openusd_export": true },
+    { "path": "openusd_visual_assets/representative_radiopharmacy.usda", "type": "OPENUSD", "primitives": ["Cube HotCell", "Cube Workbench", "Cube Dispensing"], "provenance": "REPRESENTATIVE_ASSET", "used_by_bentley": false, "used_by_openusd_export": true },
+    { "path": "bim_test_assets/mrt_pharma_hospital_bim_proof.ifc", "type": "IFC", "provenance": "GENERATED_PROOF", "used_by_bentley": true, "used_by_openusd_export": false },
+    { "path": "frontend/src/components/spatial/scannerGeometry.ts", "type": "TS_RECIPE_BENTLEY_FREE", "primitives": ["gantry", "bore", "patient_table", "table_base"], "provenance": "GENERIC_ENGINEERING_PLACEHOLDER", "used_by_bentley": true, "used_by_openusd_export": false }
+  ],
+  "reported_assets_verified": {
+    "openusd_visual_assets/representative_cyclotron.usda": true,
+    "openusd_visual_assets/representative_scanner.usda": true,
+    "openusd_visual_assets/representative_radiopharmacy.usda": true,
+    "bim_test_assets/mrt_pharma_hospital_bim_proof.ifc": true
+  },
+  "architecture": {
+    "bentley_rendering": "Two Decorator paths: SpatialAssetDecorator (AssetInstance) and ClinicalProgramDecorator (EquipmentAssetInstance). Both now consume the shared equipmentGeometry recipe.",
+    "openusd": "EXPORT_ONLY_FIREWALLED (Bentley does not import pxr/openusd_spatial_adapter).",
+    "integration_approach": "ONE_SHARED_RENDERER_INDEPENDENT_GEOMETRY_RECIPE",
+    "renderer_rewrite": false,
+    "duplicate_equipment_created": false
+  },
+  "files_changed": {
+    "new": [
+      "frontend/src/components/spatial/equipmentGeometry.ts",
+      "frontend/src/tests/equipmentVisualIntegration.test.ts"
+    ],
+    "modified": [
+      "frontend/src/components/spatial/scannerGeometry.ts",
+      "frontend/src/components/spatial/ClinicalProgramDecorator.ts",
+      "frontend/src/components/spatial/spatialAssetOverlay.ts",
+      "frontend/src/components/spatial/SpatialAssetDecorator.ts"
+    ]
+  },
+  "generic_visual_families": [
+    { "id": "GENERIC_PET_CT_SCANNER_V1", "parts": ["GANTRY", "BORE", "PATIENT_TABLE", "TABLE_BASE"] },
+    { "id": "GENERIC_MEDICAL_CYCLOTRON_V1", "parts": ["CYCLOTRON_BODY", "CYCLOTRON_SHIELDING", "CYCLOTRON_SERVICE_CABINET"] },
+    { "id": "GENERIC_RADIOPHARMACY_HOTCELL_V1", "parts": ["HOT_CELL", "WORKBENCH", "DISPENSING"] }
+  ],
+  "canonical_to_visual_mappings": [
+    { "canonicalModelId": "GE_PETTRACE_890", "class": "CYCLOTRON", "visual": "GENERIC_MEDICAL_CYCLOTRON_V1" },
+    { "canonicalModelId": "IBA_CYCLONE_KIUBE", "class": "CYCLOTRON", "visual": "GENERIC_MEDICAL_CYCLOTRON_V1" },
+    { "canonicalModelId": "GE_DISCOVERY_MI", "class": "SCANNER", "visual": "GENERIC_PET_CT_SCANNER_V1" }
+  ],
+  "identity_separation": {
+    "canonical_identity_field": "canonicalEquipmentId / geometryRepresentationId",
+    "visual_identity_field": "EquipmentVisualFamily",
+    "visual_never_overwrites_canonical": true,
+    "many_canonical_to_one_visual": true
+  },
+  "provenance_behavior": {
+    "representative_labeled": true,
+    "placeholder_preserved": true,
+    "calibrated_preserved": true,
+    "dimensions_fabricated": false,
+    "not_calibrated_authoritative_when_unavailable": true
+  },
+  "persistence_behavior": {
+    "storage_key": "mrtpharma.equipment.v1.<iModelId>",
+    "mesh_persisted": false,
+    "visual_regenerated_from_family_and_pose": true,
+    "discovery_mi_destructive_recreation_required": false
+  },
+  "pose_lock_delete": {
+    "visual_follows_translation": true,
+    "visual_follows_yaw": true,
+    "envelope_moves_with_visual": true,
+    "locked_equipment_remains_visible": true,
+    "delete_removes_visual_and_envelope_together": true,
+    "modifies_bentley_source_bim": false
+  },
+  "containment_envelope": {
+    "preserved": true,
+    "toggleable": true,
+    "default_shown": true,
+    "translucent_when_visual_present": true
+  },
+  "tests_added": {
+    "file": "frontend/src/tests/equipmentVisualIntegration.test.ts",
+    "count": 17,
+    "coverage": ["visual_mapping", "canonical_identity_separation", "structural_composition_per_family", "finite_coordinates", "pose_translation", "pose_yaw", "persistence_reconstruction", "locked_remains_rendered", "provenance", "discovery_mi_regression"]
+  },
+  "deferred": {
+    "generator_visual": true,
+    "transport_visuals": ["PTS", "RTHS", "MRT_GUIDEWAY", "MRT_CARRIER", "AGV_AMR", "PATIENT_ANIMATION", "AUTOMATIC_LOGISTICS_MISSIONS"],
+    "build2_routing": true,
+    "build1b_ux_findings": "recorded_not_fixed"
+  },
+  "manual_acceptance": {
+    "self_accepted": false,
+    "steps": [
+      "Open /viewer; PET/CT 01 -> GE HealthCare Discovery MI renders recognizable PET/CT, card still says Discovery MI.",
+      "Place an exact canonical cyclotron (e.g. GE PETtrace 890) in a valid production room -> recognizable cyclotron appears; select -> exact canonical model shown.",
+      "Place/select radiopharmacy hot-cell/workstation equipment in Radiopharmacy -> recognizable hot-cell arrangement visible.",
+      "Enter Walkthrough; confirm equipment locatable from pedestrian view where state permits."
+    ]
+  },
+  "stop_condition": "Automated success criteria satisfied. Do NOT begin PTS/RTHS/MRT animation or Build 2 routing. Await user manual-acceptance confirmation."
+}

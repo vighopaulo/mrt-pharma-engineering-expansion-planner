@@ -1,0 +1,138 @@
+{
+  "report": "MRT_PHARMA_EVI_MA02B_RIGHT_CLICK_DELETE_REPORT",
+  "correction": "EVI-MA-02B",
+  "manual_acceptance": "PENDING",
+  "self_accepted": false,
+  "governing_observation": "Left-click selection works live, proving 3D geometry -> pick id -> equipmentInstanceId -> selectedEquipmentId. That chain was not modified.",
+  "root_cause": "Right-click was only handled via Bentley onResetButtonUp, which did not fire reliably live. The first EVI-MA-02B bridge attempt used IModelApp.locateManager.doLocate with a synthetic viewToWorld({z:0}) point, which is unreliable for a non-button contextmenu event, so equipment did not resolve. Left-click uses onDataButtonDown which fires — hence the asymmetry.",
+  "fix_right_click": {
+    "approach": "persistent viewport-level DOM contextmenu bridge with a PURE ray pick (no doLocate, no Bentley reset dependency)",
+    "files": [
+      "frontend/src/components/spatial/MrtDirectManipulationTool.ts",
+      "frontend/src/components/spatial/equipmentInstance.ts"
+    ],
+    "methods": [
+      "installEquipmentContextMenuBridge (onPostInstall)",
+      "removeEquipmentContextMenuBridge (onCleanup)",
+      "onViewportContextMenu",
+      "locateEquipmentAtClient (client px -> npc -> world near/far ray -> pickNearestEquipment)"
+    ],
+    "pure_pick": [
+      "rayIntersectEquipment",
+      "pickNearestEquipment (nearest-along-ray, hidden excluded, reuses collision envelope math)"
+    ],
+    "on_equipment_hit": [
+      "preventDefault",
+      "stopPropagation",
+      "selectEquipment(id)",
+      "openEquipmentContextMenu at cursor"
+    ],
+    "on_bim_or_empty": "no equipment menu; browser menu NOT suppressed",
+    "onResetButtonUp_retained": true,
+    "doLocate_dependency_removed": true,
+    "menu_title": "canonical manufacturer + model (e.g. IBA Cyclone KIUBE / IBA Cyclone KEY)"
+  },
+  "why_first_attempt_failed": "First bridge resolved hits via doLocate with a synthetic near-plane world point; unreliable for contextmenu events. This revision uses a deterministic ray-vs-oriented-box pick against equipment envelopes, independent of Bentley locate/reset delivery.",
+  "fix_delete_key": {
+    "pure_decision": "assetPicking.shouldHandleEquipmentDeleteKey",
+    "ignores_when_typing_in": [
+      "INPUT",
+      "TEXTAREA",
+      "SELECT",
+      "contenteditable"
+    ],
+    "keys": [
+      "Delete",
+      "Backspace"
+    ],
+    "wiring": "BentleyViewer window keydown effect (AUTHENTICATED only) -> deleteEquipment(getSelectedEquipmentId())",
+    "locked_policy": "not deleted; alert 'Unlock equipment before deleting.'",
+    "nothing_selected": "no-op (key passes through)"
+  },
+  "three_convergent_delete_entry_points": [
+    "clinical program card Delete",
+    "3D right-click menu Delete",
+    "keyboard Delete"
+  ],
+  "single_lifecycle": "deleteEquipment(equipmentInstanceId)",
+  "duplicate_delete_logic": false,
+  "delete_key_not_kiube": "deleting KEY leaves KIUBE",
+  "bim_cannot_expose_equipment_delete": true,
+  "spatial_exclusivity_preserved": true,
+  "delete_releases_volume": true,
+  "files_changed": {
+    "modified": [
+      "frontend/src/components/spatial/equipmentInstance.ts",
+      "frontend/src/components/spatial/MrtDirectManipulationTool.ts",
+      "frontend/src/components/spatial/assetPicking.ts",
+      "frontend/src/routes/BentleyViewer.tsx"
+    ],
+    "new": [
+      "frontend/src/tests/eviMa02bRightClickDelete.test.ts"
+    ]
+  },
+  "tests": {
+    "new_file": "frontend/src/tests/eviMa02bRightClickDelete.test.ts",
+    "new_count": 12,
+    "covers": [
+      "focus_safety_decision",
+      "delete_key_exact_instance",
+      "delete_key_leaves_other",
+      "locked_rejected",
+      "nothing_selected_noop",
+      "delete_releases_collision_volume",
+      "canonical_title_key_vs_kiube",
+      "ray_pick_hit_miss",
+      "ray_pick_nearest_of_overlapping",
+      "ray_pick_hidden_excluded",
+      "ray_pick_exact_id_key_vs_kiube",
+      "ray_pick_empty_space_none"
+    ],
+    "baseline_before": {
+      "files": 69,
+      "tests": 1105
+    },
+    "baseline_after": {
+      "files": 70,
+      "tests": 1117,
+      "result": "PASS"
+    },
+    "tests_weakened": false
+  },
+  "verification": {
+    "typecheck_tsc_b": "PASS",
+    "production_build": "PASS_WITH_PREEXISTING_WARNINGS_ONLY",
+    "viewer_http_status": 200,
+    "wasm_asset": "public/scripts/draco_decoder.wasm",
+    "bentley_worker_asset": "public/scripts/parse-imdl-worker.js",
+    "bentley_renderability_firewall_tests": {
+      "tests": 28,
+      "result": "PASS"
+    },
+    "backend_python_modified": false
+  },
+  "dev_server": {
+    "canonical_port": 3000,
+    "left_running_for_user": true
+  },
+  "preserved_untouched": [
+    "equipment geometry",
+    "visual family mapping",
+    "persistence",
+    "collision/exclusivity",
+    "parent-room containment",
+    "selection authority",
+    "2D marker identity",
+    "Bentley authentication"
+  ],
+  "manual_acceptance_steps": [
+    "Left-click IBA Cyclone KEY -> selected",
+    "Press Delete -> KEY disappears, KIUBE remains",
+    "Right-click KIUBE -> context menu appears at cursor",
+    "Menu title = IBA Cyclone KIUBE",
+    "Delete -> KIUBE disappears",
+    "Right-click a BIM wall -> no equipment Delete menu",
+    "Place a cyclotron in the released area -> succeeds"
+  ],
+  "stop_condition": "Automated verification passes; dev server on 3000. STOP. Await manual EVI-MA-02B acceptance. Do not start PTS/RTHS/MRT animation/Build 2."
+}

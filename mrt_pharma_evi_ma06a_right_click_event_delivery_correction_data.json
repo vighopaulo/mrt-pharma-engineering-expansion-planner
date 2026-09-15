@@ -1,0 +1,53 @@
+{
+  "build": "EVI-MA-06A",
+  "title": "Right-Click Event-Delivery Correction (manual-acceptance failure fix)",
+  "corrects": "EVI-MA-06 (NOT accepted: physical right-click did not open the context menu)",
+  "manual_acceptance": "PENDING",
+  "self_accepted": false,
+  "reconcile": { "branch": "main", "head": "1de2c5b0d01e3a69e0c5a744b1d58ae1f3526bd3", "origin_main": "1de2c5b0d01e3a69e0c5a744b1d58ae1f3526bd3", "divergence": { "ahead": 0, "behind": 0 } },
+  "instrumented_chain": ["DOM contextmenu event", "viewport clientToRay", "AppObjectPickTarget resolve", "context-menu store open", "React render"],
+  "diagnostic_stages": ["EVENT_RECEIVED", "GESTURE_ACTIVE_SKIP", "NO_RAY", "NO_TARGET", "MENU_OPENED"],
+  "first_failed_stage": "EVENT_RECEIVED never fired — no contextmenu listener existed",
+  "root_cause": "the right-click bridge lived inside MrtDirectManipulationTool (installed onPostInstall/onDataButtonDown, removed onCleanup). Bentley ToolAdmin activates the view-navigation tool after camera orbit/pan / focus change / when the primitive tool was never armed, running the primitive tool's onCleanup which detached the only contextmenu listener. After any camera move (or before any left-click) there was no listener, so right-click was a no-op. Picking math was never reached.",
+  "fix": {
+    "new_module": "appObjectContextMenuBridge.ts (tool-independent, capture-phase, bound to the viewport host for the viewport lifetime)",
+    "install_hook": "overlay setActiveProductViewport(vp) — same hook the viewer uses to register/deregister its live ScreenViewport; idempotent per host element; re-installs on viewport remount",
+    "survives": ["tool switch", "camera orbit/pan/zoom", "no prior left-click", "primitive tool never armed"],
+    "tool_owned_bridge": "installEquipmentContextMenuBridge neutralized to a no-op so there is exactly ONE capture-phase listener (no double-handling / stopPropagation race); onResetButtonUp kept as a tool-native secondary path",
+    "picking_math_unchanged": true
+  },
+  "dom_level_test": {
+    "file": "eviMa06RightClickBridgeDom.test.ts",
+    "count": 8,
+    "proves": [
+      "real contextmenu event opens the menu store with the exact CYCLOTRON id",
+      "SCANNER (EQUIPMENT_INSTANCE) exact id",
+      "VESTIBULE exact id",
+      "empty/native-BIM closes app menus and does NOT preventDefault (browser menu preserved)",
+      "listener persists across repeated events (simulated tool switches); dispose removes it",
+      "gesture-active event skipped",
+      "structured diagnostics record first reached stage",
+      "NO_RAY diagnostic when the viewport cannot build a ray"
+    ]
+  },
+  "tested_families_separately": ["scanner (EQUIPMENT_INSTANCE)", "cyclotron (EQUIPMENT_INSTANCE)", "vestibule (CLINICAL_LOGISTICS_VESTIBULE)"],
+  "diagnostics_disposition": {
+    "per_event_console": "DEV-gated (import.meta.env.DEV)",
+    "structured_ring_retained": "getAppContextMenuDiagnostics() bounded <=50, PII-free",
+    "verbose_per_frame_logging": "none"
+  },
+  "files": {
+    "new": ["frontend/src/components/spatial/appObjectContextMenuBridge.ts", "frontend/src/tests/eviMa06RightClickBridgeDom.test.ts"],
+    "modified": ["frontend/src/components/spatial/spatialAssetOverlay.ts", "frontend/src/components/spatial/MrtDirectManipulationTool.ts"]
+  },
+  "verification": {
+    "typecheck": "PASS",
+    "dom_bridge_suite": "8 passed",
+    "full_suite": { "files": 80, "tests": 1254, "status": "all pass", "delta_files": 1, "delta_tests": 8 },
+    "production_build": "PASS (pre-existing warnings only)",
+    "viewer_http_status": 200,
+    "dev_server_port": 3000
+  },
+  "honesty_note": "Proven at the DOM-event level (a real contextmenu event opens the menu store with the correct id) and by the tool-independent viewport-lifetime binding that addresses the diagnosed failure. Final visible-menu confirmation in the live Bentley browser is the manual-acceptance step.",
+  "stop_conditions_respected": ["no Build 1C", "no Build 2", "no transport routing", "no animation"]
+}

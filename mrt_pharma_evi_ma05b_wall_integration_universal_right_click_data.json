@@ -1,0 +1,107 @@
+{
+  "build": "EVI-MA-05B",
+  "title": "Wall-Integrated Vestibule Correction + Universal 3D Right-Click Equipment Action",
+  "type": "manual-acceptance correction following EVI-MA-05A",
+  "manual_acceptance": "PENDING",
+  "self_accepted": false,
+  "boundary": "no transport routing/animation; ends at correctly positioned connection ports (Build 2 begins after)",
+  "reconcile": {
+    "branch": "main",
+    "head": "1de2c5b0d01e3a69e0c5a744b1d58ae1f3526bd3",
+    "origin_main": "1de2c5b0d01e3a69e0c5a744b1d58ae1f3526bd3",
+    "divergence": { "ahead": 0, "behind": 0 },
+    "test_baseline_start": { "files": 77, "tests": 1217 }
+  },
+  "defects_fixed": {
+    "A": "vestibule appeared as a freestanding rectangular mass in the cyclotron room instead of ATM-like wall-integrated interface",
+    "B": "right-click quick actions (esp. Delete) not universal across application-owned assets; vestibule had no right-click menu"
+  },
+  "defect_a_root_cause": "seedWallIntegratedPose placed the pose center depth/2 INSIDE the room and oriented rear/ports toward the wall, so the whole port-bearing assembly floated in the room",
+  "defect_a_fix": {
+    "wall_frame": "WallFrame { origin, tangent, roomInwardNormal, wallOutwardNormal } with wallOutwardNormal = -roomInwardNormal; wallFrameForSide(footprint, wallSide)",
+    "pose": "center = wallOrigin + wallOutwardNormal*(depth/2); front face flush with room-side wall plane; body extends behind wall; yaw from roomInwardNormal (not per-side guess)",
+    "front_face_flush": true,
+    "shallow_room_side_projection_only": true,
+    "behind_wall_components": ["wall sleeve", "rear manifold", "MRT large section", "MRT planar reducer", "MRT trunk stub", "MRT connection port", "PTS adapter", "circular PTS tube", "PTS connection port"],
+    "frame_persisted": "wallReference.frame (deep-copied)",
+    "reload_reconstructs_pose": true
+  },
+  "collision_distinction": {
+    "reservedVolumeFromPose": "shallow room-side access slab (~0.35m into room) used for equipment collision",
+    "fullOccupiedVolumeFromPose": "full room-side + behind-wall AABB (reference + context pick)",
+    "wall_penetration_not_a_collision": true,
+    "real_room_overlap_still_rejected": true,
+    "wallRelationshipStatus": "PROPOSED_WALL_PENETRATION",
+    "bim_wall_immutable": true
+  },
+  "hollow_passages_preserved": {
+    "chamber": true, "rear_manifold": true, "mrt_tract": true, "mrt_four_planar_reducer_faces": true, "mrt_trunk_stub": true, "pts_adapter": true, "pts_circular_tube": true,
+    "outer_vs_inner_geometry_distinct": true,
+    "port_semantics_unchanged": true
+  },
+  "defect_b_universal_right_click": {
+    "governing_rule": "if the user can see an application-owned object in 3D, they can right-click it",
+    "vestibule_context_menu_store": ["openVestibuleContextMenu", "closeVestibuleContextMenu", "subscribeVestibuleContextMenu", "getVestibuleContextMenu"],
+    "component": "ViewerVestibuleContextMenu.tsx",
+    "menu_commands": ["Fit to Vestibule", "Lock/Unlock", "Hide/Show", "Delete"],
+    "no_window_confirm": true,
+    "locked_delete_disabled_unlock_available": true,
+    "pick": {
+      "pickVestibuleForContext": "ray vs FULL occupied AABB; any visible component resolves the one vestibuleInstanceId",
+      "rayIntersectAabb": true,
+      "selection_preference": true,
+      "nearest_otherwise": true,
+      "hidden_excluded": true
+    },
+    "tool_wiring": {
+      "bridge": "onViewportContextMenu via locateVestibuleAtClient (capture-phase, idempotent re-install)",
+      "reset": "onResetButtonUp via locateVestibuleTarget",
+      "vestibule_checked_before_equipment": true,
+      "separate_pick_maps_no_cross_resolution": true,
+      "esc_empty_delete_close_menu": true,
+      "survives": ["orbit", "pan", "zoom", "fit", "viewport remount"],
+      "independent_of_clinical_program_panel": true
+    },
+    "universality": {
+      "scanner": "AssetInstance -> asset context menu",
+      "cyclotron": "EquipmentAssetInstance -> equipment menu",
+      "vestibule": "ClinicalLogisticsVestibuleInstance -> vestibule menu",
+      "each_menu_titles_exact_target": true,
+      "extends_to_future_service_class_vestibules": true
+    },
+    "bim_protection": "native wall/floor/ceiling/door/furniture never resolve to an application Delete target"
+  },
+  "one_pick_identity_per_instance": true,
+  "delete_convergence": {
+    "equipment": "deleteEquipment(exactId)",
+    "vestibule": "deleteVestibule(exactId)",
+    "right_click_and_floating_control_same_lifecycle": true,
+    "removes_all_derived_representations": true,
+    "delete_one_never_deletes_another": true,
+    "vestibule_delete_keeps_cyclotron_and_wall": true,
+    "no_orphaned_ports": true,
+    "persists_no_resurrect": true
+  },
+  "files": {
+    "new": [
+      "frontend/src/components/spatial/ViewerVestibuleContextMenu.tsx",
+      "frontend/src/tests/eviMa05bWallIntegrationRightClick.test.ts"
+    ],
+    "modified": [
+      "frontend/src/components/spatial/clinicalLogisticsVestibule.ts",
+      "frontend/src/components/spatial/spatialAssetOverlay.ts",
+      "frontend/src/components/spatial/MrtDirectManipulationTool.ts",
+      "frontend/src/routes/BentleyViewer.tsx"
+    ]
+  },
+  "verification": {
+    "typecheck": "PASS (npx tsc -b, 0 errors)",
+    "evi_ma05b_suite": "15 passed",
+    "full_suite": { "files": 78, "tests": 1232, "status": "all pass", "delta_files": 1, "delta_tests": 15 },
+    "production_build": "PASS (pre-existing INEFFECTIVE_DYNAMIC_IMPORT + chunk-size warnings only)",
+    "viewer_http_status": 200,
+    "dev_server_port": 3000
+  },
+  "honesty_note": "On-screen wall integration, camera Fit, and live 3D/2D right-click are not headlessly verifiable; the wall-frame math, collision distinction, pick resolution, menu store, and delete convergence are test/typecheck/build verified.",
+  "stop_conditions_respected": ["no PTS routing", "no MRT routing", "no RTHS", "no AGV/AMR", "no hospital-wide network", "no capsule/carrier animation", "no dispatch/scheduling", "no travel-time calc", "no Build 2"]
+}

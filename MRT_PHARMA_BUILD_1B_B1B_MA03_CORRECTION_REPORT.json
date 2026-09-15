@@ -1,0 +1,153 @@
+{
+  "defect_id": "B1B-MA-03",
+  "title": "Walkthrough / Clinical-Program state synchronization + dismissible planning panel",
+  "build": "1B",
+  "status": "BUILD 1B — IMPLEMENTED / AUTOMATED GREEN / MANUAL RETEST REQUIRED",
+  "manual_acceptance": "PENDING",
+  "build_1b_marked_complete": false,
+  "build_2_started": false,
+  "baseline_commit": "1de2c5b0d01e3a69e0c5a744b1d58ae1f3526bd3",
+  "branch": "main",
+  "sub_defects": {
+    "B1B-MA-03A": {
+      "verbatim": "Clinical Program panel is persistently open in Walkthrough and cannot be dismissed; it obstructs the 3D scene.",
+      "observed": "On entering Walkthrough the Clinical Program right-side panel stayed fully expanded over the 3D view with no way to collapse or dismiss it while inspecting the model."
+    },
+    "B1B-MA-03B": {
+      "verbatim": "2D floor-plan room selection is transient and silently overwritten by hover / inspection.",
+      "observed": "Selecting a room (e.g. Radiopharmacy - 2C17 PROSTH. LAB on the Second Floor) then hovering a corridor/wall (tooltip like '1DC8 CORRIDOR') or entering Walkthrough caused the 2C17 selection to disappear. The application silently forgot / replaced the deliberately selected room."
+    }
+  },
+  "selection_authority": "ONE authoritative selected room = programState.selectedSpaceId (a stable bimSpaceId). Every input surface converges on it: the dropdown (setClinicalProgramSelectedSpace), the 2D plan click (Bim2dPlanPanel.onSvgClick -> setClinicalProgramSelectedSpace(hitId)), candidate acceptance (setClinicalProgramSelectedSpace on Use This Room), and direct BIM reparent (programState.selectedSpaceId = newParent.bimSpaceId). Hover != selection; panel visibility != selection state.",
+  "root_cause": {
+    "B1B-MA-03B": {
+      "primary": "ClinicalProgramControl.sync() (the subscribeClinicalProgram callback) ran, on EVERY program notification: `if (o.isSelectedRoomOutsideActiveStorey()) o.setClinicalProgramSelectedSpace(undefined)`. notifyProgram() fires on the selection itself, on walker/camera samples, on candidate refresh, on async footprint/exact-mesh extraction completion, on storey-chip filter changes, and on Walkthrough entry. So a deliberately-selected room whose storeyId was not in the current storey-chip filter was cleared the instant any of those notifications arrived. The selection was ALREADY stored by stable id; the defect was purely this behavioral auto-clear plus the coupling of selectedRoom resolution to the storey-filtered option list.",
+      "hover_is_not_selection": "Bim2dPlanPanel hover only sets local hoveredId state (onSvgMove/onSvgLeave); it never writes the selection store. BentleyViewer's onDeselect -> clearSelection only clears the LOCAL Bentley inspection card (setSelection(null)); it does NOT touch the clinical selection. Neither is the culprit — the overwrite came exclusively from the sync() auto-clear reacting to the redraw notifications those interactions produced.",
+      "selectedRoom_coupling": "selectedRoom was resolved only from `rooms` (the storey-filtered option list). Even with the auto-clear removed, an out-of-filter selection would have collapsed the room detail/assignment/volume/equipment UI to 'no room'. The fix resolves the selected room authoritatively from the immutable base discovery."
+    },
+    "B1B-MA-03A": {
+      "primary": "ClinicalProgramControl always mounted in BentleyViewer's viewer-program-bar, fully expanded, independent of camera mode. There was no collapse control and no reaction to Walkthrough entry, so the panel obstructed the 3D scene during walkthrough with no dismiss affordance. (The CameraModeControl walkthrough card was already dismissible; the Clinical Program panel was not.)"
+    }
+  },
+  "fix": {
+    "B1B-MA-03B": {
+      "removed_auto_clear": "Deleted the out-of-filter auto-clear from ClinicalProgramControl.sync(). The selected room now persists across hover samples, walker samples, candidate refresh, footprint extraction, storey-chip changes and Walkthrough entry.",
+      "authoritative_resolution": "Added spatialAssetOverlay.getDiscoveredRoomById(bimSpaceId) — resolves a single discovered room from the IMMUTABLE base discovery, INDEPENDENT of the active storey filter. selectedRoom is now resolved from the in-filter option OR this authoritative fallback, so the room detail / assignment / volume / equipment UI stays intact for the persistent selection.",
+      "storey_chip_is_a_filter_not_an_authority": "getDiscoveredRoomOptions still storey-filters the dropdown OPTIONS. When the selected room is outside the active filter, the dropdown still renders a labelled option for it (suffixed 'outside current storey filter') so the <select> reflects the true selection, and a non-destructive hint explains it stays selected. Switching the storey chip to the room's floor shows it in the normal list.",
+      "isSelectedRoomOutsideActiveStorey_repurposed": "Now purely INFORMATIONAL (drives the hint + the out-of-filter option). It is documented as MUST NOT be used to clear the authoritative selection."
+    },
+    "B1B-MA-03A": {
+      "presentation_only_collapse": "Added a presentation-only panelCollapsed state to ClinicalProgramControl. Entering WALKTHROUGH (detected via the new snapshot.cameraMode) auto-collapses the panel to a compact reopen chip; returning to PLANNING auto-expands it. The chip surfaces the persistent room context (e.g. 'CLINICAL PROGRAM > Radiopharmacy 2C17').",
+      "transition_only": "Auto-collapse fires only on the PLANNING/BIRDS_EYE -> WALKTHROUGH transition (tracked via a prevCameraMode ref), not on every notification while already in walkthrough, so a user who reopens the panel mid-walkthrough is not fought.",
+      "explicit_controls": "An explicit collapse control (x) in the panel head collapses it; the compact chip reopens it. Both are presentation-only.",
+      "outside_click": "While in WALKTHROUGH, a window-level pointerdown OUTSIDE the .clinical-program element collapses the panel (mirrors the CameraModeControl walkthrough-card pattern: ancestry test, NO full-screen invisible blocker, so 3D-scene input is never intercepted). Outside-click collapses; it NEVER clears the selection.",
+      "collapse_never_resets_state": "Collapsing/reopening flips only panelCollapsed. The selected room, storey filter, assignments, planning volumes, equipment, candidates and summary are all preserved. Reopening restores the exact same room context.",
+      "camera_mode_surfaced": "getClinicalProgramSnapshot now returns cameraMode (from activeCameraMode). Both applyCameraMode('WALKTHROUGH') and enterWalkthroughAtClinicalRoom already set activeCameraMode then call notifyProgram(), so the panel reacts through the existing subscription with no new store."
+    }
+  },
+  "authorities_reused": {
+    "selected_room_authority": "programState.selectedSpaceId (stable bimSpaceId) — unchanged single source of truth",
+    "base_discovery_authority": "getDiscoveredRoomVolumes() (immutable base discovery) via new getDiscoveredRoomById",
+    "storey_filter": "filterDiscoveredRoomsByStorey (dropdown options only; not a selection authority)",
+    "camera_mode_authority": "spatialAssetOverlay.activeCameraMode (single existing camera-mode signal), surfaced via the snapshot",
+    "floating_panel_policy_untouched": "The floatingPanels tool-panel policy (PROJECT_BIM/DEV_TOOLS/etc.) is unchanged; the Clinical Program bar is a persistent right-side panel with its own presentation-only collapse."
+  },
+  "tests_added": {
+    "new_test_file": "frontend/src/tests/build1bB1bMa03SelectionAndPanel.test.tsx",
+    "new_tests_count": 9,
+    "reproduces_old_overwrite_path": true,
+    "reproduction_proof": "With the old auto-clear temporarily re-inserted into sync(), 4 of the 9 tests FAIL (the persistence + out-of-filter cases); with the fix all 9 pass. The tests drive the REAL ClinicalProgramControl against a faithful in-memory overlay whose isSelectedRoomOutsideActiveStorey uses the real storey-filter rule, and record every write to the selection authority to prove the component never writes undefined.",
+    "cases": [
+      "S22: select 2C17 -> filter to First Floor + enter Walkthrough (both fire notifyProgram) -> 2C17 still selected; no undefined ever written",
+      "S23: hover-equivalent non-selection notifications with 2C17 selected on Second Floor -> 2C17 preserved",
+      "S23 (old-path reproduction): selection OUTSIDE active filter + 5 repeated notifications -> still selected (old code cleared on the first)",
+      "S20/S21: out-of-filter selected room stays selectable + labelled '(outside current storey filter)' with a non-destructive hint; room detail resolves",
+      "S20/S21: switching the storey chip to Second Floor shows 2C17 in the normal list, still selected",
+      "S25: entering Walkthrough auto-collapses the panel to the reopen chip; selection preserved",
+      "S24: collapse -> reopen restores 2C17 + Radiopharmacy + Second Floor filter (reopened while still in Walkthrough)",
+      "S24: explicit collapse control (x) is presentation-only and never clears the selection",
+      "S25: returning to Planning auto-expands the panel"
+    ],
+    "preexisting_mocks_extended": "build1a3StoreyFilterUi, build1a4ContainmentValidationUi, build1bEquipmentBindingUi and build1bCandidateAcceptanceUi overlay mocks gained getDiscoveredRoomById (the sync() authoritative-resolution call). No behavioral test assertions were changed."
+  },
+  "regression_preserved": {
+    "b1b_ma01_reparent_containment": "PASS (build1bB1bMa01ReparentContainment.test.ts unchanged and green)",
+    "b1b_ma02_walkthrough_spawn": "PASS (build1bB1bMa02WalkthroughSpawn.test.ts unchanged and green)",
+    "scanner_acceptance": "PASS (no changes to acceptance / equipment gate / canonical identity)",
+    "radiopharmacy_2c17_assignment": "PASS (assignment domain untouched; only UI selection persistence + panel visibility changed)",
+    "storey_filter_ui": "PASS (build1a3StoreyFilterUi green; options still storey-filtered)",
+    "candidate_acceptance_ui": "PASS",
+    "equipment_binding_ui": "PASS",
+    "containment_validation_ui": "PASS (build1a4 green)"
+  },
+  "files_changed_by_this_fix": [
+    "frontend/src/components/spatial/ClinicalProgramControl.tsx",
+    "frontend/src/components/spatial/spatialAssetOverlay.ts",
+    "frontend/src/routes/BentleyViewer.css",
+    "frontend/src/tests/build1a3StoreyFilterUi.test.tsx",
+    "frontend/src/tests/build1a4ContainmentValidationUi.test.tsx",
+    "frontend/src/tests/build1bEquipmentBindingUi.test.tsx",
+    "frontend/src/tests/build1bCandidateAcceptanceUi.test.tsx",
+    "frontend/src/tests/build1bB1bMa03SelectionAndPanel.test.tsx"
+  ],
+  "verification": {
+    "typecheck": "PASS",
+    "test_files_baseline": 63,
+    "test_files_after": 64,
+    "tests_baseline": 1027,
+    "tests_after": 1036,
+    "test_failures": 0,
+    "new_tests_count": 9,
+    "production_build": "PASS",
+    "worker_head": "(()=>{\"use strict\";f",
+    "wasm_magic": "0061 736d",
+    "core_frontend_version": "5.12.5",
+    "viewer_http": 200,
+    "dev_server_port": 3000,
+    "dev_server_restarted_clean": true,
+    "backend_tests_run": false,
+    "backend_tests_reason": "No backend (.py) files were changed by this fix."
+  },
+  "scope_review": {
+    "changes_confined_to_frontend_plus_report": true,
+    "py_or_closed_domain_changes_by_this_fix": false,
+    "preexisting_untracked_py_files_unrelated": [
+      "transport_connectivity_composition_authority.py",
+      "test_transport_connectivity_composition_authority.py"
+    ],
+    "preexisting_uncommitted_files_not_touched_by_this_fix": [
+      "frontend/src/components/spatial/CameraModeControl.tsx",
+      "frontend/src/components/spatial/ClinicalProgramDecorator.ts",
+      "frontend/src/components/spatial/clinicalPlanningVolume.ts",
+      "frontend/src/components/spatial/walkNav.ts",
+      "frontend/src/components/spatial/walkthroughController.ts",
+      "frontend/src/components/viewer/LiveItwinViewer.tsx",
+      "frontend/src/routes/BentleyViewer.tsx",
+      "frontend/src/tests/build1aWalkthroughControlsPaneUi.test.tsx"
+    ],
+    "env_file_modified_by_this_fix": false,
+    "env_file_state": "M (pre-existing, unstaged)",
+    "temporary_diagnostics_removed": true,
+    "staged": false,
+    "committed": false,
+    "pushed": false
+  },
+  "limitations": [
+    "Auto-collapse keys off the PLANNING->WALKTHROUGH transition observed through the program snapshot's cameraMode. If a future path entered walkthrough without setting activeCameraMode + calling notifyProgram(), the auto-collapse would not fire (both existing entry paths do this).",
+    "The out-of-filter selected room is rendered as an extra dropdown option and a hint; the storey-chip filter still governs the rest of the option list by design (chip is a filter, not a selection authority).",
+    "Outside-click collapse is armed only in WALKTHROUGH (the panel is the primary programming surface in Planning). It uses ancestry testing on a window listener, so it never intercepts 3D-scene pointer input."
+  ],
+  "manual_retest_steps": [
+    "Load MRTway Medical Clinic Demo; confirm /viewer renders at http://localhost:3000/viewer.",
+    "Select the Second Floor storey chip.",
+    "In the Clinical Program room dropdown, select Radiopharmacy — 2C17 PROSTH. LAB.",
+    "Confirm 2C17 is highlighted in the 2D floor plan and the room detail shows 2C17 / Radiopharmacy.",
+    "Click Enter Walkthrough Here.",
+    "Confirm the Clinical Program panel COLLAPSES to a compact 'CLINICAL PROGRAM' reopen chip (it no longer obstructs the 3D scene) and EXIT WALKTHROUGH remains reachable.",
+    "Reopen the Clinical Program panel via the chip while still in Walkthrough; confirm it still shows 2C17 selected, Radiopharmacy assigned, and the Second Floor storey filter.",
+    "Click / hover a corridor or wall (e.g. tooltip '1DC8 CORRIDOR'); confirm the selection is STILL 2C17 (the 2C17 selection does not disappear).",
+    "Click a DIFFERENT room; confirm ONLY THEN does the selected room change to the newly clicked room.",
+    "Exit Walkthrough back to Planning; confirm the Clinical Program panel auto-expands and 2C17 is still the selected room.",
+    "Regression: repeat B1B-MA-01 (2D18 TECH. OFFICE -> PET/CT Scanner Room -> Discovery MI) and B1B-MA-02 (Second-floor Enter Walkthrough Here spawns at eye height on the slab) to confirm both still pass."
+  ]
+}

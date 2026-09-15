@@ -1,0 +1,77 @@
+{
+  "report": "MRT_PHARMA_EVI_MA02E_HIDDEN_EQUIPMENT_RECOVERY_REPORT",
+  "correction": "EVI-MA-02E",
+  "manual_acceptance": "PENDING",
+  "self_accepted": false,
+  "root_cause": {
+    "location": "ViewerSelectedEquipmentControl.tsx useSyncExternalStore(subscribeClinicalProgram, getSelectedEquipmentId)",
+    "explanation": "Snapshot getter returned only the selected id, which is unchanged on Hide, so useSyncExternalStore bailed out of re-render and the button label stayed stale ('Hide' after hidden=true). Store mutation/persist/notify were all correct.",
+    "authoritative_visibility_field": "EquipmentAssetInstance.hidden"
+  },
+  "fix": {
+    "composite_snapshot": "selectedEquipmentSnapshot() = `${id}|${hidden?hidden:visible}|${lifecycleState}` so the control re-renders on hide/lock change",
+    "resolves_current_instance_each_render": true,
+    "hide_show_toggle": "hidden===false -> Hide -> setEquipmentVisibility(id,false); hidden===true -> Show -> setEquipmentVisibility(id,true)",
+    "lock_gates_show": false,
+    "title_shows_hidden": true,
+    "context_menu_hide_toggle": true,
+    "card_visible_hidden_status": true,
+    "2d_hidden_marker": "subdued/dashed, retains equipmentInstanceId, selectable, flagged hidden (not dropped)"
+  },
+  "semantics_preserved": {
+    "show_restores_same_instance": true,
+    "show_changes_only_hidden_false": true,
+    "hidden_still_in_collection": true,
+    "hidden_reserves_collision": true,
+    "hide_not_delete": true,
+    "delete_policy_unchanged": true,
+    "no_reseed_or_clone": true
+  },
+  "persistence": {
+    "hidden_persists": true,
+    "hide_then_reload_stays_hidden": true,
+    "show_then_reload_stays_visible": true,
+    "same_id_throughout": true
+  },
+  "files_changed": {
+    "modified": [
+      "frontend/src/components/spatial/ViewerSelectedEquipmentControl.tsx",
+      "frontend/src/components/spatial/ViewerEquipmentContextMenu.tsx",
+      "frontend/src/components/spatial/ClinicalProgramControl.tsx",
+      "frontend/src/components/spatial/bim2dPlanProjection.ts",
+      "frontend/src/components/spatial/Bim2dPlanPanel.tsx",
+      "frontend/src/tests/build1bPlan2d.test.ts"
+    ],
+    "new": ["frontend/src/tests/eviMa02eHiddenEquipmentRecovery.test.ts"]
+  },
+  "test_change_note": "build1bPlan2d.test.ts 'projects visible equipment envelopes and skips hidden ones' updated to the EVI-MA-02E §9 doctrine (hidden equipment is projected WITH a hidden flag, not dropped). Not a weakening: asserts both equipment present + the hidden one flagged + equipmentCount 2.",
+  "tests": {
+    "new_file": "frontend/src/tests/eviMa02eHiddenEquipmentRecovery.test.ts",
+    "new_count": 8,
+    "covers": ["visible_label_hide", "hide_flips_hidden_and_label_show", "show_flips_back", "same_id_and_pose", "locked_hidden_can_show", "hidden_in_collection", "hidden_reserves_collision", "hide_show_persistence", "2d_hidden_marker_recoverable"],
+    "baseline_before": { "files": 72, "tests": 1133 },
+    "baseline_after": { "files": 73, "tests": 1141, "result": "PASS" },
+    "tests_weakened": false
+  },
+  "verification": {
+    "typecheck_tsc_b": "PASS",
+    "production_build": "PASS_WITH_PREEXISTING_WARNINGS_ONLY",
+    "viewer_http_status": 200,
+    "wasm_asset": "public/scripts/draco_decoder.wasm",
+    "bentley_worker_asset": "public/scripts/parse-imdl-worker.js",
+    "backend_python_modified": false
+  },
+  "dev_server": { "canonical_port": 3000, "left_running_for_user": true },
+  "untouched": ["right_click", "picking", "delete_semantics", "persistence_semantics", "collision_exclusivity", "bim_geometry", "authentication", "room_planning_volume_semantics"],
+  "manual_acceptance_steps": [
+    "Select KIUBE; if hidden control shows [Fit][Show][Unlock][Delete disabled]",
+    "Click Show -> KIUBE reappears; button -> Hide immediately",
+    "Click Hide -> disappears; button -> Show immediately (no refresh)",
+    "Refresh -> stays hidden + recoverable",
+    "Show -> refresh -> stays visible",
+    "While hidden attempt overlapping placement -> still rejected (collision reserved)",
+    "Unlock -> Delete -> KIUBE gone from 3D, 2D, card, floating control",
+    "Refresh -> absent"
+  ],
+  "stop_condition": "Automated verification passes; dev server on 3000. STOP. Await manual EVI-MA-02E acceptance. Do not start PTS/RTHS/MRT animation/Build 2."
+}
