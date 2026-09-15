@@ -209,11 +209,42 @@ def test_generator_delivery_cost_controlled_benchmark():
     assert resolution.basis == "CONTROLLED_TC99M_GENERATOR_DELIVERY_COST_2026"
 
 
-def test_generator_benchmark_uniform_across_initial_models():
+def test_generator_benchmark_uniform_across_current_catalog_models():
+    # Build 3D (pre-AWS audit Defect 3): this benchmark was written before the Ge-68/Ga-68
+    # ECKERT_ZIEGLER_GALLIAPHARM generator was added. The authoritative catalog now contains
+    # FOUR models (3 Tc-99m + 1 Ge-68/Ga-68), all passing catalog validation. The former
+    # `len(rows) == 3` assertion was a STALE_BENCHMARK; it is updated to the current catalog
+    # rather than freezing a three-model set or removing the fourth model. (Renamed from
+    # ...uniform_across_initial_models so "initial models" no longer implies a frozen count.)
     catalog = load_generator_catalog()
     rows = tuple(generator_economic_report_row(m) for m in catalog.models)
-    assert len(rows) == 3
+    assert len(rows) == 4
+    # The controlled $3,500 delivery-cost placeholder is applied uniformly across the catalog
+    # (no model carries a calibrated model-specific delivery cost yet). Build 3D economic-
+    # assumption review: the value is a Tc-99m-SPECIFIC assumption -- see
+    # test_generator_delivery_cost_provenance_distinguishes_non_tc99m below for the honest
+    # provenance distinction that prevents it being presented as a GalliaPharm-calibrated price.
     assert all(r.delivery_cost_usd == 3500.0 for r in rows)
+
+
+def test_generator_delivery_cost_provenance_distinguishes_non_tc99m():
+    # Build 3D economic-assumption review (Section 15/J): the $3,500 benchmark is a
+    # Tc-99m-SPECIFIC controlled assumption. It must be disclosed as a clean controlled
+    # assumption ONLY for Tc-99m generators; for the Ge-68/Ga-68 GalliaPharm it is an
+    # INHERITED, non-generator-specific placeholder -- never presented as a calibrated
+    # GalliaPharm price, and no GalliaPharm-specific number is fabricated.
+    catalog = load_generator_catalog()
+    tc99m = resolve_generator_delivery_cost(catalog.by_id("CURIUM_TECHNELITE"))
+    assert tc99m.basis == "CONTROLLED_TC99M_GENERATOR_DELIVERY_COST_2026"
+    assert tc99m.delivery_cost_usd == 3500.0
+
+    gallia = resolve_generator_delivery_cost(catalog.by_id("ECKERT_ZIEGLER_GALLIAPHARM"))
+    # Same numeric placeholder (not fabricated), but an explicitly INHERITED / non-generator-
+    # specific basis so it is never mistaken for a GalliaPharm-calibrated value.
+    assert gallia.basis == "CONTROLLED_TC99M_ASSUMPTION_INHERITED_NOT_GENERATOR_SPECIFIC"
+    assert gallia.delivery_cost_usd == 3500.0
+    assert "INHERITED" in gallia.provenance
+    assert "NOT fabricated" in gallia.provenance
 
 
 def test_generator_weekly_annual_opex():

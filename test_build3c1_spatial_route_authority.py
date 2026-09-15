@@ -93,7 +93,9 @@ def test_5_rght_lane_identity():
     # AGV_AMR canonically normalizes to RGHT; RGHT owns its own network mode value.
     assert tta.normalize_transport_technology("AGV_AMR") == "RGHT"
     assert rght.RGHT_TRANSPORT_MODE == "AGV_AMR"
-    assert tta.FLOOR_AGV_AMR_IMPLEMENTATION_STATUS == "NOT_IMPLEMENTED"
+    # BUILD 1B.9 STALE_BENCHMARK: FLOOR_AGV_AMR now genuinely implemented (L1 kinematic
+    # model in floor_agv_amr_authority.py; upgraded by KIRO Super-Build 1). RGHT identity unaffected.
+    assert tta.FLOOR_AGV_AMR_IMPLEMENTATION_STATUS == "IMPLEMENTED"
 
 
 # 6. Ordinary PTS resolves to CONCEALED_SERVICE_TRANSPORT_CORRIDOR + PTS lane.

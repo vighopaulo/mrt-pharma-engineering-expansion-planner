@@ -49,10 +49,14 @@ def test_part1_baseline_is_unchanged_by_shared_network_module():
     )
     plan = conventional(inputs, assumptions, 109.8)
 
+    # Build 3B: physical EOB capacity is NOT calibrated for this baseline, so no fabricated
+    # 10% dose-count production-block CapEx is charged. Achieved capacity, retained activity,
+    # and the reported production-increase REQUIREMENT are unchanged; only the fabricated
+    # production-block CapEx is removed (14_250_000 -> 10_250_000, i.e. 8 x 500k blocks).
     assert math.isclose(plan.achieved_capacity_per_day, 183.6)
     assert math.isclose(plan.retained_activity_pct, 88.13889028316868)
     assert math.isclose(plan.required_production_increase_pct, 70.18594120947827)
-    assert math.isclose(plan.capex, 14_250_000.0)
+    assert math.isclose(plan.capex, 10_250_000.0)
 
 
 def test_shared_network_is_executable_and_backbone_is_charged_once():

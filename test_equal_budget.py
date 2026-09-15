@@ -216,15 +216,23 @@ def test_part1_canonical_outputs_unchanged():
     conv = conventional(inputs, assumptions, hl)
     mrt_plan = mrt(inputs, assumptions, hl)
 
+    # Build 3B: physical EOB capacity is NOT calibrated for these inputs, so production is
+    # non-limiting and no synthetic 10% dose-count production blocks (or their CapEx) are
+    # fabricated. Achieved capacity is unchanged (it was always clinical-resource-limited,
+    # never production-limited), but the previously fabricated production-block CapEx is gone:
+    #   conventional CapEx 14_250_000 -> 10_250_000 (8 removed 500k blocks = 4_000_000)
+    #   MRT CapEx          24_405_000 -> 21_405_000 (removed production/cyclotron CapEx)
+    #   MRT production_increase_pct 60.0 -> 0 (no fabricated expansion when uncalibrated)
     assert math.isclose(conv.achieved_capacity_per_day, 183.6)
     assert math.isclose(conv.retained_activity_pct, 88.13889028316868)
     assert math.isclose(conv.required_production_increase_pct, 70.18594120947827)
-    assert math.isclose(conv.capex, 14_250_000.0)
+    assert math.isclose(conv.capex, 10_250_000.0)
+    assert conv.ledger["physical_production_capacity_status"] == "not_calibrated"
 
     assert math.isclose(mrt_plan.achieved_capacity_per_day, 182.0)
     assert math.isclose(mrt_plan.retained_activity_pct, 99.68485682924154)
-    assert math.isclose(mrt_plan.production_increase_pct, 60.0)
-    assert math.isclose(mrt_plan.capex, 24_405_000.0)
+    assert math.isclose(mrt_plan.production_increase_pct, 0.0)
+    assert math.isclose(mrt_plan.capex, 21_405_000.0)
 
 
 def test_equal_budget_is_deterministic():
@@ -788,7 +796,11 @@ def test_part2b3b_greenfield_timing_uses_actual_administration_wait_not_half_int
         assert decay_min == pytest.approx(wait_min + 0.5, rel=0.0, abs=1e-9)
     assert row_six["mean_administration_wait_minutes"][0] != pytest.approx(90.0, abs=1e-9)
     assert row_six["completed_patients_per_day"] > 0.0
-    assert row_six["binding_constraint"] == "dose_availability"
+    # Build 3B: physical EOB capacity is NOT calibrated here, so production is non-limiting and
+    # can never be reported as the physical binding constraint (the legacy dose-count
+    # "dose_availability" ceiling is removed). Throughput is bounded by the clinical resources
+    # bought within budget, so nothing binds strictly at this fully-resourced configuration.
+    assert row_six["binding_constraint"] != "dose_availability"
 
 
 def test_part2b3b_common_administration_wait_diagnostic_uses_same_decay_endpoint_rule():
@@ -838,16 +850,28 @@ def test_part2b3b_greenfield_mode_reports_total_reference_resources_not_incremen
     assert summary["total_injection_resources_required"] == result.conventional_reference.additional_injection_rooms
     assert summary["total_uptake_resources_required"] == result.conventional_reference.additional_uptake_rooms
     assert math.isclose(summary["transport_assumption_min"], 5.0)
-    assert math.isclose(result.conventional_reference_capex, 25_875_000.0)
+    # Build 3B: greenfield conventional reference CapEx no longer includes fabricated
+    # 10% dose-count production-block or dose-count-driven cyclotron CapEx (physical EOB
+    # capacity is NOT calibrated). 25_875_000 -> 20_375_000.
+    assert math.isclose(result.conventional_reference_capex, 20_375_000.0)
     assert math.isclose(sum(item["subtotal"] for item in result.conventional_reference.capex_ledger), result.conventional_reference_capex)
-    assert math.isclose(result.conventional_budget_difference_vs_initial, -14_125_000.0)
+    assert math.isclose(result.conventional_budget_difference_vs_initial, -19_625_000.0)
     assert math.isclose(result.conventional_existing_sunk_infrastructure_capex, 0.0)
     assert math.isclose(result.conventional_incremental_expansion_capex, 0.0)
     assert math.isclose(summary["total_modeled_conventional_capex"], result.conventional_reference_capex)
     assert math.isclose(result.conventional_reference.retained_activity_pct, retention(5.0, _half_life()) * 100.0)
 
 
-def test_part2b3b_greenfield_200_target_still_has_no_primary_mrt_candidate_after_timing_correction():
+def test_part2b3b_greenfield_200_target_reachable_via_clinical_resources_when_production_uncalibrated():
+    # Build 3B correction of the former
+    # `test_part2b3b_greenfield_200_target_still_has_no_primary_mrt_candidate_after_timing_correction`.
+    # The old test asserted 200/day was UNREACHABLE. That conclusion was an artifact of the
+    # prohibited legacy dose-count production model (its fabricated production interacted with
+    # the timing model to cap throughput below 200). With physical EOB capacity NOT calibrated,
+    # production is correctly NON-LIMITING and never fabricated -- so throughput is bounded only
+    # by the clinical resources purchasable within the 40M greenfield budget. Those resources
+    # can serve >=200/day, so a feasible MRT candidate legitimately exists. Production feasibility
+    # itself remains NOT_CALIBRATED (no fabricated physical capacity claim).
     assumptions = PlannerAssumptions()
     inputs = PlannerInputs(
         project_name="Greenfield Requirement Derived",
@@ -875,9 +899,14 @@ def test_part2b3b_greenfield_200_target_still_has_no_primary_mrt_candidate_after
         confirmed_comparison_budget=40_000_000.0,
         planning_mode="greenfield_requirement_derived",
     )
-    assert result.primary_feasible_economic_recommendation is None
     assert result.best_achievable_candidate is not None
-    assert result.best_achievable_candidate.achieved_capacity_per_day < inputs.target_patients_per_day
+    # Throughput is clinical-resource-limited, not production-limited, and reaches the target.
+    assert result.best_achievable_candidate.achieved_capacity_per_day >= inputs.target_patients_per_day
+    # Production must NOT be fabricated: capacity status stays NOT_CALIBRATED and no
+    # production-block CapEx is charged.
+    assert result.best_achievable_candidate.production_capacity_status == "not_calibrated"
+    assert result.best_achievable_candidate.production_expansion_pct == 0.0
+    assert result.best_achievable_candidate.production_expansion_capex_charged is False
 
 
 def test_part2b3b_no_feasible_message_is_provisional_when_heuristic_guideway_binds_best_candidate():

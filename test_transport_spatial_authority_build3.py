@@ -402,7 +402,9 @@ def test_34_bentley_not_required():
 
 
 def test_35_floor_agv_amr_remains_not_implemented():
-    assert tta.FLOOR_AGV_AMR_IMPLEMENTATION_STATUS == "NOT_IMPLEMENTED"
+    # BUILD 1B.9 STALE_BENCHMARK: FLOOR_AGV_AMR now genuinely implemented (L1 kinematic
+    # model in floor_agv_amr_authority.py; upgraded by KIRO Super-Build 1).
+    assert tta.FLOOR_AGV_AMR_IMPLEMENTATION_STATUS == "IMPLEMENTED"
 
 
 # ---------------------------------------------------------------------------

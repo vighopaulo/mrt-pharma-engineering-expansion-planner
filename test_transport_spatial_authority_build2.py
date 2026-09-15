@@ -62,7 +62,9 @@ def test_2_agv_amr_legacy_compatibility_remains():
 
 def test_3_floor_agv_amr_remains_distinct():
     assert tta.FLOOR_AGV_AMR != tta.RAIL_GUIDED_HOSPITAL_TRANSPORT
-    assert tta.FLOOR_AGV_AMR_IMPLEMENTATION_STATUS == "NOT_IMPLEMENTED"
+    # BUILD 1B.9 STALE_BENCHMARK: FLOOR_AGV_AMR now genuinely implemented (L1 kinematic
+    # model in floor_agv_amr_authority.py; upgraded by KIRO Super-Build 1).
+    assert tta.FLOOR_AGV_AMR_IMPLEMENTATION_STATUS == "IMPLEMENTED"
 
 
 def test_4_vendor_brand_not_canonical():

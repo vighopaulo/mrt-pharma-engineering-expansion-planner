@@ -251,13 +251,40 @@ def test_porter_shortage_shows_degraded_service(baseline):
 
 
 def test_mrt_carrier_shortage_shows_degraded_service(baseline):
-    constrained = evaluate_mrt_dominant_operational_only_carrier_shortage(baseline, installed_carriers=7)
+    # Build 2R2 carrier-shortage correction (pre-AWS audit Defect 2): the shortage evaluator
+    # now enforces the canonical PHYSICAL carrier-occupancy doctrine (loaded-outbound +
+    # empty-return leg), via the SAME authority used for fleet sizing. Under that corrected
+    # model the physical peak carrier concurrency for this baseline is 9, so a fleet of 1 is
+    # genuinely insufficient and produces real late/unmet degradation. (The former benchmark
+    # asserted degradation at 7 carriers; the corrected physical model proves 7 clears all
+    # missions within the late/unmet thresholds -- only genuine queuing wait remains -- so the
+    # degradation demonstration correctly uses a fleet below the physical peak.)
+    constrained = evaluate_mrt_dominant_operational_only_carrier_shortage(baseline, installed_carriers=1)
     assert constrained.late + constrained.unmet > 0
+    # Turnaround/return occupancy must not be silently omitted: even a modest fleet below the
+    # physical peak incurs measurable queuing wait (a carrier is unavailable during its full
+    # occupation cycle, not merely a ~1-minute headway).
+    below_peak = evaluate_mrt_dominant_operational_only_carrier_shortage(baseline, installed_carriers=7)
+    assert below_peak.physical_peak_carrier_concurrency == 9
+    assert below_peak.installed_carriers < below_peak.physical_peak_carrier_concurrency
+    assert below_peak.max_wait_minutes > 0.0
 
 
 def test_mrt_carrier_shortage_never_auto_expands(baseline):
     constrained = evaluate_mrt_dominant_operational_only_carrier_shortage(baseline, installed_carriers=7)
     assert constrained.installed_carriers == 7  # never silently expanded
+
+
+def test_mrt_carrier_shortage_at_physical_peak_has_no_queuing(baseline):
+    # Build 2R2: at/above the physical peak carrier concurrency, no mission is delayed by
+    # carrier unavailability (zero queuing wait). This ties the shortage evaluator to the SAME
+    # physical-occupancy authority as fleet sizing.
+    at_peak = evaluate_mrt_dominant_operational_only_carrier_shortage(baseline, installed_carriers=9)
+    assert at_peak.physical_peak_carrier_concurrency == 9
+    assert at_peak.max_wait_minutes == 0.0
+    assert at_peak.late == 0 and at_peak.unmet == 0
+    # Mission count is preserved -- no mission disappears to satisfy fleet capacity.
+    assert at_peak.on_time + at_peak.late + at_peak.unmet == at_peak.total_missions
 
 
 # ---------------------------------------------------------------------------
