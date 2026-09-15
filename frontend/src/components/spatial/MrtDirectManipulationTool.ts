@@ -38,13 +38,28 @@ import {
     cancelRotate,
     clearSelection,
     closeAssetContextMenu,
+    closeEquipmentContextMenu,
     commitDrag,
     commitGroupDrag,
     commitRotate,
     computeAssetScreenBounds,
+    equipmentIdForPickId,
+    vestibuleIdForPickId,
     getSpatialDecorator,
     openAssetContextMenu,
+    openEquipmentContextMenu,
+    openVestibuleContextMenu,
+    closeVestibuleContextMenu,
     replaceSelection,
+    resolveAppObjectAtRay,
+    selectAppObject,
+    selectAppObjectWithAnchor,
+    deleteSelectedAppObject,
+    getEquipmentInstance,
+    getVestibuleInstance,
+    moveEquipmentToFloorPoint,
+    slideVestibuleToWallPoint,
+    updateEquipmentPlacement,
     setMarqueeRect,
     setRotationHandleHover,
     updateDragPreview,
@@ -63,6 +78,8 @@ import {
     type MrtPickTarget,
     type Ray3,
 } from './assetPicking'
+import { isTextEditingFocus } from './appObjectPicking'
+import { Point3d } from '@itwin/core-geometry'
 
 export class MrtDirectManipulationTool extends PrimitiveTool {
     public static override toolId = 'MrtPharma.DirectManipulation'
@@ -121,7 +138,107 @@ export class MrtDirectManipulationTool extends PrimitiveTool {
         // not iModel elements. Without this, ElementLocateManager rejects with
         // "LocateFailure.Transient" ("Decoration is not valid for this tool").
         IModelApp.locateManager.options.allowDecorations = true
+        // EVI-MA-02B: install a persistent viewport-level contextmenu bridge so
+        // right-click reliably opens the equipment menu even if Bentley does not
+        // deliver onResetButtonUp to this tool (right-click may be consumed as
+        // view navigation). The bridge resolves the SAME equipmentInstanceId and
+        // opens the SAME menu; it only suppresses the browser menu for an
+        // equipment hit (BIM / empty right-click is left untouched).
+        this.installEquipmentContextMenuBridge()
         IModelApp.notifications.outputPromptByKey?.('MrtPharma:tools.DirectManipulation.Prompts.SelectOrDrag')
+    }
+
+    // --- EVI-MA-02B: persistent right-click (contextmenu) bridge --------------
+    private contextMenuBridgeTarget: HTMLElement | undefined
+    private readonly onViewportContextMenu = (e: MouseEvent): void => {
+        // Never interfere during an active gesture (the secondary-button guard
+        // handles that case and Esc cancels).
+        if (spatialAssetStore.isDragActive() || spatialAssetStore.isGroupDragActive() || spatialAssetStore.isRotationActive()) return
+        const vp = IModelApp.viewManager?.selectedView
+        if (!vp) return
+        // EVI-MA-06 — ONE unified resolution. A single AppObjectPickTarget decides
+        // the menu (equipment OR vestibule) via the centralized picker; no
+        // competing family-specific resolution. Native BIM / planning volumes are
+        // not candidates, so they resolve to nothing and the browser menu is left
+        // untouched (only suppressed for an app-owned hit).
+        const hit = this.resolveAppObjectAtClient(vp, e.clientX, e.clientY)
+        if (!hit || !hit.target) {
+            closeEquipmentContextMenu()
+            closeVestibuleContextMenu()
+            return
+        }
+        e.preventDefault()
+        e.stopPropagation()
+        selectAppObject({ objectType: hit.target.objectType, instanceId: hit.target.instanceId })
+        this.openContextMenuForTarget(hit.target, hit.viewX, hit.viewY)
+        if (import.meta.env.DEV) console.info('[app-context-menu] bridge open %s=%s', hit.target.objectType, hit.target.instanceId)
+    }
+
+    private installEquipmentContextMenuBridge(): void {
+        // EVI-MA-06 CORRECTION — the right-click contextmenu bridge is NO LONGER
+        // owned by this tool. It was moved to the OVERLAY / viewport lifetime
+        // (setActiveProductViewport → installAppObjectContextMenuBridge) so it
+        // survives every Bentley tool switch and camera move. Installing a second
+        // capture-phase listener here would double-handle the event (and the
+        // first stopPropagation would race the other), so this is intentionally a
+        // no-op. `onResetButtonUp` remains a tool-native secondary path.
+    }
+
+    private removeEquipmentContextMenuBridge(): void {
+        // No tool-owned bridge to remove (see installEquipmentContextMenuBridge).
+        const el = this.contextMenuBridgeTarget
+        if (!el) return
+        el.removeEventListener('contextmenu', this.onViewportContextMenu, { capture: true } as EventListenerOptions)
+        this.contextMenuBridgeTarget = undefined
+    }
+
+    /**
+     * EVI-MA-06 — the ONE unified application-object resolution used by
+     * left-click, right-click, and drag. Builds the frustum ray from client
+     * coordinates and resolves a single AppObjectPickTarget (equipment or
+     * vestibule) via the centralized picker. Returns the target + rounded view
+     * coords for menu positioning, or undefined for BIM / empty / planning-volume.
+     */
+    private resolveAppObjectAtClient(vp: ScreenViewport, clientX: number, clientY: number): { target: ReturnType<typeof resolveAppObjectAtRay>; viewX: number; viewY: number } | undefined {
+        try {
+            const rect = vp.parentDiv.getBoundingClientRect()
+            const viewX = clientX - rect.left
+            const viewY = clientY - rect.top
+            const npc = vp.viewToNpc(Point3d.create(viewX, viewY, 0))
+            const near = vp.npcToWorld(Point3d.create(npc.x, npc.y, 0))
+            const far = vp.npcToWorld(Point3d.create(npc.x, npc.y, 1))
+            if (!near || !far) return undefined
+            const ray = {
+                origin: [near.x, near.y, near.z] as [number, number, number],
+                direction: [far.x - near.x, far.y - near.y, far.z - near.z] as [number, number, number],
+            }
+            const target = resolveAppObjectAtRay(ray)
+            if (!target) return undefined
+            return { target, viewX: Math.round(viewX), viewY: Math.round(viewY) }
+        } catch {
+            return undefined
+        }
+    }
+
+    /** EVI-MA-06 — unified resolution from a Bentley button event (left/right). */
+    private resolveAppObjectAtEvent(ev: BeButtonEvent): NonNullable<ReturnType<typeof resolveAppObjectAtRay>> | undefined {
+        const vp = ev.viewport
+        if (!vp) return undefined
+        const ray = this.pickRay(ev)
+        if (!ray) return undefined
+        return resolveAppObjectAtRay(ray) ?? undefined
+    }
+
+    /** Open the correct context menu for a resolved unified target. */
+    private openContextMenuForTarget(target: NonNullable<ReturnType<typeof resolveAppObjectAtRay>>, viewX: number, viewY: number): void {
+        closeAssetContextMenu()
+        if (target.objectType === 'CLINICAL_LOGISTICS_VESTIBULE') {
+            closeEquipmentContextMenu()
+            openVestibuleContextMenu({ vestibuleInstanceId: target.instanceId, screenX: viewX, screenY: viewY })
+        } else {
+            closeVestibuleContextMenu()
+            openEquipmentContextMenu({ equipmentInstanceId: target.instanceId, screenX: viewX, screenY: viewY })
+        }
     }
 
     public override async onRestartTool(): Promise<void> {
@@ -148,9 +265,15 @@ export class MrtDirectManipulationTool extends PrimitiveTool {
      */
     public override async filterHit(hit: HitDetail, _out?: LocateResponse): Promise<LocateFilterStatus> {
         const decorator = getSpatialDecorator()
+        // EVI-MA-02: accept a hit that resolves to EITHER an app-owned asset
+        // (legacy scanner fixtures) OR an app-owned equipment instance
+        // (cyclotron / PET-CT / hot-cell). BIM elements never resolve to either
+        // pick map, so walls/rooms/doors stay rejected.
         const decision = decideHitAcceptance(
             { sourceId: hit.sourceId, isElementHit: hit.isElementHit },
-            (pickId) => decorator?.assetIdForPickId(pickId),
+            // EVI-MA-05A: also accept app-owned VESTIBULE hits so a wall-integrated
+            // vestibule is directly selectable in the live 3D viewport.
+            (pickId) => decorator?.assetIdForPickId(pickId) ?? equipmentIdForPickId(pickId) ?? vestibuleIdForPickId(pickId),
         )
         if (import.meta.env.DEV) {
             console.info('[direct-pick] sourceId=%s isDecoration=%s toolFilter=%s',
@@ -273,7 +396,31 @@ export class MrtDirectManipulationTool extends PrimitiveTool {
         if (spatialAssetStore.isDragActive()) { commitDrag(); return EventHandled.Yes }
         if (spatialAssetStore.isRotationActive()) { commitRotate(); return EventHandled.Yes }
         if (spatialAssetStore.isGroupDragActive()) { commitGroupDrag(); return EventHandled.Yes }
+        // EVI-MA-02D — (re)ensure the right-click bridge is attached to the CURRENT
+        // viewport element. If the view reopened after the tool installed (a proven
+        // cause of the right-click regression), the original target is stale; this
+        // idempotent re-install (guarded by target identity) reattaches it. Left-
+        // click is proven to fire, so this guarantees the bridge before any right-
+        // click.
+        this.installEquipmentContextMenuBridge()
         closeAssetContextMenu()
+        closeEquipmentContextMenu()
+        // EVI-MA-06 — ONE unified resolution for left-click selection: the SAME
+        // AppObjectPickTarget the right-click + drag use (equipment or vestibule,
+        // selected-preference then nearest). Native BIM / planning volumes are not
+        // candidates, so a click there falls through to the legacy asset path.
+        const appTarget = this.resolveAppObjectAtEvent(ev)
+        if (appTarget) {
+            clearSelection() // drop any legacy asset selection (one visible selection)
+            // EVI-MA-07 — select AND capture the local-menu anchor at the click
+            // point. Selection persists; the anchor is not recomputed on hover.
+            selectAppObjectWithAnchor(
+                { objectType: appTarget.objectType, instanceId: appTarget.instanceId },
+                this.clientAnchorForEvent(ev),
+            )
+            if (import.meta.env.DEV) console.info('[app-pick] left-click selected %s=%s', appTarget.objectType, appTarget.instanceId)
+            return EventHandled.Yes
+        }
         const target = await this.locatePickTarget(ev)
         if (target) {
             if (ev.isShiftKey) {
@@ -291,10 +438,77 @@ export class MrtDirectManipulationTool extends PrimitiveTool {
                 spatialAssetStore.selectAsset(target.assetInstanceId)
             }
         } else {
-            // Empty / non-application-owned target -> clear MRT selection.
+            // Empty / non-application-owned target -> deliberate deselection
+            // (§32): clear both the legacy asset selection AND the authoritative
+            // SelectedAppObject + its local-menu anchor.
             clearSelection()
+            selectAppObjectWithAnchor(undefined)
         }
         return EventHandled.Yes
+    }
+
+    /** EVI-MA-07 — page/client anchor for the local action popover from an event. */
+    private clientAnchorForEvent(ev: BeButtonEvent): { x: number; y: number } | undefined {
+        const vp = ev.viewport
+        if (!vp) return undefined
+        try {
+            const view = ev.viewPoint ?? vp.worldToView(ev.point)
+            const rect = (vp as unknown as { parentDiv?: HTMLElement }).parentDiv?.getBoundingClientRect()
+            if (!rect) return { x: Math.round(view.x), y: Math.round(view.y) }
+            return { x: Math.round(rect.left + view.x), y: Math.round(rect.top + view.y) }
+        } catch { return undefined }
+    }
+
+    // --- EVI-MA-06 unified app-object drag state ------------------------------
+    private appDrag: { objectType: 'EQUIPMENT_INSTANCE' | 'CLINICAL_LOGISTICS_VESTIBULE' | 'ASSET_INSTANCE'; instanceId: string; planeZ: number } | undefined
+    /** Snapshot to restore on Escape (equipment placement or vestibule pose). */
+    private appDragStart: unknown | undefined
+
+    /** The floor drag-plane elevation for a resolved app target. */
+    private appDragPlaneZForTarget(t: NonNullable<ReturnType<typeof resolveAppObjectAtRay>>): number {
+        if (t.objectType === 'EQUIPMENT_INSTANCE') {
+            const e = getEquipmentInstance(t.instanceId)
+            if (e) { this.appDragStart = { ...e.placement }; return e.placement.zBase + e.placement.height / 2 }
+        } else if (t.objectType === 'CLINICAL_LOGISTICS_VESTIBULE') {
+            const v = getVestibuleInstance(t.instanceId)
+            if (v) { this.appDragStart = { ...v.pose }; return v.pose.zBase + v.pose.height / 2 }
+        }
+        return 0
+    }
+
+    /**
+     * Feed a candidate world point to the active app-object drag: project the
+     * cursor ray onto the drag plane, then call the authoritative move (which
+     * enforces collision/containment/wall constraints, keeps last-valid on
+     * rejection, and persists on success). No screen-pixel-derived pose.
+     */
+    private async updateAppDrag(ev: BeButtonEvent): Promise<void> {
+        const d = this.appDrag
+        if (!d) return
+        const ray = this.pickRay(ev)
+        if (!ray) return
+        const hit = rayIntersectZPlane(ray, d.planeZ)
+        if (!hit) return
+        if (d.objectType === 'EQUIPMENT_INSTANCE') {
+            moveEquipmentToFloorPoint(d.instanceId, hit[0], hit[1])
+        } else if (d.objectType === 'CLINICAL_LOGISTICS_VESTIBULE') {
+            await slideVestibuleToWallPoint(d.instanceId, hit[0], hit[1])
+        }
+    }
+
+    /** Restore the pre-drag pose (Escape / cancel during an app-object drag). */
+    private restoreAppDragStart(): void {
+        const d = this.appDrag
+        if (!d || this.appDragStart === undefined) { this.appDrag = undefined; this.appDragStart = undefined; return }
+        if (d.objectType === 'EQUIPMENT_INSTANCE') {
+            updateEquipmentPlacement(d.instanceId, this.appDragStart as Parameters<typeof updateEquipmentPlacement>[1])
+        } else if (d.objectType === 'CLINICAL_LOGISTICS_VESTIBULE') {
+            const v = getVestibuleInstance(d.instanceId)
+            const start = this.appDragStart as { centerX: number; centerY: number }
+            if (v) void slideVestibuleToWallPoint(d.instanceId, start.centerX, start.centerY)
+        }
+        this.appDrag = undefined
+        this.appDragStart = undefined
     }
 
     /**
@@ -303,6 +517,25 @@ export class MrtDirectManipulationTool extends PrimitiveTool {
      * fluid yaw rotation.
      */
     public override async onMouseStartDrag(ev: BeButtonEvent): Promise<EventHandled> {
+        // EVI-MA-06 — a drag that begins on an app-owned EQUIPMENT or VESTIBULE
+        // (resolved by the ONE unified picker) is a direct move: freestanding
+        // equipment slides in the parent-room FLOOR PLANE; a vestibule slides
+        // ALONG its attached wall. The move authority (collision + containment +
+        // last-valid + persist) lives in the overlay; here we only track the
+        // active drag + feed candidate world points. Locked objects are not
+        // draggable (target.draggable === false) so the gesture falls through.
+        const appTarget = this.resolveAppObjectAtEvent(ev)
+        if (appTarget && appTarget.draggable) {
+            this.appDrag = {
+                objectType: appTarget.objectType,
+                instanceId: appTarget.instanceId,
+                planeZ: this.appDragPlaneZForTarget(appTarget),
+            }
+            selectAppObject({ objectType: appTarget.objectType, instanceId: appTarget.instanceId })
+            this.installSecondaryButtonGuard(ev.viewport)
+            void this.updateAppDrag(ev) // seed the first candidate
+            return EventHandled.Yes
+        }
         const target = await this.locatePickTarget(ev)
         if (!target) {
             // Empty 3D space => begin MARQUEE (bounding-box) selection. Claiming
@@ -390,6 +623,8 @@ export class MrtDirectManipulationTool extends PrimitiveTool {
     /** Motion during a translate or rotate gesture: update the transient preview
      * (no domain event). Invalid points are ignored (keep last valid preview). */
     public override async onMouseMotion(ev: BeButtonEvent): Promise<void> {
+        // EVI-MA-06 — an active unified app-object drag consumes motion.
+        if (this.appDrag) { await this.updateAppDrag(ev); return }
         if (this.marqueeActive) {
             const vp = ev.viewport
             const view = ev.viewPoint ?? (vp ? vp.worldToView(ev.point) : undefined)
@@ -462,6 +697,16 @@ export class MrtDirectManipulationTool extends PrimitiveTool {
 
     /** Release after a translate, rotate, group, or marquee gesture. */
     public override async onMouseEndDrag(ev: BeButtonEvent): Promise<EventHandled> {
+        // EVI-MA-06 — finalize a unified app-object drag. The authoritative move
+        // was already committed+persisted per-motion (last-valid on rejection),
+        // so releasing only feeds a final candidate and clears the drag state.
+        if (this.appDrag) {
+            await this.updateAppDrag(ev)
+            this.appDrag = undefined
+            this.appDragStart = undefined
+            this.removeSecondaryButtonGuard()
+            return EventHandled.Yes
+        }
         if (this.marqueeActive) {
             const vp = ev.viewport
             const view = ev.viewPoint ?? (vp ? vp.worldToView(ev.point) : undefined)
@@ -607,10 +852,26 @@ export class MrtDirectManipulationTool extends PrimitiveTool {
         if (spatialAssetStore.isDragActive() || spatialAssetStore.isGroupDragActive() || spatialAssetStore.isRotationActive()) {
             return EventHandled.Yes
         }
+        // EVI-MA-06 — ONE unified resolution for the right-click menu (the SAME
+        // AppObjectPickTarget as left-click + drag). Equipment or vestibule menu
+        // routed by objectType; native BIM / planning volumes are not candidates.
+        const appTarget = this.resolveAppObjectAtEvent(ev)
+        if (appTarget) {
+            // EVI-MA-07 — right-click opens the SAME local popover as left-click by
+            // selecting-with-anchor at the cursor (no separate context-menu model).
+            selectAppObjectWithAnchor(
+                { objectType: appTarget.objectType, instanceId: appTarget.instanceId },
+                this.clientAnchorForEvent(ev),
+            )
+            MrtDirectManipulationTool.dbg(`[app-menu] right-click ${appTarget.objectType}=${appTarget.instanceId}`)
+            return EventHandled.Yes
+        }
         const target = await this.locatePickTarget(ev)
         if (target) {
             const vp = ev.viewport
             const view = ev.viewPoint ?? (vp ? vp.worldToView(ev.point) : undefined)
+            closeEquipmentContextMenu()
+            closeVestibuleContextMenu()
             openAssetContextMenu({
                 assetInstanceId: target.assetInstanceId,
                 screenX: view ? Math.round(view.x) : 0,
@@ -619,6 +880,8 @@ export class MrtDirectManipulationTool extends PrimitiveTool {
             MrtDirectManipulationTool.dbg(`[context-menu] open assetInstanceId=${target.assetInstanceId}`)
         } else {
             closeAssetContextMenu()
+            closeEquipmentContextMenu()
+            closeVestibuleContextMenu()
         }
         return EventHandled.Yes
     }
@@ -629,6 +892,15 @@ export class MrtDirectManipulationTool extends PrimitiveTool {
         MrtDirectManipulationTool.dbg(`[direct-input] callback=onKeyTransition key=${keyEvent.key} wentDown=${wentDown} interaction=${spatialAssetStore.getInteractionState()} activeTool=${IModelApp.toolAdmin?.activeTool?.toolId ?? '—'}`)
         if (wentDown && keyEvent.key === 'Escape') {
             closeAssetContextMenu()
+            closeEquipmentContextMenu()
+            closeVestibuleContextMenu()
+            // EVI-MA-06 — Escape during a unified app-object drag restores ONLY
+            // that instance's pre-drag pose (independent-pose doctrine).
+            if (this.appDrag) {
+                this.restoreAppDragStart()
+                this.removeSecondaryButtonGuard()
+                return EventHandled.Yes
+            }
             if (this.marqueeActive) {
                 // Discard the marquee; restore the selection that existed before it began.
                 this.marqueeActive = false
@@ -641,6 +913,20 @@ export class MrtDirectManipulationTool extends PrimitiveTool {
                 this.cancelActiveDirectDrag('ESC')
                 return EventHandled.Yes
             }
+        }
+        // EVI-MA-06 — DELETE / BACKSPACE deletes the SELECTED application object
+        // via the ONE authoritative dispatcher, but ONLY when: no gesture is
+        // active, and keyboard focus is NOT inside a text-editing element (so
+        // typing in a field never deletes equipment). Locked objects are refused
+        // by the lifecycle delete itself (returns a non-ok result).
+        if (wentDown && (keyEvent.key === 'Delete' || keyEvent.key === 'Backspace')) {
+            if (spatialAssetStore.isDragActive() || spatialAssetStore.isRotationActive() || spatialAssetStore.isGroupDragActive()) {
+                return EventHandled.No
+            }
+            if (isTextEditingFocus()) return EventHandled.No
+            const res = deleteSelectedAppObject()
+            if (res && import.meta.env.DEV) console.info('[app-delete-key] %s ok=%s', res.objectType, String(res.ok))
+            return res ? EventHandled.Yes : EventHandled.No
         }
         return EventHandled.No
     }
@@ -657,6 +943,8 @@ export class MrtDirectManipulationTool extends PrimitiveTool {
         }
         // Always drop the secondary-button guard on cleanup (StrictMode-safe).
         this.removeSecondaryButtonGuard()
+        // EVI-MA-02B: remove the persistent right-click bridge.
+        this.removeEquipmentContextMenuBridge()
         // Restore default locate behavior so other tools are unaffected.
         IModelApp.locateManager.options.allowDecorations = false
         await super.onCleanup()

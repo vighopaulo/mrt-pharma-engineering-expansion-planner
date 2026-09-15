@@ -20,7 +20,7 @@
    are positioned absolutely and MUST NOT be forced to full size — otherwise the
    mode bar becomes a full-viewport layer that the Viewer canvas covers, making
    the planning controls NOT_DISCOVERABLE (Correction 2 root cause). */
-.viewer-stage>*:not(.viewer-mode-bar):not(.viewer-projectbim-bar):not(.viewer-camera-bar):not(.viewer-program-bar):not(.viewer-devbar):not(.viewer-panel-backdrop):not(.viewer-dev-drawer):not(.viewer-ingest-drawer):not(.viewer-audit-drawer):not(.viewer-product-panel):not(.mrt-marquee-rect):not(.mrt-context-menu) {
+.viewer-stage>*:not(.viewer-mode-bar):not(.viewer-projectbim-bar):not(.viewer-camera-bar):not(.viewer-program-bar):not(.viewer-plan-bar):not(.viewer-devbar):not(.viewer-panel-backdrop):not(.viewer-dev-drawer):not(.viewer-ingest-drawer):not(.viewer-audit-drawer):not(.viewer-product-panel):not(.mrt-marquee-rect):not(.mrt-context-menu) {
     width: 100%;
     height: 100%;
 }
@@ -539,6 +539,21 @@
     border-top: 1px solid #2b313a;
 }
 
+/* EVI-MA-02 — equipment context-menu title (identifies the exact instance). */
+.mrt-context-menu .mrt-context-menu-title {
+    padding: 0.35rem 0.8rem;
+    font-size: 0.78rem;
+    font-weight: 700;
+    color: #e4eeff;
+    border-bottom: 1px solid #2b313a;
+    white-space: nowrap;
+}
+
+.mrt-context-menu button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
 /* Multi-selection indication in Placed Assets (restrained). */
 .mrt-placed-item.multi-selected {
     outline: 1px solid #5aa0ff;
@@ -790,6 +805,60 @@
 
 .camera-mode-help-reopen:hover {
     color: #fff;
+}
+
+/* Build 1B Problem C — the WHOLE walkthrough control card is dismissible. */
+.camera-mode-walkthrough {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+}
+
+.camera-mode-walkthrough-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+}
+
+.camera-mode-card-close {
+    border: none;
+    background: transparent;
+    color: #cdd6df;
+    font-size: 1rem;
+    line-height: 1;
+    cursor: pointer;
+    padding: 2px 5px;
+    border-radius: 4px;
+}
+
+.camera-mode-card-close:hover {
+    color: #fff;
+    background: rgba(255, 255, 255, 0.08);
+}
+
+/* Collapsed card: only a compact reopen chip + the always-reachable EXIT. */
+.camera-mode-walkthrough-collapsed {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    flex-wrap: wrap;
+}
+
+.camera-mode-card-reopen {
+    font-size: 0.66rem;
+    color: #cdd6df;
+    background: rgba(18, 24, 33, 0.7);
+    border: 1px solid rgba(138, 148, 163, 0.35);
+    border-radius: 6px;
+    padding: 0.26rem 0.55rem;
+    cursor: pointer;
+    font-weight: 600;
+}
+
+.camera-mode-card-reopen:hover {
+    color: #fff;
+    background: rgba(64, 156, 255, 0.2);
 }
 
 /* Compact planning control bar — top-right, small, never covers the model. */
@@ -1068,6 +1137,51 @@
     box-shadow: inset 0 0 0 1px rgba(79, 176, 138, 0.4);
 }
 
+/* B1B-MA-03A: presentation-only panel collapse. When collapsed the panel shrinks
+   to a compact reopen chip; feature state (selection/assignments/volumes) is kept. */
+.clinical-program.collapsed {
+    width: auto;
+    padding: 0.3rem;
+    gap: 0;
+}
+
+.clinical-program-collapse {
+    font-size: 0.9rem;
+    line-height: 1;
+    padding: 0 0.35rem;
+    margin-left: 0.35rem;
+    border-radius: 5px;
+    border: 1px solid #30363d;
+    background: #161b22;
+    color: #9fb0c2;
+    cursor: pointer;
+}
+
+.clinical-program-collapse:hover {
+    color: #d6dde5;
+    border-color: #4b5563;
+}
+
+.clinical-program-reopen {
+    font-size: 0.66rem;
+    letter-spacing: 0.06em;
+    padding: 0.28rem 0.6rem;
+    border-radius: 6px;
+    border: 1px solid #30363d;
+    background: rgba(13, 17, 23, 0.92);
+    color: #c9d3dd;
+    cursor: pointer;
+    white-space: nowrap;
+    max-width: 260px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.clinical-program-reopen:hover {
+    border-color: #4fb08a;
+    color: #d6f2e6;
+}
+
 .clinical-program-hint,
 .clinical-program-note {
     font-size: 0.62rem;
@@ -1206,6 +1320,110 @@
     color: #ffe6e2;
 }
 
+/* Build 1B — equipment validation warning (not color-only: icon + text +
+   dashed border), and the equipment section container. */
+.equipment-warning {
+    margin: 6px 0;
+    padding: 8px 10px;
+    border: 2px dashed rgba(235, 90, 80, 0.9);
+    border-radius: 6px;
+    background: rgba(70, 18, 14, 0.5);
+    color: #ffd9d3;
+    font-size: 0.72rem;
+    line-height: 1.35;
+}
+
+.equipment-warning strong {
+    color: #ffe6e2;
+}
+
+.equipment-section {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+    border-top: 1px solid #262d36;
+    margin-top: 0.5rem;
+    padding-top: 0.5rem;
+}
+
+.equipment-section h4 {
+    margin: 0;
+    font-size: 0.74rem;
+    color: #cdd6e0;
+}
+
+.equipment-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+}
+
+.equipment-row {
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+    padding: 0.35rem 0.4rem;
+    border: 1px solid #262d36;
+    border-radius: 5px;
+    background: rgba(18, 32, 54, 0.35);
+}
+
+.equipment-row.selected {
+    border-color: rgba(140, 190, 255, 0.8);
+    background: rgba(24, 44, 74, 0.5);
+}
+
+.equipment-row-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 0.3rem;
+}
+
+.equipment-row-title {
+    font-size: 0.7rem;
+    color: #dbe4ee;
+    font-weight: 600;
+}
+
+.equipment-status {
+    font-size: 0.62rem;
+    padding: 1px 6px;
+    border-radius: 4px;
+}
+
+.equipment-status.pass {
+    color: #d6ffe2;
+    background: rgba(16, 60, 34, 0.6);
+}
+
+.equipment-status.fail {
+    color: #ffd9d3;
+    background: rgba(70, 18, 14, 0.6);
+}
+
+.equipment-status.not-evaluated {
+    color: #d8dee6;
+    background: rgba(40, 46, 56, 0.6);
+}
+
+.equipment-controls {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.25rem;
+}
+
+.equipment-crosswalk {
+    font-size: 0.58rem;
+    color: #8a97a6;
+    line-height: 1.3;
+    word-break: break-word;
+}
+
+.equipment-crosswalk .cal {
+    color: #b7c4d2;
+}
+
 .clinical-program-dev {
     display: flex;
     flex-direction: column;
@@ -1320,4 +1538,662 @@
 .clinical-program-num .clinical-program-input {
     width: 100%;
     box-sizing: border-box;
+}
+
+/* Build 1B spatial correction — CLINICAL ROOM CANDIDATE DISCOVERY panel. */
+.clinical-program-candidates {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+    border-top: 1px solid #262d36;
+    margin-top: 0.5rem;
+    padding-top: 0.5rem;
+}
+
+.clinical-program-candidate-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+    max-height: 320px;
+    overflow-y: auto;
+}
+
+.clinical-program-candidate {
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+    padding: 6px 8px;
+    border: 1px solid #262d36;
+    border-radius: 6px;
+    background: rgba(20, 26, 33, 0.6);
+}
+
+.clinical-program-candidate.selected {
+    border-color: #4c7bd6;
+    background: rgba(28, 44, 74, 0.6);
+}
+
+.clinical-program-candidate-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.4rem;
+}
+
+.clinical-program-candidate-title {
+    background: none;
+    border: none;
+    color: #e6edf5;
+    font-size: 0.76rem;
+    font-weight: 600;
+    text-align: left;
+    cursor: pointer;
+    padding: 0;
+}
+
+.clinical-program-candidate-title:hover {
+    text-decoration: underline;
+}
+
+.clinical-program-candidate-badge {
+    font-size: 0.62rem;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    padding: 2px 6px;
+    border-radius: 4px;
+    white-space: nowrap;
+}
+
+.clinical-program-candidate-badge.ok {
+    color: #b9f4c9;
+    background: rgba(24, 70, 42, 0.7);
+    border: 1px solid rgba(72, 176, 108, 0.7);
+}
+
+.clinical-program-candidate-badge.warn {
+    color: #ffd9a8;
+    background: rgba(74, 52, 14, 0.7);
+    border: 1px solid rgba(200, 150, 60, 0.7);
+}
+
+/* Build 1B candidate acceptance tiers: SUITABLE (blue) + REJECTED (red). */
+.clinical-program-candidate-badge.suitable {
+    color: #bcd6ff;
+    background: rgba(24, 44, 78, 0.7);
+    border: 1px solid rgba(76, 123, 214, 0.7);
+}
+
+.clinical-program-candidate-badge.reject {
+    color: #ffc3c3;
+    background: rgba(74, 22, 22, 0.7);
+    border: 1px solid rgba(200, 80, 80, 0.7);
+}
+
+/* Compact candidate card: keep each card small so more fit in the bounded
+   scroll region. The meta row wraps the key facts (storey/scores/area/authority). */
+.clinical-program-candidate.compact {
+    gap: 0.15rem;
+    padding: 5px 8px;
+}
+
+.clinical-program-candidate-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.15rem 0.5rem;
+    font-size: 0.66rem;
+    line-height: 1.3;
+}
+
+.clinical-program-candidate-meta>span::after {
+    content: '·';
+    margin-left: 0.5rem;
+    opacity: 0.4;
+}
+
+.clinical-program-candidate-meta>span:last-child::after {
+    content: '';
+    margin-left: 0;
+}
+
+.clinical-program-candidate-reasons {
+    margin: 4px 0 0;
+    padding-left: 1.1rem;
+    color: #aeb8c4;
+    font-size: 0.68rem;
+    line-height: 1.35;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.clinical-program-candidate-override {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.35rem;
+    font-size: 0.68rem;
+    color: #ffd9a8;
+    margin: 4px 0;
+    line-height: 1.3;
+}
+
+/* Build 1B Problem B — PLANNING controlled pan + inspector dismiss. */
+.camera-mode-planning {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+    margin-top: 0.35rem;
+}
+
+.camera-mode-pan {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 3px;
+}
+
+.camera-mode-pan-mid {
+    display: flex;
+    gap: 24px;
+}
+
+.camera-mode-pan-btn {
+    width: 30px;
+    height: 26px;
+    border: 1px solid #38414d;
+    border-radius: 5px;
+    background: #1b222b;
+    color: #cdd6e0;
+    font-size: 0.85rem;
+    cursor: pointer;
+    line-height: 1;
+}
+
+.camera-mode-pan-btn:hover {
+    background: #26303c;
+    border-color: #4c7bd6;
+}
+
+.inspector-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+}
+
+.inspector-dismiss {
+    border: 1px solid #38414d;
+    border-radius: 5px;
+    background: #1b222b;
+    color: #cdd6e0;
+    width: 26px;
+    height: 26px;
+    font-size: 1rem;
+    line-height: 1;
+    cursor: pointer;
+}
+
+.inspector-dismiss:hover {
+    background: #3a2020;
+    border-color: rgba(235, 90, 80, 0.9);
+    color: #ffd9d3;
+}
+
+/* ===========================================================================
+   Build 1B §B — TRUE 2D BIM floor plan (shown SIMULTANEOUSLY with Walkthrough).
+   Bottom-left panel; own absolute layer (excluded from the full-size stage rule).
+   =========================================================================== */
+.viewer-plan-bar {
+    position: absolute;
+    left: 0.6rem;
+    bottom: 0.6rem;
+    z-index: 6;
+    pointer-events: none;
+    /* only the panel itself is interactive */
+}
+
+.bim2d-plan {
+    pointer-events: auto;
+    /* Compact navigation map. Responsive: clamps to the viewport rather than a
+       hard-coded width, and never dominates the 3D scene. */
+    width: clamp(200px, 22vw, 280px);
+    background: rgba(12, 18, 28, 0.92);
+    border: 1px solid rgba(127, 142, 163, 0.35);
+    border-radius: 8px;
+    box-shadow: 0 6px 24px rgba(0, 0, 0, 0.4);
+    color: #e6edf3;
+    font-size: 0.74rem;
+    backdrop-filter: blur(4px);
+}
+
+/* CLOSED state: a small reopen chip only. It is the ONLY interactive element,
+   so nothing invisible blocks the 3D viewport while the plan is dismissed. */
+.bim2d-plan-reopen {
+    pointer-events: auto;
+    background: rgba(12, 18, 28, 0.92);
+    border: 1px solid rgba(127, 142, 163, 0.35);
+    border-radius: 6px;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
+    color: #cfe6ff;
+    cursor: pointer;
+    font-size: 0.74rem;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    padding: 0.34rem 0.6rem;
+    backdrop-filter: blur(4px);
+}
+
+.bim2d-plan-reopen:hover {
+    background: rgba(64, 156, 255, 0.2);
+}
+
+.bim2d-plan-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    padding: 0.35rem 0.5rem;
+    border-bottom: 1px solid rgba(127, 142, 163, 0.25);
+}
+
+.bim2d-plan-title {
+    font-weight: 600;
+    letter-spacing: 0.02em;
+}
+
+.bim2d-plan-close {
+    background: transparent;
+    border: none;
+    color: #9fb3c8;
+    cursor: pointer;
+    font-size: 1rem;
+    line-height: 1;
+    padding: 0.1rem 0.35rem;
+    border-radius: 4px;
+}
+
+.bim2d-plan-close:hover {
+    color: #e6edf3;
+    background: rgba(255, 255, 255, 0.08);
+}
+
+.bim2d-plan-svg {
+    display: block;
+    width: 100%;
+    height: 200px;
+    background: rgba(7, 11, 18, 0.7);
+    border-top: 1px solid rgba(127, 142, 163, 0.2);
+    border-bottom: 1px solid rgba(127, 142, 163, 0.2);
+    cursor: crosshair;
+    touch-action: none;
+}
+
+.bim2d-plan-room-label {
+    fill: #cbd5e1;
+    font-size: 8px;
+    pointer-events: none;
+    user-select: none;
+}
+
+/* Clinical Program rooms read as the dominant, permanent labels. */
+.bim2d-plan-room-label--clinical {
+    fill: #e8f2ff;
+    font-weight: 600;
+}
+
+.bim2d-plan-room-label--selected {
+    fill: #ffe08a;
+    font-weight: 600;
+}
+
+.bim2d-plan-room-label--hovered {
+    fill: #cbd5e1;
+    opacity: 0.9;
+}
+
+.bim2d-plan-actions {
+    padding: 0.4rem 0.55rem;
+}
+
+.bim2d-plan-enter {
+    width: 100%;
+    background: rgba(57, 217, 138, 0.16);
+    border: 1px solid rgba(57, 217, 138, 0.45);
+    color: #b8f5d6;
+    border-radius: 5px;
+    padding: 0.3rem;
+    cursor: pointer;
+    font-weight: 600;
+}
+
+.bim2d-plan-enter:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+}
+
+.bim2d-plan-provenance {
+    padding: 0 0.55rem 0.4rem;
+    color: #8b9bb0;
+    font-size: 0.7rem;
+}
+
+.bim2d-plan-note {
+    padding: 0 0.55rem 0.5rem;
+    color: #ffd166;
+    font-size: 0.72rem;
+}
+
+/* EVI-MA-03 — secret-free 3D viewer config diagnostic (PRESENT/MISSING by name). */
+.viewer-config-diag {
+    margin: 0.75rem 0;
+    text-align: left;
+    font-size: 0.82rem;
+    color: #c8d0da;
+    max-width: 32rem;
+}
+
+.viewer-config-diag summary {
+    cursor: pointer;
+    font-weight: 600;
+    color: #e4eeff;
+}
+
+.viewer-config-diag ul {
+    list-style: none;
+    padding: 0.4rem 0 0;
+    margin: 0;
+}
+
+.viewer-config-diag li {
+    padding: 0.1rem 0;
+}
+
+.viewer-config-diag code {
+    color: #9ecbff;
+}
+
+.viewer-config-diag-note {
+    margin-top: 0.4rem;
+    color: #8b93a0;
+    font-size: 0.76rem;
+}
+
+.viewer-cta-detail {
+    color: #b9c2cf;
+    font-size: 0.82rem;
+    max-width: 40rem;
+}
+
+/* EVI-MA-02C — equipment context-menu error (keeps menu open on failed delete). */
+.mrt-context-menu .mrt-context-menu-error {
+    padding: 0.35rem 0.8rem;
+    font-size: 0.76rem;
+    color: #ff8a80;
+    border-top: 1px solid #2b313a;
+    max-width: 20rem;
+}
+
+/* EVI-MA-02D — floating SELECTED EQUIPMENT control (always reachable). */
+.mrt-selected-equipment {
+    position: fixed;
+    right: 1rem;
+    bottom: 1rem;
+    z-index: 60;
+    background: rgba(18, 24, 34, 0.94);
+    border: 1px solid #33506e;
+    border-radius: 8px;
+    padding: 0.55rem 0.7rem;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.45);
+    max-width: 22rem;
+}
+
+.mrt-selected-equipment-title {
+    font-size: 0.82rem;
+    font-weight: 700;
+    color: #cfe4ff;
+    margin-bottom: 0.4rem;
+    white-space: nowrap;
+}
+
+.mrt-selected-equipment-actions {
+    display: flex;
+    gap: 0.4rem;
+    flex-wrap: wrap;
+}
+
+.mrt-selected-equipment-actions button {
+    font-size: 0.78rem;
+    padding: 0.28rem 0.6rem;
+    border-radius: 5px;
+    border: 1px solid #3a4a5e;
+    background: #1c2735;
+    color: #e4eeff;
+    cursor: pointer;
+}
+
+.mrt-selected-equipment-actions button:hover {
+    background: #263447;
+}
+
+.mrt-selected-equipment-actions .mrt-selected-equipment-delete {
+    color: #ff8a80;
+    border-color: #5a2b2b;
+}
+
+.mrt-selected-equipment-actions button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+/* EVI-MA-05A — CREATE RADIOPHARMACY VESTIBULE action on the cyclotron control. */
+.mrt-selected-equipment-logistics {
+    margin-top: 0.45rem;
+    padding-top: 0.45rem;
+    border-top: 1px solid #2a3a4e;
+}
+
+.mrt-create-vestibule {
+    font-size: 0.78rem;
+    padding: 0.3rem 0.6rem;
+    border-radius: 5px;
+    border: 1px solid #3e6b53;
+    background: #17301f;
+    color: #bfe9cf;
+    cursor: pointer;
+    width: 100%;
+}
+
+.mrt-create-vestibule:hover {
+    background: #1e3d29;
+}
+
+/* EVI-MA-05A — SELECTED VESTIBULE control stacks ABOVE the equipment control so
+   they never overlap when both a cyclotron and a vestibule interaction occur
+   (only one is selected at a time, but the offset keeps layout stable). */
+.mrt-selected-vestibule {
+    bottom: 1rem;
+}
+
+.mrt-selected-vestibule-meta {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 0.1rem 0.6rem;
+    font-size: 0.72rem;
+    color: #cfe0d6;
+    margin-bottom: 0.45rem;
+}
+
+.mrt-selected-vestibule-meta>div {
+    display: contents;
+}
+
+.mrt-selected-vestibule-meta span {
+    color: #8fb7a2;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    font-size: 0.64rem;
+}
+
+/* EVI-MA-03A — app-owned Bentley 3D auth reconnect overlay (never the raw
+   validTokenNeeded string). Non-blocking to the rest of the app shell. */
+.viewer-auth-overlay {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(10, 14, 20, 0.72);
+    z-index: 40;
+}
+
+.viewer-auth-overlay-card {
+    background: #141b26;
+    border: 1px solid #33506e;
+    border-radius: 10px;
+    padding: 1.4rem 1.6rem;
+    max-width: 34rem;
+    text-align: center;
+    color: #e4eeff;
+}
+
+.viewer-auth-overlay-card h2 {
+    margin: 0 0 0.5rem;
+    font-size: 1.05rem;
+}
+
+.viewer-auth-overlay-card p {
+    color: #c8d0da;
+    font-size: 0.9rem;
+}
+
+.viewer-auth-overlay-card button {
+    margin-top: 0.8rem;
+    padding: 0.5rem 1rem;
+    border-radius: 6px;
+    border: 1px solid #3a6ea5;
+    background: #1c3a5e;
+    color: #e4eeff;
+    cursor: pointer;
+    font-weight: 600;
+}
+
+.viewer-auth-overlay-card button:hover {
+    background: #234a76;
+}
+
+/* EVI-MA-07 — local action popover for the selected application object. Anchored
+   near the object; buttons stopPropagation so clicks never reach the viewport. */
+.mrt-appobject-menu {
+    position: fixed;
+    z-index: 65;
+    min-width: 12rem;
+    background: rgba(18, 24, 34, 0.96);
+    border: 1px solid #3a5372;
+    border-radius: 8px;
+    padding: 0.5rem 0.55rem;
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.5);
+}
+
+.mrt-appobject-menu-title {
+    font-size: 0.8rem;
+    font-weight: 700;
+    color: #cfe4ff;
+    margin-bottom: 0.4rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 18rem;
+}
+
+.mrt-appobject-menu-actions {
+    display: flex;
+    gap: 0.35rem;
+    flex-wrap: wrap;
+}
+
+.mrt-appobject-menu-actions button {
+    font-size: 0.78rem;
+    padding: 0.3rem 0.6rem;
+    border-radius: 5px;
+    border: 1px solid #3a4a5e;
+    background: #1c2735;
+    color: #e4eeff;
+    cursor: pointer;
+}
+
+.mrt-appobject-menu-actions button:hover {
+    background: #263447;
+}
+
+.mrt-appobject-menu-actions .mrt-appobject-menu-delete {
+    color: #ff8a80;
+    border-color: #5a2b2b;
+}
+
+.mrt-appobject-menu-actions button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+/* EVI-MA-07 — non-blocking Delete toast with an inline Undo (no browser alert). */
+.mrt-delete-toast {
+    position: fixed;
+    left: 50%;
+    bottom: 1.5rem;
+    transform: translateX(-50%);
+    z-index: 70;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    background: rgba(24, 28, 34, 0.96);
+    border: 1px solid #45566b;
+    border-radius: 8px;
+    padding: 0.5rem 0.8rem;
+    color: #e6edf6;
+    font-size: 0.82rem;
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.5);
+}
+
+.mrt-delete-toast button {
+    font-size: 0.78rem;
+    padding: 0.25rem 0.7rem;
+    border-radius: 5px;
+    border: 1px solid #3e6b53;
+    background: #17301f;
+    color: #bfe9cf;
+    cursor: pointer;
+}
+
+/* EVI-MA-07 — Undo / Redo toolbar (top-left, out of the way of controls). */
+.mrt-undo-redo-toolbar {
+    position: fixed;
+    top: 1rem;
+    left: 1rem;
+    z-index: 60;
+    display: flex;
+    gap: 0.35rem;
+    background: rgba(18, 24, 34, 0.9);
+    border: 1px solid #33506e;
+    border-radius: 8px;
+    padding: 0.3rem 0.35rem;
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.4);
+}
+
+.mrt-undo-redo-toolbar button {
+    font-size: 0.78rem;
+    padding: 0.28rem 0.6rem;
+    border-radius: 5px;
+    border: 1px solid #3a4a5e;
+    background: #1c2735;
+    color: #e4eeff;
+    cursor: pointer;
+}
+
+.mrt-undo-redo-toolbar button:hover {
+    background: #263447;
+}
+
+.mrt-undo-redo-toolbar button:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
 }

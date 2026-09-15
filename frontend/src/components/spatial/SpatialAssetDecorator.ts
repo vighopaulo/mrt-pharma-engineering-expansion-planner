@@ -14,7 +14,12 @@ import { GraphicType, type DecorateContext, type Decorator } from '@itwin/core-f
 import { Arc3d, Box, Cone, Point3d, Range3d, TorusPipe } from '@itwin/core-geometry'
 import { ColorDef } from '@itwin/core-common'
 import type { AssetInstance } from '../../domain/assets'
-import { applyYaw, buildScannerParts, type ScannerPart, type WorldBox } from './scannerGeometry'
+import { applyYaw, type WorldBox } from './scannerGeometry'
+import {
+    buildEquipmentPartsForInstance,
+    EQUIPMENT_PART_COLOR as PART_COLOR,
+    type EquipmentPart,
+} from './equipmentGeometry'
 import { resolveRotationHandleVisualState, type RotationHandleVisualState } from './assetPicking'
 import { resolveEquipmentVisualState, resolveSelectionVisualState, type EquipmentVisualState } from './planningVisuals'
 
@@ -22,18 +27,12 @@ import { resolveEquipmentVisualState, resolveSelectionVisualState, type Equipmen
 export interface DecorationPlan {
     instanceId: string
     displayLabel: string
-    parts: { part: ScannerPart; kind: 'BOX' | 'CYLINDER' }[]
+    parts: { part: EquipmentPart; kind: 'BOX' | 'CYLINDER' }[]
 }
 
-/** Clinical / engineering equipment palette — a light equipment body, a darker
- * recessed bore, a neutral couch, and a subdued base. Restrained (no toy/neon
- * colors); distinct from the grey architecture. */
-const PART_COLOR: Record<ScannerPart, [number, number, number]> = {
-    GANTRY: [226, 230, 236], // light clinical body (off-white steel)
-    BORE: [56, 66, 84], // dark recessed bore
-    PATIENT_TABLE: [200, 206, 214], // neutral couch
-    TABLE_BASE: [150, 158, 170], // subdued support base
-}
+// EVI-MA-04 — the material palette is the SHARED EQUIPMENT_PART_COLOR (imported
+// as PART_COLOR) so the AssetInstance path (Discovery MI etc.) and the
+// EquipmentAssetInstance path never diverge on materials.
 
 /** Highlight color for the directly-selected asset (application-owned render
  * state only — NOT a geometry-identity change and NOT transparency). */
@@ -151,7 +150,7 @@ export class SpatialAssetDecorator implements Decorator {
         return instances.map((inst) => ({
             instanceId: inst.assetInstanceId,
             displayLabel: inst.displayLabel,
-            parts: buildScannerParts(inst).map((p) => ({ part: p.part, kind: p.kind })),
+            parts: buildEquipmentPartsForInstance(inst).map((p) => ({ part: p.part, kind: p.kind })),
         }))
     }
 
@@ -287,7 +286,7 @@ export class SpatialAssetDecorator implements Decorator {
     }
 
     private decorateInstance(context: DecorateContext, inst: AssetInstance, pickId: string | undefined, visualState: EquipmentVisualState): void {
-        const parts = buildScannerParts(inst)
+        const parts = buildEquipmentPartsForInstance(inst)
         for (const part of parts) {
             // Pickable graphics carry the transient id so a click resolves back
             // to this instance via testDecorationHit + HitDetail.sourceId.
@@ -320,7 +319,7 @@ export class SpatialAssetDecorator implements Decorator {
         }
     }
 
-    private buildBox(part: WorldBox): Box | undefined {
+    private buildBox(part: WorldBox<EquipmentPart>): Box | undefined {
         // Apply yaw to the 8 corners about the instance center, then build a
         // range from the rotated corners. (LOW-LOD generic representation: a
         // yaw-rotated axis-aligned range is sufficient and deterministic.)

@@ -17,9 +17,10 @@
  * changeset, and mutates NO Bentley identity.
  */
 import { GraphicType, type DecorateContext, type Decorator } from '@itwin/core-frontend'
-import { Point3d } from '@itwin/core-geometry'
+import { Box, Cone, Point3d, Range3d } from '@itwin/core-geometry'
 import { ColorDef, LinePixels } from '@itwin/core-common'
 import type { SpatialRoomReference } from '../../domain/assets'
+import type { AssetFamily } from '../../domain/assets/types'
 import type { StoreyZRange } from './planningPlan'
 import {
     deriveClinicalProgramOverlay,
@@ -30,6 +31,18 @@ import type { ViewerMode } from './planningVisuals'
 import type { CameraMode } from './cameraNav'
 import { resolveWalkthroughLabelVisibility } from './walkthroughLabelVisibility'
 import type { ClinicalProgramAssignment, ClinicalFunction } from './clinicalProgram'
+import type { CanonicalEquipmentClass } from './canonicalEquipmentCatalog'
+import {
+    applyYaw,
+    buildEquipmentParts,
+    resolveVisualFamilyForCanonical,
+    EQUIPMENT_PART_COLOR,
+    EQUIPMENT_SELECTION_OUTLINE,
+    type EquipmentPart,
+    type EquipmentPartGeometry,
+    type EquipmentVisualFamily,
+    type WorldBox,
+} from './equipmentGeometry'
 
 // Restrained clinical-planning category tints (UI ONLY — not regulatory).
 export type ProgramCategory = 'RADIOPHARMACEUTICAL_PRODUCTION' | 'PATIENT_PREPARATION' | 'IMAGING' | 'SUPPORT' | 'CIRCULATION'
@@ -109,6 +122,50 @@ export interface ClinicalProgramInputs {
     getShowClinicalVolume?: () => boolean
     /** The planning volume for a parent space, if defined + visible. */
     getPlanningVolumeForSpace?: (bimSpaceId: string) => { params: PrismParams; lifecycleState: ClinicalVolumeLifecycle; displayName: string; selected: boolean; invalid?: boolean } | undefined
+    /** Whether to render app-owned equipment envelopes (Build 1B). */
+    getShowEquipment?: () => boolean
+    /**
+     * Build 1B — the app-owned equipment envelopes to render as true 3D world
+     * boxes. Each carries its oriented-prism params (already floor-based),
+     * lifecycle, selection, an invalid (containment FAIL) flag, and a honest
+     * placeholder flag so the label can disclose a proxy envelope.
+     */
+    getEquipmentForRender?: () => readonly {
+        id: string
+        params: PrismParams
+        lifecycleState: ClinicalVolumeLifecycle
+        label: string
+        selected: boolean
+        invalid?: boolean
+        placeholder?: boolean
+        /** Canonical class → resolves the generic VISUAL family (never identity). */
+        canonicalClass?: CanonicalEquipmentClass
+        /** Spatial family (helps disambiguate; GENERATOR has none). */
+        assetFamily?: AssetFamily
+    }[]
+    /**
+     * EVI-MA-05A — the app-owned CLINICAL LOGISTICS VESTIBULE instances to render
+     * as recognizable wall-integrated 3D geometry. Each carries its oriented-prism
+     * params (front-face pose), the visual family, which rear ports are
+     * fabricated, lifecycle, selection, and label. Rendered by the SAME
+     * per-part-material + outline-only-selection path as equipment.
+     */
+    getVestibulesForRender?: () => readonly {
+        id: string
+        params: PrismParams
+        family: EquipmentVisualFamily
+        ports: { mrt?: boolean; mrtHeavy?: boolean; pts?: boolean }
+        lifecycleState: ClinicalVolumeLifecycle
+        label: string
+        selected: boolean
+    }[]
+    /**
+     * Whether to render the translucent engineering CONTAINMENT ENVELOPE around
+     * recognizable equipment geometry. Defaults to true (envelope always drawn)
+     * for backward compatibility. When recognizable geometry is present the
+     * envelope stays authoritative for spatial validation but may be toggled.
+     */
+    getShowEquipmentEnvelope?: () => boolean
     /**
      * Build 1A label-occlusion: the active product CAMERA mode (PLANNING /
      * WALKTHROUGH / BIRDS_EYE_CUTAWAY). In WALKTHROUGH the planning-volume label
@@ -143,6 +200,86 @@ export class ClinicalProgramDecorator implements Decorator {
     // Not cacheable: selection/assignments/storey change frequently.
     public readonly useCachedDecorations = undefined
     private readonly inputs: ClinicalProgramInputs
+
+    /**
+     * EVI-MA-02 — pickable transient id <-> equipmentInstanceId maps, rebuilt
+     * each decorate(). The stable identity is the equipmentInstanceId; the
+     * transient pick id is NEVER treated as identity. This makes the recognizable
+     * equipment geometry + envelope directly selectable in the live 3D viewport
+     * (mirrors the SpatialAssetDecorator pattern). One pick id per equipment
+     * instance covers all of that instance's primitives (body + shielding +
+     * cabinet + envelope), so any part of ONE cyclotron resolves to its id.
+     */
+    private readonly equipmentPickIdToInstance = new Map<string, string>()
+    private readonly instanceToEquipmentPickId = new Map<string, string>()
+
+    /**
+     * EVI-MA-05A — the SAME pick-id doctrine for clinical logistics vestibules:
+     * ONE transient pick id per vestibuleInstanceId covers ALL of that
+     * vestibule's primitives (front fascia + door + HMI + rear manifold + MRT
+     * reducer/stub + PTS adapter/tube), so any part resolves to the one
+     * vestibuleInstanceId. Kept in a SEPARATE map so a vestibule pick never
+     * resolves to an equipment id and vice versa.
+     */
+    private readonly vestibulePickIdToInstance = new Map<string, string>()
+    private readonly instanceToVestibulePickId = new Map<string, string>()
+
+    /** Bentley picking hook: does this pickable id belong to app-owned equipment/vestibule? */
+    testDecorationHit(id: string): boolean {
+        return this.equipmentPickIdToInstance.has(id) || this.vestibulePickIdToInstance.has(id)
+    }
+
+    /** Resolve a picked transient id to its stable equipmentInstanceId. */
+    equipmentIdForPickId(pickId: string): string | undefined {
+        return this.equipmentPickIdToInstance.get(pickId)
+    }
+
+    /** Resolve a picked transient id to its stable vestibuleInstanceId. */
+    vestibuleIdForPickId(pickId: string): string | undefined {
+        return this.vestibulePickIdToInstance.get(pickId)
+    }
+
+    /** Allocate/reuse a pickable transient id for an equipment instance this frame. */
+    private equipmentPickIdFor(equipmentInstanceId: string, iModel: { transientIds: { getNext(): string } } | undefined): string | undefined {
+        if (!iModel) return undefined
+        const existing = this.instanceToEquipmentPickId.get(equipmentInstanceId)
+        if (existing) return existing
+        const id = iModel.transientIds.getNext()
+        this.instanceToEquipmentPickId.set(equipmentInstanceId, id)
+        this.equipmentPickIdToInstance.set(id, equipmentInstanceId)
+        return id
+    }
+
+    /** Drop pick-map entries for equipment instances that no longer render. */
+    private dropStaleEquipmentPickIds(liveIds: Set<string>): void {
+        for (const [instId, pickId] of Array.from(this.instanceToEquipmentPickId)) {
+            if (!liveIds.has(instId)) {
+                this.instanceToEquipmentPickId.delete(instId)
+                this.equipmentPickIdToInstance.delete(pickId)
+            }
+        }
+    }
+
+    /** Allocate/reuse a pickable transient id for a vestibule instance this frame. */
+    private vestibulePickIdFor(vestibuleInstanceId: string, iModel: { transientIds: { getNext(): string } } | undefined): string | undefined {
+        if (!iModel) return undefined
+        const existing = this.instanceToVestibulePickId.get(vestibuleInstanceId)
+        if (existing) return existing
+        const id = iModel.transientIds.getNext()
+        this.instanceToVestibulePickId.set(vestibuleInstanceId, id)
+        this.vestibulePickIdToInstance.set(id, vestibuleInstanceId)
+        return id
+    }
+
+    /** Drop pick-map entries for vestibule instances that no longer render. */
+    private dropStaleVestibulePickIds(liveIds: Set<string>): void {
+        for (const [instId, pickId] of Array.from(this.instanceToVestibulePickId)) {
+            if (!liveIds.has(instId)) {
+                this.instanceToVestibulePickId.delete(instId)
+                this.vestibulePickIdToInstance.delete(pickId)
+            }
+        }
+    }
 
     /** Live diagnostics (view-only; no secrets). Reset each decorate call. */
     public readonly diag: ClinicalDecoratorDiagnostics = {
@@ -203,6 +340,24 @@ export class ClinicalProgramDecorator implements Decorator {
         d.footprintGraphicCreatedFor.clear()
         d.htmlLabelAttachedFor.clear()
 
+        // EVI-MA-01 ROOT-CAUSE FIX: app-owned equipment is a FIRST-CLASS world
+        // object. Its visibility must NOT be coupled to the clinical-program
+        // overlay derivation (program-enabled state / active-storey overlay set /
+        // whether the parent room produced an overlay row). Previously the
+        // equipment block lived AFTER `if (!enabled) return`, `if (mode !=
+        // NORMAL_PLANNING) return` and `if (overlay.length === 0) return`, so a
+        // validly-placed cyclotron silently never reached Bentley whenever the
+        // clinical overlay was empty for the active storey. Draw equipment FIRST,
+        // gated only on its own visibility flag + the planning viewer mode
+        // (world geometry, so it also shows through Walkthrough). The label
+        // overlay still respects the camera mode inside drawEquipmentLabel.
+        if (d.lastMode === 'NORMAL_PLANNING') {
+            this.drawEquipment(context)
+            // EVI-MA-05A — vestibules render alongside equipment (same class of
+            // app-owned wall-integrated spatial object).
+            this.drawVestibules(context)
+        }
+
         if (!d.lastEnabled) { d.overlayCountSeen = 0; return }
         if (d.lastMode !== 'NORMAL_PLANNING') { d.overlayCountSeen = 0; return }
         const overlay = this.buildOverlay()
@@ -226,6 +381,239 @@ export class ClinicalProgramDecorator implements Decorator {
                 this.drawLabel(context, room)
             }
         }
+
+    }
+
+    /**
+     * EVI-MA-01 — draw app-owned equipment as first-class world objects,
+     * INDEPENDENT of clinical-overlay derivation. For each instance: the
+     * recognizable generic geometry (cyclotron / PET-CT / hot-cell) at the SAME
+     * authoritative pose as the envelope, then the (toggleable, translucent)
+     * containment envelope, then the world-anchored label. Both the recognizable
+     * visual and the envelope derive from the ONE EquipmentAssetInstance pose.
+     */
+    private drawEquipment(context: DecorateContext): void {
+        const showEquipment = this.inputs.getShowEquipment?.() ?? false
+        const equipment = this.inputs.getEquipmentForRender?.() ?? []
+        // Rebuild the equipment pick maps for the current visible set (drop stale
+        // entries) BEFORE any early return so a hidden/removed instance never
+        // leaves a dangling pick id resolving to a gone instance.
+        this.dropStaleEquipmentPickIds(new Set(equipment.map((e) => e.id)))
+        if (!showEquipment) return
+        const iModel = context.viewport.iModel as unknown as { transientIds: { getNext(): string } }
+        // The engineering envelope stays available; default ON so nothing
+        // regresses. When a recognizable visual family resolves, the envelope
+        // is drawn as a translucent clearance boundary AROUND the equipment.
+        const showEnvelope = this.inputs.getShowEquipmentEnvelope?.() ?? true
+        for (const e of equipment) {
+            // ONE stable pickable id per equipment instance (covers all its
+            // primitives + envelope), so any part of ONE cyclotron resolves to
+            // its exact equipmentInstanceId — even when two cyclotrons overlap.
+            const pickId = this.equipmentPickIdFor(e.id, iModel)
+            const family = e.canonicalClass
+                ? resolveVisualFamilyForCanonical({ canonicalClass: e.canonicalClass, assetFamily: e.assetFamily })
+                : undefined
+            // Recognizable equipment geometry (cyclotron / PET-CT / hot-cell)
+            // at the SAME authoritative pose as the AssetInstance envelope.
+            if (family) {
+                this.drawEquipmentVisual(context, family, e.params, e.selected, e.invalid ?? false, pickId)
+            }
+            // Keep the containment envelope: authoritative for validation,
+            // translucent so recognizable geometry reads through it. When a
+            // recognizable family is present the envelope is drawn only if
+            // enabled (toggleable); with no family it is always drawn (legacy
+            // proxy-box behavior — never removed, so an unmapped family still
+            // shows SOMETHING honest rather than nothing).
+            if (!family || showEnvelope) {
+                this.drawEquipmentEnvelope(context, e.params, e.lifecycleState, e.selected, e.invalid ?? false, family !== undefined, pickId)
+            }
+            this.drawEquipmentLabel(context, e.params, e.label, e.lifecycleState, e.invalid ?? false, (e.placeholder ?? false) && !family)
+        }
+    }
+
+    /**
+     * EVI-MA-05A — draw app-owned CLINICAL LOGISTICS VESTIBULES as first-class
+     * wall-integrated world objects, mirroring drawEquipment. Each vestibule
+     * renders the CLINICAL_LOGISTICS_VESTIBULE_V1 recipe (front access face +
+     * wall sleeve + rear manifold + the CONFIGURED MRT/PTS port stubs) via the
+     * SAME drawEquipmentVisual path (per-part materials, outline-only selection),
+     * plus a translucent reserved-volume envelope and a world label. ONE pick id
+     * per vestibule covers every primitive. Gated by getShowEquipment so the
+     * equipment visibility toggle governs both (they are the same class of
+     * app-owned spatial object).
+     */
+    private drawVestibules(context: DecorateContext): void {
+        const showEquipment = this.inputs.getShowEquipment?.() ?? false
+        const vestibules = this.inputs.getVestibulesForRender?.() ?? []
+        // Rebuild the vestibule pick maps for the current visible set BEFORE any
+        // early return so a hidden/removed vestibule leaves no dangling pick id.
+        this.dropStaleVestibulePickIds(new Set(vestibules.map((v) => v.id)))
+        if (!showEquipment) return
+        const iModel = context.viewport.iModel as unknown as { transientIds: { getNext(): string } }
+        const showEnvelope = this.inputs.getShowEquipmentEnvelope?.() ?? true
+        for (const v of vestibules) {
+            const pickId = this.vestibulePickIdFor(v.id, iModel)
+            // Recognizable wall-integrated vestibule geometry at its front-face pose.
+            this.drawEquipmentVisual(context, v.family, v.params, v.selected, false, pickId, v.ports)
+            // Translucent reserved-volume envelope (the room-side clearance cue).
+            if (showEnvelope) {
+                this.drawEquipmentEnvelope(context, v.params, v.lifecycleState, v.selected, false, true, pickId)
+            }
+            this.drawEquipmentLabel(context, v.params, v.label, v.lifecycleState, false, false)
+        }
+    }
+
+    /**
+     * Build 1B — render an app-owned equipment envelope as TRUE 3D WORLD
+     * GEOMETRY: an oriented box with translucent faces + solid edges in
+     * BIM/world coordinates. INVALID (containment FAIL) = red + DASHED thick
+     * edges (a non-color cue too); DRAFT = cool blue; LOCKED = green; SELECTED =
+     * brighter. It is a proxy box (labeled honestly when placeholder), never a
+     * fabricated detailed model.
+     */
+    private drawEquipmentEnvelope(context: DecorateContext, params: PrismParams, state: ClinicalVolumeLifecycle, selected: boolean, invalid: boolean, hasVisual = false, pickId?: string): void {
+        const g = buildOrientedPlanningPrism(params)
+        const V = g.vertices.map((p) => Point3d.create(p.x, p.y, p.z))
+        const rgb: [number, number, number] = invalid ? [230, 90, 80] : selected ? [140, 190, 255] : state === 'LOCKED' ? [120, 205, 140] : [120, 160, 210]
+        const edge = ColorDef.from(...rgb)
+        // When recognizable geometry is present the envelope reads as a faint
+        // clearance boundary (much more translucent) so it never masks the solid.
+        const baseFill = invalid ? 160 : selected ? 165 : state === 'LOCKED' ? 195 : 185
+        const fill = ColorDef.from(...rgb).withTransparency(hasVisual ? Math.min(baseFill + 45, 235) : baseFill)
+        const faces: [number, number, number, number][] = [
+            [0, 1, 2, 3], [4, 5, 6, 7],
+            [0, 1, 5, 4], [1, 2, 6, 5], [2, 3, 7, 6], [3, 0, 4, 7],
+        ]
+        // Pickable face builder (3-arg form) so clicking the envelope also
+        // resolves to the equipment instance — important when no recognizable
+        // family renders (proxy-box case), so the box stays directly selectable.
+        const faceBuilder = pickId
+            ? context.createGraphicBuilder(GraphicType.WorldDecoration, undefined, pickId)
+            : context.createGraphicBuilder(GraphicType.WorldDecoration)
+        faceBuilder.setSymbology(edge, fill, 1)
+        for (const [a, b, c, d] of faces) faceBuilder.addShape([V[a], V[b], V[c], V[d], V[a]])
+        context.addDecorationFromBuilder(faceBuilder)
+
+        const edgeBuilder = pickId
+            ? context.createGraphicBuilder(GraphicType.WorldDecoration, undefined, pickId)
+            : context.createGraphicBuilder(GraphicType.WorldDecoration)
+        edgeBuilder.setSymbology(edge, edge, invalid ? 4 : selected ? 4 : state === 'LOCKED' ? 3 : 2, invalid ? LinePixels.Code2 : LinePixels.Solid)
+        const edges: [number, number][] = [[0, 1], [1, 2], [2, 3], [3, 0], [4, 5], [5, 6], [6, 7], [7, 4], [0, 4], [1, 5], [2, 6], [3, 7]]
+        for (const [a, b] of edges) edgeBuilder.addLineString([V[a], V[b]])
+        context.addDecorationFromBuilder(edgeBuilder)
+    }
+
+    /**
+     * Visual-integration — render the RECOGNIZABLE generic equipment geometry
+     * (cyclotron / PET-CT / hot-cell) as true world solids at the SAME
+     * authoritative pose as the AssetInstance envelope. The parts come from the
+     * renderer-independent equipmentGeometry recipe; this method only emits them
+     * as GraphicBuilder solids. It never invents geometry and never changes the
+     * canonical identity — the identity is surfaced by the label/selection card.
+     */
+    private drawEquipmentVisual(context: DecorateContext, family: EquipmentVisualFamily, params: PrismParams, selected: boolean, invalid: boolean, pickId?: string, vestibulePorts?: { mrt?: boolean; mrtHeavy?: boolean; pts?: boolean }): void {
+        // The envelope params carry the authoritative pose: XY center, floor Z,
+        // extents, yaw. Recover them so the recognizable geometry follows the
+        // instance pose EXACTLY (translation + yaw), together with the envelope.
+        const center: [number, number, number] = [params.centerX, params.centerY, params.zLow]
+        const pose = {
+            center,
+            width: params.width,
+            depth: params.depth,
+            height: params.zHigh - params.zLow,
+            yawRadians: params.yaw,
+        }
+        const parts: EquipmentPartGeometry[] = buildEquipmentParts(family, pose, vestibulePorts ? { vestibulePorts } : undefined)
+        if (parts.length === 0) return
+        for (const part of parts) {
+            // Pickable graphic (3-arg form) carries the equipment's transient id
+            // so a click resolves back to its exact equipmentInstanceId.
+            const builder = pickId
+                ? context.createGraphicBuilder(GraphicType.WorldDecoration, undefined, pickId)
+                : context.createGraphicBuilder(GraphicType.WorldDecoration)
+            const [r, g, b] = EQUIPMENT_PART_COLOR[part.part]
+            // EVI-MA-04 — the machine ALWAYS keeps its per-part material fill.
+            // Selection adds only a thin restrained outline (edge) + slightly
+            // heavier weight; it NEVER repaints the solid cyan (the translucent
+            // containment envelope is the selection region cue). INVALID
+            // (containment FAIL) is the only case that tints the fill (red), as a
+            // strong non-color-only cue paired with the envelope's dashed edges.
+            const fill = invalid ? ColorDef.from(230, 90, 80) : ColorDef.from(r, g, b)
+            const line = selected ? ColorDef.from(...EQUIPMENT_SELECTION_OUTLINE) : fill
+            builder.setSymbology(line, fill, selected ? 2 : 1)
+            if (part.kind === 'BOX') {
+                const box = this.buildEquipmentBox(part)
+                if (box) builder.addSolidPrimitive(box)
+            } else {
+                const cone = Cone.createAxisPoints(
+                    Point3d.create(...part.centerA),
+                    Point3d.create(...part.centerB),
+                    part.radius,
+                    part.radius,
+                    true,
+                )
+                if (cone) builder.addSolidPrimitive(cone)
+            }
+            context.addDecorationFromBuilder(builder)
+        }
+    }
+
+    /** Yaw the 8 corners of a WorldBox about its center, then build a range box. */
+    private buildEquipmentBox(part: WorldBox<EquipmentPart>): Box | undefined {
+        const [lx, ly, lz] = part.low
+        const [hx, hy, hz] = part.high
+        const corners: [number, number, number][] = [
+            [lx, ly, lz], [hx, ly, lz], [lx, hy, lz], [hx, hy, lz],
+            [lx, ly, hz], [hx, ly, hz], [lx, hy, hz], [hx, hy, hz],
+        ]
+        const range = Range3d.createNull()
+        for (const c of corners) {
+            const [wx, wy, wz] = applyYaw(c, part.center, part.yawRadians)
+            range.extendXYZ(wx, wy, wz)
+        }
+        if (range.isNull) return undefined
+        return Box.createRange(range, true)
+    }
+
+    /** Build 1B — world-anchored equipment label; billboards; honest proxy disclosure. */
+    private drawEquipmentLabel(context: DecorateContext, params: PrismParams, label: string, state: ClinicalVolumeLifecycle, invalid: boolean, placeholder: boolean): void {
+        const g = buildOrientedPlanningPrism(params)
+        const world = Point3d.create(g.interiorAnchor.x, g.interiorAnchor.y, params.zHigh + 0.1)
+        const view = context.viewport.worldToView(world)
+        if (!Number.isFinite(view.x) || !Number.isFinite(view.y)) return
+        const cameraMode: CameraMode = this.inputs.getCameraMode?.() ?? 'PLANNING'
+        if (cameraMode === 'WALKTHROUGH') {
+            const vp = context.viewport
+            const npc = vp.worldToNpc(world)
+            const behindCamera = !Number.isFinite(npc.z) || npc.z < 0 || npc.z > 1
+            const rect = vp.viewRect
+            const onScreen = view.x >= rect.left && view.x <= rect.right && view.y >= rect.top && view.y <= rect.bottom
+            let distance = Infinity
+            try {
+                const eye = (vp.view as unknown as { getEyePoint?: () => Point3d }).getEyePoint?.()
+                if (eye) distance = eye.distance(world)
+            } catch { /* no camera eye */ }
+            const decision = resolveWalkthroughLabelVisibility({ cameraMode, behindCamera, onScreen, occluded: false, distance })
+            if (!decision.visible) return
+        }
+        const suffix = invalid ? ' — OUTSIDE ROOM' : placeholder ? ' (proxy envelope)' : state === 'DRAFT' ? ' (draft)' : ''
+        const div = document.createElement('div')
+        div.className = invalid ? 'mrt-equipment-label mrt-equipment-label--invalid' : 'mrt-equipment-label'
+        div.textContent = invalid ? `⚠ ${label}${suffix}` : `${label}${suffix}`
+        div.style.position = 'absolute'
+        div.style.left = `${Math.round(view.x)}px`
+        div.style.top = `${Math.round(view.y)}px`
+        div.style.transform = 'translate(-50%, -50%)'
+        div.style.pointerEvents = 'none'
+        div.style.whiteSpace = 'nowrap'
+        div.style.font = '700 12px system-ui, sans-serif'
+        div.style.color = invalid ? '#ffe6e2' : state === 'LOCKED' ? '#e4fae8' : '#e4eeff'
+        div.style.padding = '2px 8px'
+        div.style.borderRadius = '5px'
+        div.style.background = invalid ? 'rgba(70,18,14,0.86)' : state === 'LOCKED' ? 'rgba(16,42,22,0.8)' : 'rgba(18,32,54,0.82)'
+        div.style.border = `${invalid ? '2px dashed rgba(235,90,80,0.95)' : `1px solid ${state === 'LOCKED' ? 'rgba(120,205,140,0.9)' : 'rgba(120,160,210,0.9)'}`}`
+        div.style.textShadow = '0 1px 3px rgba(0,0,0,0.95)'
+        context.addHtmlDecoration?.(div)
     }
 
     /**

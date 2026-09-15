@@ -8,9 +8,11 @@
  * binding). READ-ONLY; no building drag/drop (Sec 28), no live mutation (Sec 29).
  */
 import { Suspense, lazy, useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react'
-import { getViewerConfig, isViewerConfigured, ViewerConfigError, type ViewerConfig } from '../lib/viewerConfig'
-import { authReducer, INITIAL_AUTH_STATE } from '../lib/viewerAuth'
+import { getViewerConfig, isViewerConfigured, resolveViewerConfigDiagnostic, ViewerConfigError, type ViewerConfig } from '../lib/viewerConfig'
+import { authReducer, INITIAL_AUTH_STATE, viewerMayMount, type ViewerAuthState } from '../lib/viewerAuth'
 import { resolveFloatingPanelAction, type FloatingPanelId, type FloatingPanelAction } from '../components/spatial/floatingPanels'
+import { shouldHandleEquipmentDeleteKey } from '../components/spatial/assetPicking'
+import { decideEscapeRecovery, backdropMayMount, shouldCloseFloatingPanelOnPlacementArmed } from '../components/spatial/placementEscapeRecovery'
 import {
     VIEWER_CAMERA_CAPABILITIES,
     BASIC_CLIPPING_CAPABILITY,
@@ -52,10 +54,39 @@ const CameraModeControl = lazy(() =>
 const ClinicalProgramControl = lazy(() =>
     import('../components/spatial/ClinicalProgramControl').then((m) => ({ default: m.ClinicalProgramControl })),
 )
+// Build 1B §B: TRUE 2D BIM floor plan, shown SIMULTANEOUSLY with the 3D
+// Walkthrough (isolated + lazy so vitest never imports the overlay's Bentley
+// stack). Its own bottom-left panel; reads the same authorities by bimSpaceId.
+const Bim2dPlanPanel = lazy(() =>
+    import('../components/spatial/Bim2dPlanPanel').then((m) => ({ default: m.Bim2dPlanPanel })),
+)
 // Right-click asset context menu (viewport overlay). Isolated/lazy so vitest
 // never pulls the Bentley overlay stack.
 const ViewerAssetContextMenu = lazy(() =>
     import('../components/spatial/ViewerAssetContextMenu').then((m) => ({ default: m.ViewerAssetContextMenu })),
+)
+// EVI-MA-02 — right-click equipment context menu (Fit / Lock / Hide / Delete).
+const ViewerEquipmentContextMenu = lazy(() =>
+    import('../components/spatial/ViewerEquipmentContextMenu').then((m) => ({ default: m.ViewerEquipmentContextMenu })),
+)
+// EVI-MA-05B — right-click vestibule context menu (Fit / Lock / Hide / Delete).
+const ViewerVestibuleContextMenu = lazy(() =>
+    import('../components/spatial/ViewerVestibuleContextMenu').then((m) => ({ default: m.ViewerVestibuleContextMenu })),
+)
+// EVI-MA-07 — the ONE local action popover for the selected app object + Undo/Redo toolbar.
+const ViewerAppObjectMenu = lazy(() =>
+    import('../components/spatial/ViewerAppObjectMenu').then((m) => ({ default: m.ViewerAppObjectMenu })),
+)
+const ViewerUndoRedoToolbar = lazy(() =>
+    import('../components/spatial/ViewerUndoRedoToolbar').then((m) => ({ default: m.ViewerUndoRedoToolbar })),
+)
+// EVI-MA-02D — always-available floating control for the selected equipment.
+const ViewerSelectedEquipmentControl = lazy(() =>
+    import('../components/spatial/ViewerSelectedEquipmentControl').then((m) => ({ default: m.ViewerSelectedEquipmentControl })),
+)
+// EVI-MA-05A — always-available floating control for the selected vestibule.
+const ViewerSelectedVestibuleControl = lazy(() =>
+    import('../components/spatial/ViewerSelectedVestibuleControl').then((m) => ({ default: m.ViewerSelectedVestibuleControl })),
 )
 // Marquee (bounding-box) selection overlay. Lazy + outside the viewer Suspense.
 const ViewerMarqueeOverlay = lazy(() =>
@@ -96,13 +127,67 @@ export function BentleyViewer() {
     const dispatchPanel = useCallback((action: FloatingPanelAction, targetPanel?: FloatingPanelId) => {
         setOpenPanel((cur) => resolveFloatingPanelAction({ currentlyOpenPanel: cur, action, targetPanel }).nextOpenPanel)
     }, [])
-    // Esc closes the open tool panel (does not exit Bird's-eye / turn off features).
+
+    // EVI-MA-07A — ONE authoritative placement-session flag mirrored into React.
+    // The single source of truth is SpatialAssetStore.intent (placementModeActive);
+    // we subscribe to it (event-driven, no polling) so the app shell can (a) tear
+    // down any orphanable backdrop and (b) run an app-stable Escape recovery.
+    const [placementModeActive, setPlacementModeActive] = useState(false)
     useEffect(() => {
-        if (!openPanel) return
-        const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') dispatchPanel('ESCAPE') }
-        window.addEventListener('keydown', onKey)
-        return () => window.removeEventListener('keydown', onKey)
-    }, [openPanel, dispatchPanel])
+        if (auth.state !== 'AUTHENTICATED') return
+        let unsub: (() => void) | undefined
+        let disposed = false
+        void import('../components/spatial/spatialAssetOverlay')
+            .then((o) => {
+                if (disposed) return
+                const read = () => setPlacementModeActive(o.spatialAssetStore.getSnapshot().placementModeActive)
+                read()
+                unsub = o.subscribeSpatialAssets(read)
+            })
+            .catch(() => { /* overlay not ready; placement stays inactive */ })
+        return () => { disposed = true; if (unsub) unsub() }
+    }, [auth.state])
+
+    // EVI-MA-07A §7 — the transparent full-viewport backdrop must NEVER be
+    // orphaned across a placement session. The moment placement is armed, close
+    // any open floating tool panel so the backdrop that panel would keep mounted
+    // cannot survive and block the viewport after "Placement cancelled".
+    useEffect(() => {
+        if (shouldCloseFloatingPanelOnPlacementArmed({ placementModeActive, hasOpenFloatingPanel: openPanel !== null })) {
+            setOpenPanel(null)
+        }
+    }, [placementModeActive, openPanel])
+
+    // EVI-MA-07A §5 — APP-STABLE Escape recovery. Installed at window level and
+    // always mounted post-auth (NOT gated on openPanel, NOT dependent on Bentley's
+    // active Tool). ONE Escape from ANY placement phase / pointer location cancels
+    // placement AND closes any open panel, restoring normal viewer interaction
+    // immediately — no refresh. Supersedes the old openPanel-only Escape handler.
+    useEffect(() => {
+        if (auth.state !== 'AUTHENTICATED') return
+        const onKey = (e: KeyboardEvent) => {
+            const activeEl = document.activeElement as HTMLElement | null
+            const decision = decideEscapeRecovery({
+                placementModeActive,
+                hasOpenFloatingPanel: openPanel !== null,
+                key: e.key,
+                focusedTagName: activeEl?.tagName,
+                focusedIsContentEditable: activeEl?.isContentEditable,
+            })
+            if (!decision.handle) return
+            e.preventDefault()
+            e.stopPropagation()
+            if (decision.closeFloatingPanel) dispatchPanel('ESCAPE')
+            if (decision.cancelPlacement) {
+                void import('../components/spatial/spatialAssetOverlay')
+                    .then((o) => o.cancelPlacement())
+                    .catch(() => { /* overlay not ready; nothing to cancel */ })
+            }
+        }
+        // Capture phase so placement-specific handling is pre-empted (§5).
+        window.addEventListener('keydown', onKey, true)
+        return () => window.removeEventListener('keydown', onKey, true)
+    }, [auth.state, placementModeActive, openPanel, dispatchPanel])
 
     // Reversible, view-only planning appearance (opaque architecture + hide the
     // room/space VOLUME semantics that otherwise dominate as translucent boxes).
@@ -170,6 +255,47 @@ export function BentleyViewer() {
         [],
     )
 
+    // Build 1B Problem B: dismiss the obstructing Bentley element info card WITHOUT
+    // disabling global BIM inspection. Cleared on empty-space click (forwarded from
+    // the viewport selection set as onDeselect) and on Esc. Re-selecting any element
+    // re-shows the card (the selection listener stays wired). Stable identity.
+    const clearSelection = useCallback(() => setSelection(null), [])
+    useEffect(() => {
+        if (!selection) return
+        const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setSelection(null) }
+        window.addEventListener('keydown', onKey)
+        return () => window.removeEventListener('keydown', onKey)
+    }, [selection])
+
+    // EVI-MA-02B — DIRECT DELETE KEY. When equipment is selected, Delete /
+    // Backspace deletes THAT exact instance via the authoritative
+    // deleteEquipment(selectedEquipmentId) — the SAME lifecycle the card and 3D
+    // right-click menu use. Focus-safe (never fires while typing in a field) via
+    // the pure shouldHandleEquipmentDeleteKey decision. Respects the lock policy
+    // (locked -> not deleted; honest reason). Only wired once authenticated.
+    useEffect(() => {
+        if (auth.state !== 'AUTHENTICATED') return
+        const onKey = (e: KeyboardEvent) => {
+            const activeEl = document.activeElement as HTMLElement | null
+            if (!shouldHandleEquipmentDeleteKey({
+                key: e.key,
+                tagName: activeEl?.tagName,
+                isContentEditable: activeEl?.isContentEditable,
+            })) return
+            void import('../components/spatial/spatialAssetOverlay').then((o) => {
+                const id = o.getSelectedEquipmentId()
+                if (!id) return // nothing selected: let the key pass (no-op)
+                e.preventDefault()
+                const res = o.deleteEquipment(id)
+                if (!res.ok && res.reason === 'LOCKED' && typeof window !== 'undefined') {
+                    window.alert('Unlock equipment before deleting.')
+                }
+            }).catch(() => { /* overlay not ready */ })
+        }
+        window.addEventListener('keydown', onKey)
+        return () => window.removeEventListener('keydown', onKey)
+    }, [auth.state])
+
     // STABLE identity: getViewerConfig() returns a NEW object each call. Passing
     // a fresh config to <LiveItwinViewer> every render was recreating the auth
     // client and re-running the auth effect on a loop (the proven cause of the
@@ -189,6 +315,22 @@ export function BentleyViewer() {
     // every render and re-trigger the child's auth effect.
     const handleAuthSuccess = useCallback(() => dispatch({ type: 'AUTH_SUCCEEDED' }), [])
     const handleAuthError = useCallback((m: string) => dispatch({ type: 'AUTH_FAILED', message: m }), [])
+
+    // EVI-MA-03A — the authoritative viewer-auth state (from the child's state
+    // machine) drives an app-owned reconnect UI so the raw Bentley
+    // `validTokenNeeded` is never the user-facing failure. `reconnectNonce`
+    // re-runs silent+verify; the Reconnect button drives the interactive PKCE
+    // sign-in. NEITHER touches equipment / clinical / 2D application state.
+    const [viewerAuthState, setViewerAuthState] = useState<ViewerAuthState>('INITIALIZING')
+    const [reconnectNonce, setReconnectNonce] = useState(0)
+    const handleAuthStateChange = useCallback((s: ViewerAuthState) => setViewerAuthState(s), [])
+    const handleReconnect = useCallback(() => {
+        setReconnectNonce((n) => n + 1)
+        if (!config) return
+        void import('../components/viewer/LiveItwinViewer')
+            .then((m) => m.reconnectBentleyAuth(config))
+            .catch(() => { /* redirect may navigate away; nothing to do */ })
+    }, [config])
 
     // Diagnostic control: invoke ONE bounded native fit against the live
     // viewport. Dynamically imports the viewer module so unit tests / the
@@ -337,6 +479,43 @@ export function BentleyViewer() {
         }
     }, [showDev])
 
+    // EVI-MA-07A.1 — DEV-only LIVE darkening root-cause diagnostic. READ-ONLY.
+    // Captures placement state + the elementsFromPoint stack at viewport center +
+    // all full-viewport elements + common-ancestor dimmers (viewport/2D/inspector)
+    // + Bentley view state + the pointer receiver, then classifies the root cause.
+    // Invoke it at NORMAL, during PLACEMENT_ACTIVE, and AFTER_CANCEL_DARK.
+    const handleDiagnoseDarkening = useCallback(async (moment: 'NORMAL' | 'PLACEMENT_ACTIVE' | 'AFTER_CANCEL_DARK') => {
+        try {
+            const [overlay, viewer, diag] = await Promise.all([
+                import('../components/spatial/spatialAssetOverlay'),
+                import('../components/viewer/LiveItwinViewer'),
+                import('../components/spatial/placementDarkeningDiagnostic'),
+            ])
+            const ps = overlay.readPlacementStateForDiagnostic()
+            const bentley = viewer.readBentleyViewStateForDiagnostic()
+            const snap = diag.capturePlacementDarkeningSnapshot({
+                moment,
+                placementState: {
+                    placementModeActive: ps.placementModeActive,
+                    intentPresent: ps.intentPresent,
+                    intentSummary: ps.intentSummary,
+                    interactionState: ps.interactionState,
+                    openPanel,
+                    selectedCatalogAssetId: undefined, // React-owned in the Asset Library panel
+                    pendingPlacementAssetId: ps.pendingPlacementAssetId,
+                    placementCandidatePresent: ps.placementCandidatePresent,
+                    placementToolActive: ps.placementToolActive,
+                    activeBentleyToolId: ps.activeBentleyToolId,
+                    selectedAppObject: ps.selectedAppObject,
+                },
+                bentleyViewState: bentley,
+            })
+            showDev(`Darkening Diagnostic (${moment})`, diag.formatDarkeningSnapshot(snap))
+        } catch (e) {
+            showDev('Darkening Diagnostic', `error: ${e instanceof Error ? e.message : String(e)}`)
+        }
+    }, [showDev, openPanel])
+
     // NOTE: DIAGNOSE CLINICAL PROGRAM OVERLAY moved into the dedicated
     // AuditDiagnosticsPanel (own reliably hit-testable drawer) — it was invisible
     // buried at the bottom of the crowded, clipped .viewer-dev-drawer.
@@ -377,7 +556,8 @@ export function BentleyViewer() {
                 {!configured || configError ? (
                     <div className="viewer-cta">
                         <h1>MRTway Development Viewer</h1>
-                        <p>{configError ?? 'Bentley viewer configuration is not set.'}</p>
+                        <p>{configError ?? '3D BIM viewer unavailable — Bentley/iTwin configuration is not set.'}</p>
+                        <ViewerConfigDiagnosticPanel />
                         <button type="button" disabled aria-disabled="true">
                             Sign in with Bentley (configure client id first)
                         </button>
@@ -392,8 +572,10 @@ export function BentleyViewer() {
                     </div>
                 ) : auth.state === 'AUTH_ERROR' ? (
                     <div className="viewer-cta" role="alert">
-                        <h1>Authentication error</h1>
-                        <p>{auth.errorMessage}</p>
+                        <h1>3D BIM viewer unavailable</h1>
+                        <p>Bentley/iTwin authentication is not ready, so the 3D BIM could not load.</p>
+                        {auth.errorMessage && <p className="viewer-cta-detail">{auth.errorMessage}</p>}
+                        <ViewerConfigDiagnosticPanel />
                         <button type="button" onClick={() => dispatch({ type: 'SIGN_IN_REQUESTED' })}>Try again</button>
                     </div>
                 ) : (
@@ -402,9 +584,33 @@ export function BentleyViewer() {
                             <LiveItwinViewer
                                 config={config}
                                 onSelect={handleSelect}
+                                onDeselect={clearSelection}
                                 onAuthSuccess={handleAuthSuccess}
                                 onAuthError={handleAuthError}
+                                onAuthStateChange={handleAuthStateChange}
+                                reconnectNonce={reconnectNonce}
                             />
+                        )}
+                        {/* EVI-MA-03A — app-owned reconnect overlay. Shown when the
+                            viewer-auth state machine is NOT TOKEN_READY, so the raw
+                            Bentley `validTokenNeeded` is never the user-facing
+                            failure. Reconnect drives the interactive PKCE sign-in and
+                            NEVER clears equipment / clinical / 2D application state. */}
+                        {config && !viewerMayMount(viewerAuthState) && (
+                            <div className="viewer-auth-overlay" role="status">
+                                <div className="viewer-auth-overlay-card">
+                                    {viewerAuthState === 'AUTHENTICATING' || viewerAuthState === 'INITIALIZING' ? (
+                                        <p>Connecting to the Bentley 3D digital twin…</p>
+                                    ) : (
+                                        <>
+                                            <h2>3D BIM authentication required</h2>
+                                            <p>The 3D digital twin needs a valid Bentley sign-in. Your planning data (equipment, clinical program, 2D plan) is preserved.</p>
+                                            <button type="button" onClick={handleReconnect}>Reconnect Bentley 3D</button>
+                                            <ViewerConfigDiagnosticPanel />
+                                        </>
+                                    )}
+                                </div>
+                            </div>
                         )}
                         {/* Compact planning control bar (always present, top-right,
                             does not cover the model). Mode toggle + view-only
@@ -456,6 +662,16 @@ export function BentleyViewer() {
                             </Suspense>
                         </div>
 
+                        {/* Build 1B §B: TRUE 2D BIM floor plan, live and
+                            SIMULTANEOUS with the 3D Walkthrough. Own bottom-left
+                            panel; shares bimSpaceId identity + the single walker
+                            state (no duplicate stores). Never dev-gated. */}
+                        <div className="viewer-plan-bar">
+                            <Suspense fallback={null}>
+                                <Bim2dPlanPanel />
+                            </Suspense>
+                        </div>
+
                         {/* DEVELOPER MODE: compact toolbar toggles the tool panels.
                             Developer mode ON no longer means every panel is open. */}
                         {devMode && (
@@ -469,7 +685,7 @@ export function BentleyViewer() {
 
                         {/* Outside-click backdrop: closes the open tool panel. Only
                             mounted while a panel is open; transparent; below panels. */}
-                        {openPanel && (
+                        {backdropMayMount({ hasOpenFloatingPanel: openPanel !== null, placementModeActive }) && (
                             <div className="viewer-panel-backdrop" aria-hidden="true" onPointerDown={() => dispatchPanel('OUTSIDE_CLICK')} />
                         )}
 
@@ -492,6 +708,10 @@ export function BentleyViewer() {
                                 <button type="button" onClick={() => void handleInspectRotationState()}>INSPECT ROTATION STATE</button>
                                 <button type="button" onClick={() => void handleInspectBimSpatialStructure()}>INSPECT BIM SPATIAL STRUCTURE</button>
                                 <button type="button" onClick={() => void handleInspectSpatialAssociation()}>INSPECT SPATIAL ASSOCIATION</button>
+                                <span className="viewer-dev-label">DARKENING DIAGNOSTIC</span>
+                                <button type="button" onClick={() => void handleDiagnoseDarkening('NORMAL')}>DIAGNOSE — NORMAL</button>
+                                <button type="button" onClick={() => void handleDiagnoseDarkening('PLACEMENT_ACTIVE')}>DIAGNOSE — PLACEMENT ACTIVE</button>
+                                <button type="button" onClick={() => void handleDiagnoseDarkening('AFTER_CANCEL_DARK')}>DIAGNOSE — AFTER CANCEL (DARK)</button>
                                 {fitNote && <span className="viewer-fit-note">{fitNote}</span>}
                             </div>
                         )}
@@ -539,6 +759,12 @@ export function BentleyViewer() {
                 {config && auth.state === 'AUTHENTICATED' && (
                     <Suspense fallback={null}>
                         <ViewerAssetContextMenu />
+                        <ViewerEquipmentContextMenu />
+                        <ViewerVestibuleContextMenu />
+                        <ViewerSelectedEquipmentControl />
+                        <ViewerSelectedVestibuleControl />
+                        <ViewerAppObjectMenu />
+                        <ViewerUndoRedoToolbar />
                         <ViewerMarqueeOverlay />
                     </Suspense>
                 )}
@@ -558,7 +784,12 @@ export function BentleyViewer() {
                         <pre className="dev-inspector-body">{devInspector.content || '(empty)'}</pre>
                     </div>
                 )}
-                <h2>Inspection</h2>
+                <div className="inspector-head">
+                    <h2>Inspection</h2>
+                    {selection && (
+                        <button type="button" className="inspector-dismiss" aria-label="Dismiss inspection" title="Dismiss (Esc, or click empty space)" onClick={clearSelection}>×</button>
+                    )}
+                </div>
                 {!selection ? (
                     <p className="inspector-empty">Select an element in the model to inspect it.</p>
                 ) : (
@@ -612,5 +843,29 @@ export function BentleyViewer() {
                 </ul>
             </aside>
         </main>
+    )
+}
+
+/**
+ * EVI-MA-03 — intelligible, secret-free configuration diagnostic. Renders the
+ * PRESENT/MISSING status of each required/optional Bentley/iTwin env key by
+ * NAME only (never a value). Shown in the config-missing and auth-error CTAs so
+ * a real failure is intelligible instead of the raw library string
+ * `baseViewerInitializer.validTokenNeeded`. No tokens/secrets/ids are rendered.
+ */
+function ViewerConfigDiagnosticPanel() {
+    const diag = resolveViewerConfigDiagnostic()
+    return (
+        <details className="viewer-config-diag">
+            <summary>Required 3D viewer configuration ({diag.ready ? 'all present' : `${diag.missingRequired.length} missing`})</summary>
+            <ul>
+                {diag.keys.map((k) => (
+                    <li key={k.key}>
+                        <code>{k.key}</code>{k.required ? '' : ' (optional)'}: {k.present ? 'PRESENT' : 'MISSING'}
+                    </li>
+                ))}
+            </ul>
+            <p className="viewer-config-diag-note">Values are never shown. Configure any MISSING required key in <code>frontend/.env</code>.</p>
+        </details>
     )
 }

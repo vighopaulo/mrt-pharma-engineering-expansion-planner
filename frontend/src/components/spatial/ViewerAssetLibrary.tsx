@@ -334,12 +334,17 @@ export function ViewerAssetLibrary() {
 
             {status && <p className="mrt-lib-status">{status}</p>}
 
-            <h3>Placed Assets ({placed.length})</h3>
+            {/* EVI-MA-01 §16 — this panel is scoped to the LEGACY/TEST generic
+                asset-placement subsystem only. It does NOT count application-owned
+                CLINICAL EQUIPMENT (EquipmentAssetInstance), which lives in the
+                Clinical Program panel. Retitled + clarified so a 0 here never
+                implies that no clinical equipment exists. No stores are merged. */}
+            <h3>Legacy / Test Assets ({placed.length})</h3>
             {selectedIdSet.size > 1 && (
                 <p className="mrt-selection-status" role="status">{selectedIdSet.size} assets selected</p>
             )}
             {placed.length === 0 ? (
-                <p className="mrt-lib-empty">No assets placed yet. Select equipment and PLACE IN MODEL.</p>
+                <p className="mrt-lib-empty">No legacy/test assets placed. Clinical equipment (cyclotron, PET/CT, radiopharmacy) is managed in the Clinical Program panel, not here.</p>
             ) : (
                 <ul className="mrt-placed-list">
                     {placed.map((inst) => {

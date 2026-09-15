@@ -140,6 +140,63 @@ export function isViewerConfigured(): boolean {
     }
 }
 
+// ---------------------------------------------------------------------------
+// EVI-MA-03 — configuration-presence diagnostic (NAMES + PRESENT/MISSING only)
+// ---------------------------------------------------------------------------
+
+/** Env keys REQUIRED for the viewer to authenticate + open an iModel. */
+export const REQUIRED_VIEWER_ENV_KEYS = [
+    'VITE_BENTLEY_SPA_CLIENT_ID',
+    'VITE_BENTLEY_IMODEL_ID',
+] as const
+
+/** Env keys that are OPTIONAL (public defaults exist) but reported for clarity. */
+export const OPTIONAL_VIEWER_ENV_KEYS = [
+    'VITE_BENTLEY_AUTHORITY',
+    'VITE_BENTLEY_SCOPE',
+    'VITE_BENTLEY_REDIRECT_URI',
+    'VITE_BENTLEY_POST_SIGNOUT_REDIRECT_URI',
+    'VITE_BENTLEY_ITWIN_ID',
+] as const
+
+export interface ViewerConfigKeyStatus {
+    key: string
+    present: boolean
+    required: boolean
+}
+
+export interface ViewerConfigDiagnostic {
+    /** True only when every REQUIRED key is present. */
+    ready: boolean
+    /** PRESENT/MISSING per key — NEVER any secret value. */
+    keys: ViewerConfigKeyStatus[]
+    /** Names of the missing REQUIRED keys (for an actionable message). */
+    missingRequired: string[]
+}
+
+/**
+ * Report which viewer env keys are PRESENT vs MISSING — by NAME only, never a
+ * value. This is safe to render in a Developer-only diagnostic and to log: it
+ * emits no tokens, secrets, ids, or URLs. Uses the same `env()` presence rule
+ * `getViewerConfig` uses (non-empty after trim). `readEnv` is injectable for
+ * pure unit testing without touching `import.meta.env`.
+ */
+export function resolveViewerConfigDiagnostic(
+    readEnv: (key: string) => string | undefined = env,
+): ViewerConfigDiagnostic {
+    const keys: ViewerConfigKeyStatus[] = []
+    const missingRequired: string[] = []
+    for (const key of REQUIRED_VIEWER_ENV_KEYS) {
+        const present = !!readEnv(key)
+        keys.push({ key, present, required: true })
+        if (!present) missingRequired.push(key)
+    }
+    for (const key of OPTIONAL_VIEWER_ENV_KEYS) {
+        keys.push({ key, present: !!readEnv(key), required: false })
+    }
+    return { ready: missingRequired.length === 0, keys, missingRequired }
+}
+
 /**
  * Security invariant (Sec 6/30): the SPA never requires a client secret and no
  * forbidden secret key is referenced. This is a structural guarantee — the SPA

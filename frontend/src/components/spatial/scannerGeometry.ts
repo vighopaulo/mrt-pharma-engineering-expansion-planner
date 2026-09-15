@@ -14,7 +14,7 @@
  */
 import type { AssetInstance } from '../../domain/assets'
 
-export interface WorldBox {
+export interface WorldBox<P extends string = ScannerPart> {
     /** Axis-aligned-in-local corner low/high, already rotated+translated to world via `points`. */
     kind: 'BOX'
     /** 8 world-space corner points (lo/hi combinations) for a (possibly yawed) box. */
@@ -24,16 +24,16 @@ export interface WorldBox {
     yawRadians: number
     /** Instance center (world) about which yaw is applied. */
     center: [number, number, number]
-    part: ScannerPart
+    part: P
 }
 
-export interface WorldCylinder {
+export interface WorldCylinder<P extends string = ScannerPart> {
     kind: 'CYLINDER'
     /** Axis endpoints in world coordinates. */
     centerA: [number, number, number]
     centerB: [number, number, number]
     radius: number
-    part: ScannerPart
+    part: P
 }
 
 export type ScannerPartGeometry = WorldBox | WorldCylinder
@@ -61,8 +61,32 @@ export function buildScannerParts(inst: AssetInstance): ScannerPartGeometry[] {
     const { width: w, depth: d, height: h } = inst.dimensions
     const p = inst.transform.position
     const sx = inst.transform.scale.x, sy = inst.transform.scale.y, sz = inst.transform.scale.z
-    const W = w * sx, D = d * sy, H = h * sz
-    const yaw = inst.transform.rotation.yaw * DEG2RAD
+    return buildScannerPartsFromPose({
+        center: [p.x, p.y, p.z],
+        width: w * sx,
+        depth: d * sy,
+        height: h * sz,
+        yawRadians: inst.transform.rotation.yaw * DEG2RAD,
+    })
+}
+
+/**
+ * Pose-based core of the PET/CT scanner recipe. Renderer-independent and shared
+ * by both the AssetInstance path and the app-owned EquipmentAssetInstance path
+ * (via equipmentGeometry). `center` is the world XY center at floor (base) Z;
+ * width=X, depth=Y, height=Z; yawRadians rotates about vertical.
+ */
+export function buildScannerPartsFromPose(pose: {
+    center: [number, number, number]
+    width: number
+    depth: number
+    height: number
+    yawRadians: number
+}): ScannerPartGeometry[] {
+    const W = pose.width, D = pose.depth, H = pose.height
+    const yaw = pose.yawRadians
+    const [px, py, pz] = pose.center
+    const p = { x: px, y: py, z: pz }
     const center: [number, number, number] = [p.x, p.y, p.z]
 
     // Gantry: a substantial body block occupying the rear ~40% of the depth,

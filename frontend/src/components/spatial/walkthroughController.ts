@@ -24,6 +24,7 @@ import {
     resolveKeyboardYaw,
     resolveStoreyCutaway,
     resolveWalkCollision,
+    resolveWalkthroughFloorElevation,
     resolveWalkthroughFovDegrees,
     slideAlongWall,
     turnAroundYaw,
@@ -253,6 +254,83 @@ export function applyBirdsEye(): boolean {
     }
 }
 
+/**
+ * FIT-TO-ROOM (Build 1B candidate preview). Frame a single room with an oblique
+ * 3/4 view using an EXPLICIT world range + interior anchor supplied by the caller
+ * (the overlay derives these from the room's authoritative footprint — this
+ * function never queries geometry itself). VIEW-ONLY: it repositions the camera
+ * and animates the frustum; it does NOT lock controls, so the user can still
+ * orbit/zoom/fit afterward. Returns false on any transient camera error.
+ */
+export function fitViewToRoom(input: {
+    low: { x: number; y: number; z: number }
+    high: { x: number; y: number; z: number }
+    anchor: { x: number; y: number; z: number }
+}): boolean {
+    const v = vp()
+    const view = v && view3d(v)
+    if (!v || !view) return false
+    const { low, high, anchor } = input
+    if (![low.x, low.y, low.z, high.x, high.y, high.z, anchor.x, anchor.y, anchor.z].every((n) => Number.isFinite(n))) return false
+    try {
+        const dx = Math.abs(high.x - low.x)
+        const dy = Math.abs(high.y - low.y)
+        const dz = Math.abs(high.z - low.z)
+        // Framing distance from the room's own extent (bounded so a tiny room is
+        // still visible and a large room is fully framed). Oblique 3/4 approach.
+        const span = Math.max(dx, dy, dz, 1)
+        const dist = span * 1.6
+        const target = Point3d.create(anchor.x, anchor.y, anchor.z)
+        const eye = Point3d.create(anchor.x - dist * 0.55, anchor.y - dist * 0.55, anchor.z + dist * 0.75)
+        view.lookAt({ eyePoint: eye, targetPoint: target, upVector: Vector3d.create(0, 0, 1), lensAngle: undefined })
+        v.synchWithView({ animateFrustumChange: true })
+        return true
+    } catch {
+        return false
+    }
+}
+
+/**
+ * PLANNING controlled PAN (Build 1B, Problem B). Shift the view in SCREEN space
+ * — right/up are fractions of the current view's on-screen extent (e.g. +0.15 =
+ * pan right by 15% of the frame). Works reliably AFTER a deep zoom (the step is
+ * proportional to the current view extent, so a tight zoom pans in small real-
+ * world increments and a wide view pans in large ones).
+ *
+ * VIEW-ONLY and NON-DESTRUCTIVE: it only translates the view origin along the
+ * view's own X/Y axes; it never rotates (orbit preserved), never changes the
+ * view delta (zoom preserved), never touches the clip (cutaway preserved), and
+ * never writes the iModel. Independent of applyCameraMode, so orbit/zoom/fit
+ * remain the viewer defaults. Returns false on any transient error.
+ */
+export function panPlanningCamera(right: number, up: number): boolean {
+    const v = vp()
+    const view = v && view3d(v)
+    if (!v || !view) return false
+    if (!Number.isFinite(right) || !Number.isFinite(up)) return false
+    try {
+        // View-space extent (delta) + the view's world axes (rotation rows are the
+        // view X/Y/Z unit vectors expressed in world coordinates).
+        const delta = view.getExtents() // Vector3d: x=width, y=height (view space)
+        const rot = view.getRotation() // world->view; rows are view axes in world
+        const rowX = rot.rowX() // view +X (screen right) in world
+        const rowY = rot.rowY() // view +Y (screen up) in world
+        const dx = delta.x * right
+        const dy = delta.y * up
+        const shift = Vector3d.create(
+            rowX.x * dx + rowY.x * dy,
+            rowX.y * dx + rowY.y * dy,
+            rowX.z * dx + rowY.z * dy,
+        )
+        const origin = view.getOrigin()
+        view.setOrigin(Point3d.create(origin.x + shift.x, origin.y + shift.y, origin.z + shift.z))
+        v.synchWithView({ animateFrustumChange: true })
+        return true
+    } catch {
+        return false
+    }
+}
+
 // --- walkthrough first-person state ---
 let walkState: {
     yaw: number; pitch: number; pos: Point3d; startPos: Point3d;
@@ -309,6 +387,72 @@ export function getWalkEye(): { x: number; y: number; z: number } | undefined {
     return { x: s.pos.x, y: s.pos.y, z: s.pos.z }
 }
 
+/**
+ * Build 1B (§B) SHARED walkthrough state read-model for the synchronized 2D BIM
+ * plan. This is a READ-ONLY VIEW of the SINGLE authoritative walkState — there is
+ * NO duplicate walker-position store (DUPLICATE_WALKER_POSITION_STORE = NO). The
+ * 2D plan consumes this to draw the walker marker (eye + heading) so the plan and
+ * the 3D walkthrough always agree on where the user is standing and facing.
+ */
+export interface WalkthroughState {
+    /** True while a first-person walkthrough session is active. */
+    active: boolean
+    /** World eye position (x,y,z) — the same Point3d the 3D camera uses. */
+    eye: { x: number; y: number; z: number }
+    /** Look heading in radians (walkState.yaw). 0 faces +? per firstPerson basis. */
+    yaw: number
+    /** Look pitch in radians (walkState.pitch), for completeness (plan uses yaw). */
+    pitch: number
+    /** The storey the walker entered on / is constrained to (bimSpaceId-independent). */
+    activeStoreyId: string | undefined
+    /** Field-of-view in degrees (for an optional view-cone on the plan). */
+    fovDeg: number
+}
+
+/**
+ * Structured, read-only walkthrough state (position + heading + storey), or
+ * undefined when not walking. Pure read of the single walkState — never mutates.
+ */
+export function getWalkthroughState(): WalkthroughState | undefined {
+    const s = walkState
+    if (!s) return undefined
+    return {
+        active: true,
+        eye: { x: s.pos.x, y: s.pos.y, z: s.pos.z },
+        yaw: s.yaw,
+        pitch: s.pitch,
+        activeStoreyId: s.activeStoreyId,
+        fovDeg: s.fovDeg,
+    }
+}
+
+// --- walkthrough state observability (single source; no duplicate store) ---
+type WalkStateListener = (state: WalkthroughState | undefined) => void
+const walkStateListeners = new Set<WalkStateListener>()
+
+/**
+ * Subscribe to walkthrough state changes (position/heading/active). Fires on every
+ * camera apply (movement, look, turn, fov) and on enter/exit. Returns an
+ * unsubscribe fn. The listener receives the SAME read-model getWalkthroughState()
+ * returns — there is no second position store. Safe to call when not walking
+ * (receives undefined on exit). Never throws into the caller.
+ */
+export function subscribeWalkthroughState(listener: WalkStateListener): () => void {
+    walkStateListeners.add(listener)
+    // Emit the current state immediately so late subscribers are consistent.
+    try { listener(getWalkthroughState()) } catch { /* listener error isolated */ }
+    return () => { walkStateListeners.delete(listener) }
+}
+
+/** Notify subscribers of the current walkthrough state. Bounded, error-isolated. */
+function notifyWalkState(): void {
+    if (walkStateListeners.size === 0) return
+    const snapshot = getWalkthroughState()
+    for (const l of walkStateListeners) {
+        try { l(snapshot) } catch { /* one bad listener never breaks the walk loop */ }
+    }
+}
+
 /** On-demand bounded walkthrough movement diagnostic (no per-frame logging). */
 export function diagnoseWalkthroughMovement(): string {
     const d = lastWalkDiag
@@ -344,7 +488,7 @@ export function diagnoseWalkthroughMovement(): string {
  * a door-constrained collision probe. Requires an explicit user gesture (the
  * caller invokes this from a click). Esc releases pointer lock.
  */
-export async function enterWalkthrough(startStoreyId?: string, fovPreset: FovPreset = 'NORMAL'): Promise<boolean> {
+export async function enterWalkthrough(startStoreyId?: string, fovPreset: FovPreset = 'NORMAL', spawnOverride?: { x: number; y: number; z: number }): Promise<boolean> {
     const v = vp()
     const view = v && view3d(v)
     if (!v || !view) return false
@@ -353,8 +497,26 @@ export async function enterWalkthrough(startStoreyId?: string, fovPreset: FovPre
         const range = v.view.computeFitRange()
         const storeys = await loadStoreys()
         const chosen = (startStoreyId ? storeys.find((s) => s.id === startStoreyId) : undefined) ?? storeys[0]
-        const floorZ = chosen ? chosen.zLow : range.low.z
-        const start = Point3d.create(range.center.x, range.center.y, floorZ + WALKTHROUGH_EYE_HEIGHT_M)
+        const storeyFloorZ = chosen ? chosen.zLow : range.low.z
+        // Build 1B Problem C: a TARGETED safe spawn (room-geometry-derived, floor-
+        // constrained) overrides the whole-model center entrance when supplied.
+        const hasOverride = !!spawnOverride && [spawnOverride.x, spawnOverride.y, spawnOverride.z].every((n) => Number.isFinite(n))
+        const start = hasOverride
+            ? Point3d.create(spawnOverride!.x, spawnOverride!.y, spawnOverride!.z)
+            : Point3d.create(range.center.x, range.center.y, storeyFloorZ + WALKTHROUGH_EYE_HEIGHT_M)
+        // B1B-MA-02 FIX: the per-session floor elevation the camera is pinned to
+        // MUST come from the SPAWN (the selected room's own floor) when a targeted
+        // spawn is supplied — NOT from the storey-band datum. Previously
+        // floorElevation = storeyFloorZ, so applyCamera's eyeZForFloor(...)
+        // overwrote the correct upper-storey spawn Z with a whole-model-banded
+        // (often first-floor/ground) datum, dropping the user below/through the
+        // second-floor slab. spawnOverride.z already = roomFloorZ + eye height, so
+        // the room floor is spawnOverride.z - eye height.
+        const floorZ = resolveWalkthroughFloorElevation({
+            spawnOverrideZ: hasOverride ? spawnOverride!.z : undefined,
+            eyeHeight: WALKTHROUGH_EYE_HEIGHT_M,
+            storeyFloorZ,
+        })
         const canvas = v.canvas as HTMLElement
         const collisionModel = await loadWalkCollision()
 
@@ -465,6 +627,9 @@ export async function enterWalkthrough(startStoreyId?: string, fovPreset: FovPre
                 })
                 v.synchWithView({ animateFrustumChange: false })
             } catch { /* transient camera error: skip this frame */ }
+            // Build 1B §B: publish the new eye/heading to the synchronized 2D plan
+            // (single source of truth — no duplicate walker store).
+            notifyWalkState()
         }
         state.applyCamera = applyCamera
 
@@ -629,6 +794,8 @@ export function exitWalkthrough(): void {
     exitPointerLock()
     walkState = undefined
     if (lastWalkDiag) lastWalkDiag = { ...lastWalkDiag, active: false }
+    // Build 1B §B: tell the 2D plan the walker is gone (marker hides).
+    notifyWalkState()
 }
 
 /** Apply a camera mode. Returns whether it took effect. VIEW-ONLY. */

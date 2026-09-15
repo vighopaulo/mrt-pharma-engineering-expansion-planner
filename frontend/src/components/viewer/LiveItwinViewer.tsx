@@ -9,14 +9,14 @@
  * model, no placeholder cube (Sec 14). READ-ONLY (Sec 29). Selection is
  * forwarded to the inspection panel via `onSelect`.
  */
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useReducer, useRef } from 'react'
 import { Viewer } from '@itwin/web-viewer-react'
 import { BrowserAuthorizationClient } from '@itwin/browser-authorization'
 import { IModelApp, StandardViewId, TileTreeLoadStatus, ViewCreator3d, type IModelConnection, type ScreenViewport, type ViewState } from '@itwin/core-frontend'
 import { Range3d } from '@itwin/core-geometry'
 import { QueryBinder } from '@itwin/core-common'
 import type { ViewerConfig } from '../../lib/viewerConfig'
-import { browserAuthClientOptions } from '../../lib/viewerAuth'
+import { browserAuthClientOptions, decideTokenReadiness, viewerAuthReducer, viewerMayMount, type ViewerAuthState } from '../../lib/viewerAuth'
 import type { RawBentleySelection } from '../../lib/viewerSelection'
 
 /**
@@ -32,8 +32,16 @@ const DEFAULT_UI_CONFIG = { hideToolSettings: true } as const
 interface Props {
     config: ViewerConfig
     onSelect: (raw: RawBentleySelection, properties: Record<string, unknown>) => void | Promise<void>
+    /** Called when the viewport selection is cleared (empty-space click / deselect). */
+    onDeselect?: () => void
     onAuthSuccess: () => void
     onAuthError: (message: string) => void
+    /** EVI-MA-03A — the authoritative viewer-auth state, surfaced so the route
+     * can render an app-owned reconnect UI (never the raw Bentley string). */
+    onAuthStateChange?: (state: ViewerAuthState) => void
+    /** EVI-MA-03A — a monotonically increasing nonce; incrementing it requests a
+     * fresh interactive PKCE sign-in (the "Reconnect Bentley 3D" control). */
+    reconnectNonce?: number
 }
 
 // DEV-only lifecycle counters (module scope) to prove the loop is gone. These
@@ -50,8 +58,11 @@ const devCounters = {
     viewportConfigurerRun: 0,
 }
 
-export default function LiveItwinViewer({ config, onSelect, onAuthSuccess, onAuthError }: Props) {
-    const [ready, setReady] = useState(false)
+export default function LiveItwinViewer({ config, onSelect, onDeselect, onAuthSuccess, onAuthError, onAuthStateChange, reconnectNonce = 0 }: Props) {
+    // EVI-MA-03A — ONE authoritative auth state. The <Viewer> mounts ONLY in
+    // TOKEN_READY. No independent ready/authenticated flags.
+    const [authState, setAuthState] = useReducer(viewerAuthReducer, 'INITIALIZING' as ViewerAuthState)
+    const ready = viewerMayMount(authState)
 
     if (import.meta.env.DEV) {
         devCounters.render += 1
@@ -77,6 +88,10 @@ export default function LiveItwinViewer({ config, onSelect, onAuthSuccess, onAut
     // able to re-run the one-shot sign-in effect).
     const cbRef = useRef({ onAuthSuccess, onAuthError })
     cbRef.current = { onAuthSuccess, onAuthError }
+    // EVI-MA-03A — latest onAuthStateChange in a ref so surfacing the state does
+    // not re-run the sign-in effect.
+    const onAuthStateChangeRef = useRef(onAuthStateChange)
+    onAuthStateChangeRef.current = onAuthStateChange
 
     // Mount/unmount accounting.
     useEffect(() => {
@@ -141,24 +156,42 @@ export default function LiveItwinViewer({ config, onSelect, onAuthSuccess, onAut
                     devCounters.signInSilent += 1
                     console.info('[bentley-life] SIGN_IN_SILENT_START_COUNT=%d', devCounters.signInSilent)
                 }
+                setAuthState({ type: 'AUTHENTICATING' })
                 await authClient.signInSilent()
                 if (cancelled) return
+                // EVI-MA-03/03A: signInSilent() can RESOLVE without a usable
+                // access token (stale/expired session). Mounting <Viewer> in that
+                // state shows the raw `baseViewerInitializer.validTokenNeeded`.
+                // Verify a genuine token via the SAME auth client; if not ready,
+                // do NOT mount — go to REAUTH_REQUIRED (app-owned reconnect UI).
+                // The token value is NEVER logged/stored.
+                let accessToken = ''
+                try { accessToken = await authClient.getAccessToken() } catch { accessToken = '' }
+                if (cancelled) return
+                const readiness = decideTokenReadiness({
+                    authorized: !!(authClient as unknown as { isAuthorized?: boolean }).isAuthorized,
+                    hasSignedIn: !!(authClient as unknown as { hasSignedIn?: boolean }).hasSignedIn,
+                    accessToken,
+                    expiresAt: (authClient as unknown as { accessTokenExpiresAt?: Date }).accessTokenExpiresAt,
+                })
                 clearTimeout(timer)
-                if (import.meta.env.DEV) console.info('[bentley-auth] SIGN_IN_SILENT_SUCCESS AUTHENTICATED_STATE=YES (silent)')
-                setReady(true)
+                if (readiness !== 'READY') {
+                    if (import.meta.env.DEV) console.info('[bentley-auth] SILENT_RESOLVED_BUT_TOKEN_NOT_READY -> REAUTH_REQUIRED (no token value logged)')
+                    setAuthState({ type: 'TOKEN_NOT_READY' })
+                    return
+                }
+                if (import.meta.env.DEV) console.info('[bentley-auth] SIGN_IN_SILENT_SUCCESS TOKEN_READY (silent)')
+                setAuthState({ type: 'TOKEN_VERIFIED' })
                 cbRef.current.onAuthSuccess()
             } catch {
                 if (cancelled) return
-                if (import.meta.env.DEV) console.info('[bentley-auth] SIGN_IN_SILENT_FAILURE -> SIGN_IN_REDIRECT_START RETURN_ROUTE=/viewer')
-                try {
-                    // Navigates the browser away to Bentley IMS; execution
-                    // normally does not continue past this call.
-                    await authClient.signInRedirect('/viewer')
-                } catch (e) {
-                    if (cancelled) return
-                    clearTimeout(timer)
-                    cbRef.current.onAuthError(e instanceof Error ? e.message : String(e))
-                }
+                clearTimeout(timer)
+                // Silent sign-in FAILED (no cached session). Do NOT auto-redirect
+                // (redirects can be blocked in embedded hosts and yield a dead
+                // token). Surface REAUTH_REQUIRED so the app shows a Reconnect
+                // control that drives the interactive PKCE sign-in on a gesture.
+                if (import.meta.env.DEV) console.info('[bentley-auth] SIGN_IN_SILENT_FAILURE -> REAUTH_REQUIRED')
+                setAuthState({ type: 'TOKEN_NOT_READY' })
             }
         })()
 
@@ -170,7 +203,42 @@ export default function LiveItwinViewer({ config, onSelect, onAuthSuccess, onAut
                 console.info('[bentley-life] AUTH_EFFECT_CLEANUP_COUNT=%d', devCounters.authEffectCleanup)
             }
         }
-    }, [authClient])
+        // reconnectNonce re-runs the whole silent-then-verify sequence when the
+        // user clicks Reconnect Bentley 3D.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [authClient, reconnectNonce])
+
+    // EVI-MA-03A — surface the authoritative auth state to the route so it can
+    // render an app-owned reconnect UI (never the raw Bentley string).
+    useEffect(() => { onAuthStateChangeRef.current?.(authState) }, [authState])
+
+    // EVI-MA-03A — while TOKEN_READY, periodically re-verify the token is still
+    // usable. If it expired / became invalid (the "worked five minutes ago then
+    // validTokenNeeded" regression), demote to REAUTH_REQUIRED so the Viewer is
+    // unmounted and the app shows Reconnect — instead of leaving a dead Viewer.
+    // No aggressive polling (30s) and no token value is read into state.
+    useEffect(() => {
+        if (authState !== 'TOKEN_READY') return
+        let cancelled = false
+        const interval = setInterval(() => {
+            void (async () => {
+                let token = ''
+                try { token = await authClient.getAccessToken() } catch { token = '' }
+                if (cancelled) return
+                const r = decideTokenReadiness({
+                    authorized: !!(authClient as unknown as { isAuthorized?: boolean }).isAuthorized,
+                    hasSignedIn: !!(authClient as unknown as { hasSignedIn?: boolean }).hasSignedIn,
+                    accessToken: token,
+                    expiresAt: (authClient as unknown as { accessTokenExpiresAt?: Date }).accessTokenExpiresAt,
+                })
+                if (r !== 'READY') {
+                    if (import.meta.env.DEV) console.info('[bentley-auth] TOKEN_LOST while TOKEN_READY -> REAUTH_REQUIRED')
+                    setAuthState({ type: 'TOKEN_LOST' })
+                }
+            })()
+        }, 30_000)
+        return () => { cancelled = true; clearInterval(interval) }
+    }, [authState, authClient])
 
     // Stable option objects: passing fresh nested objects to <Viewer> on every
     // render can make it reopen/reconfigure the iModel. Memoize them so their
@@ -180,14 +248,21 @@ export default function LiveItwinViewer({ config, onSelect, onAuthSuccess, onAut
         () => ({ cameraOn: true, allSubCategoriesVisible: true, viewportConfigurer: inspectAndMaybeFitViewport }),
         [],
     )
+    // Keep onDeselect in a ref so onIModelConnected stays stable (identity churn
+    // here must never contribute to a viewer remount / request loop).
+    const onDeselectRef = useRef(onDeselect)
+    onDeselectRef.current = onDeselect
     const onIModelConnected = useCallback(
         (iModel: unknown) => {
-            void wireSelection(iModel, onSelect)
+            void wireSelection(iModel, onSelect, () => onDeselectRef.current?.())
         },
         [onSelect],
     )
 
-    if (!ready) return <div className="viewer-loading">Signing in with Bentley…</div>
+    // EVI-MA-03A — the Viewer mounts ONLY in TOKEN_READY (viewerMayMount). In any
+    // other state the route renders the app-owned reconnect/loading UI (never the
+    // raw Bentley `validTokenNeeded`), so here we render nothing.
+    if (!ready) return null
 
     return (
         <Viewer
@@ -201,6 +276,23 @@ export default function LiveItwinViewer({ config, onSelect, onAuthSuccess, onAut
             onIModelConnected={onIModelConnected}
         />
     )
+}
+
+/**
+ * EVI-MA-03A — INTERACTIVE reconnect. Perform the supported PKCE interactive
+ * sign-in redirect using the SAME auth-client construction. Exported so the
+ * route's "Reconnect Bentley 3D" control can drive it on a user gesture (never
+ * clears application/equipment state). No token value is logged.
+ */
+export async function reconnectBentleyAuth(config: ViewerConfig): Promise<void> {
+    const client = new BrowserAuthorizationClient(
+        browserAuthClientOptions({
+            clientId: config.clientId, authority: config.authority, scope: config.scope,
+            redirectUri: config.redirectUri, postSignoutRedirectUri: config.postSignoutRedirectUri,
+            responseType: 'code', iTwinId: config.iTwinId, iModelId: config.iModelId,
+        }),
+    )
+    await client.signInRedirect('/viewer')
 }
 
 /**
@@ -494,6 +586,68 @@ export async function inspectFeatureAppearance(): Promise<FeatureAppearanceResul
         const msg = e instanceof Error ? e.message : String(e)
         if (import.meta.env.DEV) console.error('[bentley-appearance] INSPECT_ERROR', msg)
         return { summary: 'INSPECT_ERROR: ' + msg }
+    }
+}
+
+/**
+ * EVI-MA-07A.1 — READ-ONLY Bentley view-state snapshot for the placement
+ * darkening diagnostic. Reads viewFlags / render mode / feature-override / draw
+ * sets / selection / display style / background, and the CSS opacity+filter of
+ * the actual Bentley canvas element. Mutates NOTHING. No tokens.
+ */
+export interface BentleyViewStateReport {
+    hasViewport: boolean
+    renderMode?: string
+    viewFlagsTransparency?: boolean
+    viewFlagsLighting?: boolean
+    featureOverrideProviderCount?: number
+    alwaysDrawnCount?: number
+    neverDrawnCount?: number
+    selectionActive?: boolean
+    displayStyleName?: string
+    backgroundColorTbgr?: number
+    canvasCssOpacity?: string
+    canvasCssFilter?: string
+    note?: string
+}
+
+export function readBentleyViewStateForDiagnostic(): BentleyViewStateReport {
+    const vp = IModelApp.viewManager?.selectedView
+    if (!vp) return { hasViewport: false, note: 'NO_ACTIVE_VIEWPORT' }
+    try {
+        const vf = vp.viewFlags
+        let providerCount = 0
+        try { for (const _p of vp.featureOverrideProviders) { void _p; providerCount += 1 } } catch { /* ignore */ }
+        const alwaysDrawn = (vp as unknown as { alwaysDrawn?: Set<string> }).alwaysDrawn?.size ?? 0
+        const neverDrawn = (vp as unknown as { neverDrawn?: Set<string> }).neverDrawn?.size ?? 0
+        const selSize = (vp.iModel as unknown as { selectionSet?: { size?: number } }).selectionSet?.size ?? 0
+        const style = vp.displayStyle as unknown as { name?: string; backgroundColor?: { tbgr?: number } }
+        // The Bentley canvas lives under the viewport's parentDiv/canvas.
+        const canvas = (vp as unknown as { canvas?: HTMLCanvasElement }).canvas
+            ?? (vp as unknown as { parentDiv?: HTMLElement }).parentDiv?.querySelector('canvas') ?? undefined
+        let canvasCssOpacity: string | undefined
+        let canvasCssFilter: string | undefined
+        if (canvas && typeof getComputedStyle === 'function') {
+            const cs = getComputedStyle(canvas)
+            canvasCssOpacity = cs.opacity
+            canvasCssFilter = cs.filter
+        }
+        return {
+            hasViewport: true,
+            renderMode: String(vf.renderMode),
+            viewFlagsTransparency: vf.transparency,
+            viewFlagsLighting: (vf as unknown as { lighting?: boolean }).lighting,
+            featureOverrideProviderCount: providerCount,
+            alwaysDrawnCount: alwaysDrawn,
+            neverDrawnCount: neverDrawn,
+            selectionActive: selSize > 0,
+            displayStyleName: style?.name,
+            backgroundColorTbgr: style?.backgroundColor?.tbgr,
+            canvasCssOpacity,
+            canvasCssFilter,
+        }
+    } catch (e) {
+        return { hasViewport: true, note: 'READ_ERROR: ' + (e instanceof Error ? e.message : String(e)) }
     }
 }
 
@@ -861,6 +1015,7 @@ function fmtPt(p: { x: number; y: number; z: number }): string {
 async function wireSelection(
     iModel: unknown,
     onSelect: (raw: RawBentleySelection, properties: Record<string, unknown>) => void | Promise<void>,
+    onDeselect?: () => void,
 ): Promise<void> {
     try {
         const im = iModel as {
@@ -870,7 +1025,14 @@ async function wireSelection(
         }
         im.selectionSet?.onChanged?.addListener((set) => {
             const first = set.elements.values().next().value as string | undefined
-            if (!first) return
+            if (!first) {
+                // Empty selection (deselect / empty-space click) — forward it so the
+                // Inspection card can dismiss. Global BIM inspection stays wired: the
+                // selectionSet listener remains registered, so re-selecting an element
+                // re-fires onSelect and re-shows the card.
+                onDeselect?.()
+                return
+            }
             void onSelect(
                 { elementId: first, iModelId: im.iModelId ?? null, changesetId: im.changeset?.id ?? null },
                 {},

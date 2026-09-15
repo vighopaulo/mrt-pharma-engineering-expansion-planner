@@ -164,6 +164,26 @@ export function resolveRotationHandleVisualState(p: {
     return 'IDLE_HINT'
 }
 
+/**
+ * EVI-MA-02B — should a global Delete/Backspace key delete the selected
+ * equipment? Pure decision: ignore the key when the user is typing in a text
+ * field / editable element (so form input is never hijacked), otherwise handle
+ * it. `tagName` is uppercased HTML tag of the focused element; `isContentEditable`
+ * is its contentEditable state. Returns true only for a genuine viewport/body
+ * context.
+ */
+export function shouldHandleEquipmentDeleteKey(input: {
+    key: string
+    tagName: string | undefined
+    isContentEditable: boolean | undefined
+}): boolean {
+    if (input.key !== 'Delete' && input.key !== 'Backspace') return false
+    if (input.isContentEditable) return false
+    const tag = (input.tagName ?? '').toUpperCase()
+    if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return false
+    return true
+}
+
 /** What kind of MRT pickable a located hit resolves to. */
 export type MrtPickTargetType = 'ASSET_BODY' | 'ROTATION_HANDLE'
 

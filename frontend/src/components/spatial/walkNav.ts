@@ -210,6 +210,38 @@ export function normalizeWheelDolly(input: WheelDollyInput): number {
 }
 
 // ---------------------------------------------------------------------------
+// B1B-MA-02: walkthrough floor-elevation authority (pure, unit-testable seam)
+// ---------------------------------------------------------------------------
+
+/**
+ * Resolve the per-session FLOOR ELEVATION the walkthrough camera is pinned to.
+ *
+ * B1B-MA-02 root cause: the camera Z is re-derived every frame from this floor
+ * elevation + eye height. Previously it was always the STOREY-BAND datum
+ * (whole-model Z banding), so a room-specific TARGETED spawn on an upper storey
+ * was overwritten by a ground/first-floor datum — dropping the user below/through
+ * the slab. The correct authority when a targeted spawn is supplied is the
+ * SELECTED ROOM's own floor, which the resolved spawn already encodes as
+ * `spawnZ = roomFloorZ + eyeHeight`. So the room floor = spawnZ − eyeHeight.
+ *
+ * When there is NO targeted spawn (generic entry), fall back to the storey-band
+ * floor. Pure; deterministic; no side effects.
+ */
+export function resolveWalkthroughFloorElevation(input: {
+    /** The resolved targeted spawn Z (roomFloorZ + eyeHeight), if a room was targeted. */
+    spawnOverrideZ?: number
+    /** The canonical pedestrian eye height used by BOTH the resolver and the camera. */
+    eyeHeight: number
+    /** The generic storey-band floor datum (used only when there is no override). */
+    storeyFloorZ: number
+}): number {
+    if (Number.isFinite(input.spawnOverrideZ) && Number.isFinite(input.eyeHeight)) {
+        return (input.spawnOverrideZ as number) - input.eyeHeight
+    }
+    return input.storeyFloorZ
+}
+
+// ---------------------------------------------------------------------------
 // FOV policy
 // ---------------------------------------------------------------------------
 

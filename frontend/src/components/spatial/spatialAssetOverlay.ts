@@ -27,6 +27,9 @@ import { ClinicalProgramDecorator } from './ClinicalProgramDecorator'
 import { deriveRoomFootprint, resolveRoomStoreyId, type StoreyZRange } from './planningPlan'
 import { resolveDecoratorRegistrationAction } from './decoratorRegistration'
 import { resolveClinicalProgramFacilityAnchor, describeGeometryQuality } from './clinicalProgramAnchor'
+import { buildEquipmentEnvelope, findEquipmentCollision } from './equipmentInstance'
+import { vestibulePortRenderOptions as resolveVestibulePorts } from './clinicalLogisticsVestibule'
+import { projectBim2dPlan } from './bim2dPlanProjection'
 import {
     discoverRoomVolumes,
     summarizeRoomVolumeDiscovery,
@@ -163,6 +166,71 @@ export function closeAssetContextMenu(): void {
 }
 
 /**
+ * EVI-MA-02 — UI-only right-click EQUIPMENT context-menu state (distinct from the
+ * legacy AssetInstance menu). The direct-manipulation tool opens it with a
+ * concrete equipmentInstanceId + screen position; the React panel subscribes and
+ * renders it. Non-authoritative view state; the equipmentInstanceId is the ONLY
+ * identity (never screen px).
+ */
+export interface EquipmentContextMenuState {
+    equipmentInstanceId: string
+    screenX: number
+    screenY: number
+}
+let equipmentContextMenu: EquipmentContextMenuState | undefined
+const equipmentContextMenuListeners = new Set<() => void>()
+export function subscribeEquipmentContextMenu(listener: () => void): () => void {
+    equipmentContextMenuListeners.add(listener)
+    return () => { equipmentContextMenuListeners.delete(listener) }
+}
+export function getEquipmentContextMenu(): EquipmentContextMenuState | undefined {
+    return equipmentContextMenu
+}
+export function openEquipmentContextMenu(state: EquipmentContextMenuState): void {
+    // Opening the equipment menu also establishes the exact instance as selected
+    // (task 3: right-click first selects). Also close any legacy asset menu.
+    closeAssetContextMenu()
+    equipmentContextMenu = state
+    selectEquipment(state.equipmentInstanceId)
+    for (const l of equipmentContextMenuListeners) l()
+}
+export function closeEquipmentContextMenu(): void {
+    if (!equipmentContextMenu) return
+    equipmentContextMenu = undefined
+    for (const l of equipmentContextMenuListeners) l()
+}
+
+// EVI-MA-05B — vestibule right-click context menu store (mirrors equipment).
+export interface VestibuleContextMenuState {
+    vestibuleInstanceId: string
+    screenX: number
+    screenY: number
+}
+let vestibuleContextMenu: VestibuleContextMenuState | undefined
+const vestibuleContextMenuListeners = new Set<() => void>()
+export function subscribeVestibuleContextMenu(listener: () => void): () => void {
+    vestibuleContextMenuListeners.add(listener)
+    return () => { vestibuleContextMenuListeners.delete(listener) }
+}
+export function getVestibuleContextMenu(): VestibuleContextMenuState | undefined {
+    return vestibuleContextMenu
+}
+export function openVestibuleContextMenu(state: VestibuleContextMenuState): void {
+    // Opening the vestibule menu closes the equipment/asset menus and selects the
+    // exact vestibule (right-click first selects), converging on ONE selection.
+    closeAssetContextMenu()
+    closeEquipmentContextMenu()
+    vestibuleContextMenu = state
+    selectVestibule(state.vestibuleInstanceId)
+    for (const l of vestibuleContextMenuListeners) l()
+}
+export function closeVestibuleContextMenu(): void {
+    if (!vestibuleContextMenu) return
+    vestibuleContextMenu = undefined
+    for (const l of vestibuleContextMenuListeners) l()
+}
+
+/**
  * UI-only marquee (bounding-box) selection rectangle state, in VIEW pixels. The
  * manipulation tool sets it during an empty-space primary drag; the React panel
  * renders a restrained rectangle. Not authoritative selection state — selection
@@ -241,9 +309,91 @@ export function replaceSelection(assetInstanceIds: readonly string[]): void {
 // while this is present (the proven NO_ACTIVE_VIEWPORT root cause).
 let explicitProductViewport: ScreenViewport | undefined
 
+/** Disposer for the tool-independent right-click bridge on the current viewport. */
+let appContextMenuBridgeDispose: (() => void) | undefined
+/** The host element the bridge is currently installed on (idempotency guard). */
+let appContextMenuBridgeEl: HTMLElement | undefined
+
+/** DEV structured diagnostics ring for the right-click bridge (bounded). */
+const appContextMenuDiagnostics: import('./appObjectContextMenuBridge').ContextMenuBridgeDiagnostic[] = []
+export function getAppContextMenuDiagnostics(): readonly import('./appObjectContextMenuBridge').ContextMenuBridgeDiagnostic[] {
+    return appContextMenuDiagnostics
+}
+
+/**
+ * EVI-MA-06 CORRECTION — (re)install the TOOL-INDEPENDENT right-click bridge on a
+ * viewport host so right-click works regardless of which Bentley tool is active
+ * (the tool-scoped bridge tore down on every camera-driven tool switch — the
+ * accepted defect). Idempotent per host element.
+ */
+function installViewportContextMenuBridge(vp: ScreenViewport): void {
+    const host = (vp as unknown as { vpDiv?: HTMLElement; parentDiv?: HTMLElement })
+    const element = host.vpDiv ?? host.parentDiv
+    if (!element) return
+    if (appContextMenuBridgeEl === element && appContextMenuBridgeDispose) return // already installed
+    // Tear down a stale bridge (viewport remount) before re-installing.
+    appContextMenuBridgeDispose?.()
+    appContextMenuBridgeDispose = undefined
+    void import('./appObjectContextMenuBridge').then((m) => {
+        // Guard: the viewport may have changed again while importing.
+        if (explicitProductViewport !== vp) return
+        appContextMenuBridgeEl = element
+        appContextMenuBridgeDispose = m.installAppObjectContextMenuBridge(
+            {
+                element,
+                clientToRay: (clientX, clientY) => {
+                    try {
+                        const rect = element.getBoundingClientRect()
+                        const viewX = clientX - rect.left
+                        const viewY = clientY - rect.top
+                        const npc = vp.viewToNpc({ x: viewX, y: viewY, z: 0 } as unknown as import('@itwin/core-geometry').Point3d)
+                        const near = vp.npcToWorld({ x: npc.x, y: npc.y, z: 0 } as unknown as import('@itwin/core-geometry').Point3d)
+                        const far = vp.npcToWorld({ x: npc.x, y: npc.y, z: 1 } as unknown as import('@itwin/core-geometry').Point3d)
+                        if (!near || !far) return undefined
+                        return { origin: [near.x, near.y, near.z], direction: [far.x - near.x, far.y - near.y, far.z - near.z] }
+                    } catch { return undefined }
+                },
+            },
+            {
+                resolve: (ray) => {
+                    const t = resolveAppObjectAtRay(ray)
+                    return t ? { objectType: t.objectType, instanceId: t.instanceId } : undefined
+                },
+                select: (ref) => selectAppObject({ objectType: ref.objectType as AppObjectType, instanceId: ref.instanceId }),
+                openMenu: (target, viewX, viewY) => {
+                    // EVI-MA-07 — right-click opens the SAME local action popover as
+                    // left-click by selecting-with-anchor (one menu model). The
+                    // viewX/viewY are viewport-relative; convert to page coords.
+                    const rect = element.getBoundingClientRect()
+                    selectAppObjectWithAnchor(
+                        { objectType: target.objectType as AppObjectType, instanceId: target.instanceId },
+                        { x: Math.round(rect.left + viewX), y: Math.round(rect.top + viewY) },
+                    )
+                },
+                closeMenus: () => { closeEquipmentContextMenu(); closeVestibuleContextMenu() },
+                isGestureActive: () => spatialAssetStore.isDragActive() || spatialAssetStore.isGroupDragActive() || spatialAssetStore.isRotationActive(),
+                onDiagnostic: (d) => {
+                    appContextMenuDiagnostics.push(d)
+                    if (appContextMenuDiagnostics.length > 50) appContextMenuDiagnostics.shift()
+                    if (import.meta.env.DEV) console.info('[rc-bridge] stage=%s %s', d.stage, d.instanceId ? `${d.objectType}=${d.instanceId}` : '')
+                },
+            },
+        )
+    })
+}
+
 /** The viewer registers its live ScreenViewport here on view-open. */
 export function setActiveProductViewport(vp: ScreenViewport | undefined): void {
     explicitProductViewport = vp
+    if (vp) {
+        // EVI-MA-06 CORRECTION — attach the tool-independent right-click bridge for
+        // the LIFETIME of this viewport (survives every tool switch / camera move).
+        installViewportContextMenuBridge(vp)
+    } else {
+        appContextMenuBridgeDispose?.()
+        appContextMenuBridgeDispose = undefined
+        appContextMenuBridgeEl = undefined
+    }
 }
 
 /** Resolve the active product viewport with explicit precedence (pure policy). */
@@ -414,6 +564,45 @@ export function ensureClinicalProgramDecoratorRegistered(): void {
             // Build 1A label-occlusion: the active camera mode drives the
             // walkthrough-aware label-visibility policy in the decorator.
             getCameraMode: () => activeCameraMode,
+            // Build 1B — app-owned equipment envelopes (true 3D world boxes).
+            getShowEquipment: () => showEquipment,
+            getEquipmentForRender: () => equipmentInstances
+                .filter((e) => !e.hidden)
+                .map((e) => ({
+                    id: e.id,
+                    params: {
+                        centerX: e.placement.centerX, centerY: e.placement.centerY,
+                        zLow: e.placement.zBase, zHigh: e.placement.zBase + e.placement.height,
+                        width: e.placement.width, depth: e.placement.depth, yaw: e.placement.yaw,
+                    },
+                    lifecycleState: e.lifecycleState,
+                    label: e.displayLabel,
+                    selected: selectedEquipmentId === e.id,
+                    invalid: equipmentContainmentCache.get(e.id) === 'FAIL',
+                    placeholder: e.placement.envelopeProvenance === 'GENERIC_ENGINEERING_PLACEHOLDER',
+                    // Visual-integration: carry the canonical class + spatial
+                    // family so the decorator can resolve a recognizable generic
+                    // VISUAL family (cyclotron / PET-CT / hot-cell) WITHOUT ever
+                    // touching the exact canonical identity.
+                    canonicalClass: e.canonicalClass,
+                    assetFamily: e.assetFamily,
+                })),
+            // EVI-MA-05A — app-owned clinical logistics vestibules (wall-integrated).
+            getVestibulesForRender: () => vestibuleInstances
+                .filter((v) => !v.hidden)
+                .map((v) => ({
+                    id: v.vestibuleInstanceId,
+                    params: {
+                        centerX: v.pose.centerX, centerY: v.pose.centerY,
+                        zLow: v.pose.zBase, zHigh: v.pose.zBase + v.pose.height,
+                        width: v.pose.width, depth: v.pose.depth, yaw: v.pose.yaw,
+                    },
+                    family: v.visualFamily,
+                    ports: resolveVestibulePorts(v.serviceClass),
+                    lifecycleState: v.lifecycleState === 'LOCKED' ? 'LOCKED' as const : 'DRAFT' as const,
+                    label: v.displayLabel,
+                    selected: selectedVestibuleId === v.vestibuleInstanceId,
+                })),
         })
     }
     removeClinicalProgramDecorator = IModelApp.viewManager.addDecorator(clinicalProgramDecorator)
@@ -424,6 +613,31 @@ export function ensureClinicalProgramDecoratorRegistered(): void {
 /** The registered decorator (for the direct-manipulation tool's redraw hook). */
 export function getSpatialDecorator(): SpatialAssetDecorator | undefined {
     return decorator
+}
+
+/** The registered clinical-program decorator (equipment pick resolution). */
+export function getClinicalProgramDecorator(): ClinicalProgramDecorator | undefined {
+    return clinicalProgramDecorator
+}
+
+/**
+ * EVI-MA-02 — resolve a Bentley decoration pick id to its stable
+ * equipmentInstanceId (or undefined). Delegates to the clinical-program
+ * decorator's pick map. The tool uses this to route a 3D click/right-click to
+ * the exact EquipmentAssetInstance without inferring identity from model name.
+ */
+export function equipmentIdForPickId(pickId: string): string | undefined {
+    return clinicalProgramDecorator?.equipmentIdForPickId(pickId)
+}
+
+/**
+ * EVI-MA-05A — resolve a Bentley decoration pick id to its stable
+ * vestibuleInstanceId (or undefined). Delegates to the clinical-program
+ * decorator's SEPARATE vestibule pick map, so a vestibule pick never returns an
+ * equipment id and an equipment pick never returns a vestibule id.
+ */
+export function vestibuleIdForPickId(pickId: string): string | undefined {
+    return clinicalProgramDecorator?.vestibuleIdForPickId(pickId)
 }
 
 /**
@@ -709,6 +923,40 @@ export function inspectPlacementIntent(): string {
         `displayLabel=${intent.displayLabel}`,
         `assetFamily=${intent.assetFamily}`,
     ].join(' | ')
+}
+
+/**
+ * EVI-MA-07A.1 — READ-ONLY placement/interaction state for the darkening
+ * diagnostic. Reads the authoritative store + the live Bentley active tool.
+ * Mutates nothing. openPanel / selectedCatalogAsset are React-owned and supplied
+ * by the caller (this module has no access to them).
+ */
+export function readPlacementStateForDiagnostic(): {
+    placementModeActive: boolean
+    intentPresent: boolean
+    intentSummary: string | undefined
+    interactionState: string
+    pendingPlacementAssetId: string | undefined
+    placementCandidatePresent: boolean
+    placementToolActive: boolean
+    activeBentleyToolId: string | undefined
+    selectedAppObject: string | undefined
+} {
+    const snap = spatialAssetStore.getSnapshot()
+    const intent = spatialAssetStore.getActiveIntent()
+    const activeToolId = IModelApp.toolAdmin?.activeTool?.toolId
+    const ref = getSelectedAppObjectRef()
+    return {
+        placementModeActive: snap.placementModeActive,
+        intentPresent: intent !== undefined,
+        intentSummary: intent ? `${intent.catalogRecordId} (${intent.displayLabel})` : undefined,
+        interactionState: snap.interaction,
+        pendingPlacementAssetId: intent?.catalogRecordId,
+        placementCandidatePresent: intent !== undefined,
+        placementToolActive: activeToolId === 'MrtPharma.AssetPlacement',
+        activeBentleyToolId: activeToolId,
+        selectedAppObject: ref ? `${ref.objectType}:${ref.instanceId}` : undefined,
+    }
 }
 
 /** Product inspection for any placed asset (by id). */
@@ -1222,6 +1470,75 @@ export async function setWalkthroughFov(preset: import('./walkNav').FovPreset): 
     ctl.setWalkthroughFov(preset)
 }
 
+/**
+ * Build 1B Problem B — PLANNING controlled screen-space pan (L/R/U/D). `right` /
+ * `up` are fractions of the current view extent (positive = right / up). VIEW-
+ * ONLY: preserves orbit/zoom/fit/cutaway. Returns whether the pan applied.
+ */
+export async function panPlanningCamera(right: number, up: number): Promise<boolean> {
+    const ctl = await import('./walkthroughController')
+    return ctl.panPlanningCamera(right, up)
+}
+
+/**
+ * Build 1B Problem C — resolve a TARGETED safe walkthrough spawn for a specific
+ * clinical room WITHOUT entering (drives the UI preview + honest failure). Uses
+ * the room's authoritative footprint + storey band + the walk collision walls.
+ * The planning volume / equipment are NEVER the spawn authority. Pure resolver.
+ */
+export async function resolveClinicalRoomWalkthroughSpawn(input: {
+    bimSpaceId: string
+    eyeHeight?: number
+}): Promise<import('./targetedWalkthroughSpawn').SpawnResult> {
+    const spawnMod = await import('./targetedWalkthroughSpawn')
+    const { WALKTHROUGH_EYE_HEIGHT_M } = await import('./cameraNav')
+    if (!input.bimSpaceId) return { ok: false, code: 'DEGENERATE_FOOTPRINT', reason: 'No room specified.' }
+    await ensureAuthoritativeRoomFootprint(input.bimSpaceId).catch(() => undefined)
+    const fp = authoritativeFootprints.get(input.bimSpaceId)
+    if (!fp?.ok || !fp.outerLoop || fp.outerLoop.length < 3) {
+        return { ok: false, code: 'DEGENERATE_FOOTPRINT', reason: 'Room geometry is not available to derive a safe spawn.' }
+    }
+    // Storey band for wrong-storey rejection.
+    const storeyId = resolveRoomStoreyIdCached(input.bimSpaceId)
+    const band = programStoreyRanges.find((s) => s.id === storeyId)
+    // Wall segments (collision-active clearance).
+    const ctl = await import('./walkthroughController')
+    const collision = await ctl.loadWalkCollision().catch(() => undefined)
+    return spawnMod.resolveTargetedWalkthroughSpawn({
+        room: {
+            outerLoop: fp.outerLoop,
+            holes: fp.holes,
+            floorZ: fp.volume?.zLow ?? fp.floorZ,
+            ceilingZ: fp.volume?.zHigh,
+            interiorAnchor: fp.interiorAnchor,
+        },
+        storey: band ? { storeyId: band.id, zLow: band.zLow, zHigh: band.zHigh } : undefined,
+        eyeHeight: input.eyeHeight ?? WALKTHROUGH_EYE_HEIGHT_M,
+        walls: collision?.wallBoundaries,
+    })
+}
+
+/**
+ * Build 1B Problem C — ENTER WALKTHROUGH HERE. Resolve the room-specific safe
+ * spawn and enter walkthrough AT that point (collision-active). On an honest
+ * NO_SAFE_WALKTHROUGH_SPAWN it does NOT silently fall back to the model center —
+ * it returns the failure so the UI can explain it. Requires a user gesture.
+ */
+export async function enterWalkthroughAtClinicalRoom(input: {
+    bimSpaceId: string
+    eyeHeight?: number
+}): Promise<{ ok: true; spawn: { x: number; y: number; z: number }; provenance: string } | { ok: false; code: string; reason: string }> {
+    const spawn = await resolveClinicalRoomWalkthroughSpawn(input)
+    if (!spawn.ok) return { ok: false, code: spawn.code, reason: spawn.reason }
+    const storeyId = resolveRoomStoreyIdCached(input.bimSpaceId)
+    const ctl = await import('./walkthroughController')
+    activeCameraMode = 'WALKTHROUGH'
+    const ok = await ctl.enterWalkthrough(storeyId, 'NORMAL', spawn.spawn)
+    notifyProgram()
+    if (!ok) return { ok: false, code: 'ENTER_FAILED', reason: 'Walkthrough could not be entered (no active viewport).' }
+    return { ok: true, spawn: spawn.spawn, provenance: spawn.provenance }
+}
+
 export async function turnAroundWalkthrough(): Promise<void> {
     const ctl = await import('./walkthroughController')
     ctl.turnAround()
@@ -1246,6 +1563,30 @@ export async function diagnoseWalkthroughMovement(): Promise<string> {
 export async function resetWalkthroughMode(): Promise<void> {
     const ctl = await import('./walkthroughController')
     ctl.resetWalkthrough()
+}
+
+/**
+ * Build 1B §B: read-only structured walkthrough state (eye + heading + storey) for
+ * the synchronized 2D BIM plan. Pass-through to the SINGLE walkthroughController
+ * walkState — the overlay adds NO second walker-position store. Returns undefined
+ * when not walking.
+ */
+export async function getWalkthroughState(): Promise<import('./walkthroughController').WalkthroughState | undefined> {
+    const ctl = await import('./walkthroughController')
+    return ctl.getWalkthroughState()
+}
+
+/**
+ * Build 1B §B: subscribe to walkthrough state changes for the 2D plan walker
+ * marker. Delegates to the single controller subscription (no duplicate store).
+ * Returns a Promise of an unsubscribe fn. The listener fires immediately with the
+ * current state and again on every camera update / enter / exit.
+ */
+export async function subscribeWalkthroughState(
+    listener: (state: import('./walkthroughController').WalkthroughState | undefined) => void,
+): Promise<() => void> {
+    const ctl = await import('./walkthroughController')
+    return ctl.subscribeWalkthroughState(listener)
 }
 
 /**
@@ -1348,6 +1689,14 @@ export function loadClinicalProgramForIModel(iModelId: string): void {
     roomDiscoveryState = { ...INITIAL_ROOM_DISCOVERY_STATE }
     roomStoreyIdCache.clear()
     containmentStatusCache.clear() // Build 1A.4: per-space invalid cue is iModel-scoped
+    // Build 1B: equipment instances are iModel-scoped — switching clears + reloads.
+    equipmentContainmentCache.clear()
+    // EVI-MA-07: Undo/Redo history is app-owned + iModel-scoped — clear on switch.
+    appEditHistory.clear()
+    notifyAppHistory()
+    loadEquipmentForIModel(iModelId)
+    // EVI-MA-05A: clinical logistics vestibules are iModel-scoped too.
+    loadVestibulesForIModel(iModelId)
     loadPlanningVolumesForIModel(iModelId)
     // Ensure the decorator is attached once the runtime is ready (idempotent;
     // no-op if runtime not ready — ensureDecoratorRegistered will attach later).
@@ -1369,6 +1718,13 @@ export function getClinicalProgramSnapshot(): {
     iModelId: string
     assignments: readonly ClinicalProgramAssignment[]
     showRoomVolume: boolean
+    /**
+     * B1B-MA-03A: the active viewport camera mode, surfaced so the Clinical
+     * Program panel can auto-collapse (presentation only) on Walkthrough entry.
+     * Panel VISIBILITY is separate from FEATURE STATE — this never affects the
+     * selection, assignments, volumes, equipment or storey filter.
+     */
+    cameraMode: import('./cameraNav').CameraMode
 } {
     return {
         enabled: programState.enabled,
@@ -1377,6 +1733,7 @@ export function getClinicalProgramSnapshot(): {
         iModelId: programState.iModelId,
         assignments: programState.assignments,
         showRoomVolume: programState.showRoomVolume,
+        cameraMode: activeCameraMode,
     }
 }
 
@@ -1533,6 +1890,10 @@ export async function suggestPlanningVolumeSeedForParent(parentBimSpaceId: strin
     if (parent?.ok && parent.outerLoop && parent.outerLoop.length >= 3) {
         return m.seedPrismParamsFromParent({
             footprint: parent.outerLoop,
+            holes: parent.holes,
+            // B1B-MA-01: center the seed on a PROVEN-interior anchor (essential for
+            // rotated / irregular rooms) so the parent-derived volume is contained.
+            interiorAnchor: parent.interiorAnchor,
             zLow: parent.volume?.zLow ?? parent.floorZ,
             zHigh: parent.volume?.zHigh ?? (parent.floorZ + 3),
         })
@@ -2011,9 +2372,24 @@ export function getDiscoveredRoomOptions(): DiscoveredRoomVolume[] {
 }
 
 /**
+ * B1B-MA-03B — resolve a single discovered room by its stable BIM id from the
+ * IMMUTABLE base discovery, INDEPENDENT of the active storey filter. The room
+ * selector uses this so the authoritative selected room (programState.selectedSpaceId)
+ * remains resolvable — and its detail/assignment/volume UI stays intact — even when
+ * the storey chip filter would otherwise hide it from the dropdown option list.
+ * The storey chip filters the OPTIONS shown, never the authoritative selection.
+ */
+export function getDiscoveredRoomById(bimSpaceId: string | undefined): DiscoveredRoomVolume | undefined {
+    if (!bimSpaceId) return undefined
+    return getDiscoveredRoomVolumes().find((r) => r.bimSpaceId === bimSpaceId)
+}
+
+/**
  * Build 1A.3 — whether the currently SELECTED room is outside the active storey
- * filter. The UI uses this to clear the visible selection (out-of-filter policy)
- * WITHOUT deleting the domain assignment or planning volume.
+ * filter. B1B-MA-03B: this is now PURELY INFORMATIONAL — the UI uses it only to
+ * surface an "outside current storey filter" hint and to render the selected
+ * room's option even when filtered out. It MUST NOT be used to clear the
+ * authoritative selection (that overwrite path was the B1B-MA-03B defect).
  */
 export function isSelectedRoomOutsideActiveStorey(): boolean {
     const sel = programState.selectedSpaceId
@@ -2564,4 +2940,1667 @@ export async function diagnoseClinicalProgramOverlay(): Promise<string> {
     const out = lines.join('\n')
     if (import.meta.env.DEV) console.info('[clinical-overlay-diag]\n%s', out)
     return out
+}
+
+// ===========================================================================
+// MRT PHARMA BUILD 1B — CANONICAL EQUIPMENT SPATIAL BINDING (app-owned)
+// ===========================================================================
+//
+// App-owned equipment instances bind a canonical catalog model (by reference to
+// its backend catalog_model_id) to a parent BIM room. Placement is a parent-
+// derived floor-aware oriented envelope; containment is evaluated against the
+// room's EXACT mesh (corners+edges+anchor, NOT center-only) reusing the accepted
+// planning-volume primitives. LOCK freezes the app object only — no Bentley write.
+// Instances are iModel-scoped, persisted safely, and recomputed on reload.
+
+import type {
+    EquipmentAssetInstance,
+    EquipmentPlacement,
+} from './equipmentInstance'
+
+let equipmentInstances: EquipmentAssetInstance[] = []
+/** True once the active iModel's equipment has loaded (writes gated until then). */
+let equipmentHydrated = false
+let equipmentSeq = 0
+let showEquipment = true
+let selectedEquipmentId: string | undefined
+/** Per-instance last-computed containment status (sync cache for the decorator). */
+const equipmentContainmentCache = new Map<string, 'PASS' | 'FAIL' | 'NOT_EVALUATED'>()
+
+/** Load equipment instances for the active iModel (scoped; cleared on switch). */
+function loadEquipmentForIModel(iModelId: string): void {
+    equipmentHydrated = false
+    selectedEquipmentId = undefined
+    void import('./equipmentInstance').then((m) => {
+        if (programState.iModelId !== iModelId) return
+        equipmentInstances = iModelId ? m.loadEquipmentInstances(iModelId) : []
+        // Seed the seq past any restored ids so new ids never collide.
+        equipmentSeq = equipmentInstances.length
+        equipmentHydrated = true
+        notifyProgram()
+        // EVI-MA-02A: if persisted equipment was restored, arm the tool so the
+        // restored cyclotrons are directly selectable/deletable after reload
+        // even with zero legacy AssetInstances.
+        if (equipmentInstances.length > 0) void ensureDirectManipulationReady().catch(() => false)
+    })
+}
+
+function persistEquipment(): void {
+    if (!programState.iModelId || !equipmentHydrated) return
+    void import('./equipmentInstance').then((m) => m.saveEquipmentInstances(programState.iModelId, equipmentInstances))
+}
+
+/** Snapshot of all equipment instances (read-only). */
+export function getEquipmentInstances(): readonly EquipmentAssetInstance[] {
+    return equipmentInstances
+}
+
+/** The equipment instance for an id (or undefined). */
+export function getEquipmentInstance(id: string): EquipmentAssetInstance | undefined {
+    return equipmentInstances.find((e) => e.id === id)
+}
+
+/** Equipment instances currently bound to a parent room. */
+export function getEquipmentForRoom(bimSpaceId: string): readonly EquipmentAssetInstance[] {
+    return equipmentInstances.filter((e) => e.parentBimSpaceId === bimSpaceId)
+}
+
+/**
+ * Build 1B §B: assemble the TRUE 2D BIM floor-plan view-model shown SIMULTANEOUSLY
+ * with the 3D Walkthrough. This is a pure projection of the SAME authorities the
+ * 3D scene uses — discovered rooms, program assignments, equipment envelopes, and
+ * (optionally) ranked candidate tiers — all joined by `bimSpaceId`. It prefers the
+ * EXACT extracted room footprint and tags approximate outlines honestly. No new
+ * store is created (§26/§15/§9). Rendering happens in the React component.
+ *
+ * The `walker` read-model is passed IN by the caller (the plan component
+ * subscribes to the single walkthrough state) so this stays synchronous and the
+ * walker is never duplicated here.
+ */
+/**
+ * Build 1B Defect 1: HYDRATE the discovered-room registry for the 2D plan
+ * INDEPENDENT of the Clinical Program.
+ *
+ * The 2D plan reads `getDiscoveredRoomVolumes()`, which is derived from
+ * `cachedModelSemantics.rooms`. Those semantics are only populated by
+ * `refreshModelSemantics()`. Previously that refresh was driven ONLY by the
+ * Clinical Program's discovery effect, so with CLINICAL PROGRAM = Off (the normal
+ * Walkthrough case) the semantics were never loaded and the plan projected 0
+ * rooms — the observed "200 rooms → 0 rooms" regression.
+ *
+ * This helper lets the plan (or Walkthrough) trigger the SAME existing,
+ * idempotent, in-flight-guarded semantics refresh WITHOUT enabling the Clinical
+ * Program. It creates NO second room registry / discovery system (§24) — it just
+ * ensures the ONE authority is populated. Safe to call repeatedly: it no-ops once
+ * rooms are present, and shares the single in-flight refresh otherwise.
+ *
+ * Returns the number of discovered room volumes after the attempt (0 offline).
+ */
+export async function ensureBim2dPlanRoomsHydrated(): Promise<number> {
+    if (semanticsLoaded && cachedModelSemantics.rooms.length > 0) {
+        return getDiscoveredRoomVolumes().length
+    }
+    try {
+        await refreshModelSemantics()
+    } catch {
+        /* offline / no iModel — return whatever we have (likely 0) */
+    }
+    return getDiscoveredRoomVolumes().length
+}
+
+export function getBim2dPlanView(opts?: {
+    /** Storey to project; defaults to the program's active storey. */
+    storeyId?: string
+    /** The selected room to highlight; defaults to the program's selected space. */
+    selectedBimSpaceId?: string
+    /** Optional ranked candidates (bimSpaceId+tier) to annotate on the plan. */
+    candidates?: readonly import('./bim2dPlanProjection').PlanCandidateInput[]
+    /** Optional walker read-model from subscribeWalkthroughState (never duplicated). */
+    walker?: import('./bim2dPlanProjection').PlanWalkerInput
+}): import('./bim2dPlanProjection').Bim2dPlanView {
+    // §8 STOREY TRUTH: while walking, the plan MUST follow the WALKER's active
+    // storey (the single walkthrough read-model), NOT the Clinical Program's
+    // active storey — those are independent and were the source of the "wrong /
+    // empty floor" seam. Precedence: explicit opt > active walker storey >
+    // program active storey.
+    const walkerStoreyId = opts?.walker?.active ? opts.walker.activeStoreyId : undefined
+    const storeyId = opts?.storeyId ?? walkerStoreyId ?? programState.activeStoreyId
+    const selectedBimSpaceId = opts?.selectedBimSpaceId ?? programState.selectedSpaceId
+
+    // Rooms: discovered volumes + their EXACT extracted footprint if cached.
+    const rooms: import('./bim2dPlanProjection').PlanRoomInput[] = getDiscoveredRoomVolumes().map((r) => {
+        const fp = authoritativeFootprints.get(r.bimSpaceId)
+        const useExact = !!fp && fp.ok && fp.outerLoop.length >= 3
+        return {
+            bimSpaceId: r.bimSpaceId,
+            originalBimLabel: r.originalBimLabel,
+            mrtDisplayName: r.mrtDisplayName,
+            storeyId: r.storeyId,
+            worldRange: r.worldRange
+                ? { low: { x: r.worldRange.low.x, y: r.worldRange.low.y, z: r.worldRange.low.z }, high: { x: r.worldRange.high.x, y: r.worldRange.high.y, z: r.worldRange.high.z } }
+                : undefined,
+            exactOuterLoop: useExact ? fp!.outerLoop.map((p) => ({ x: p.x, y: p.y })) : undefined,
+            exactHoles: useExact ? fp!.holes.map((h) => h.map((p) => ({ x: p.x, y: p.y }))) : undefined,
+            exactFloorZ: useExact ? fp!.floorZ : undefined,
+        }
+    })
+
+    // Assignments: the app-owned clinical program (join by bimSpaceId).
+    const assignments: import('./bim2dPlanProjection').PlanAssignmentInput[] = programState.assignments
+        .filter((a) => a.clinicalFunction !== 'UNASSIGNED_EXISTING')
+        .map((a) => ({ bimSpaceId: a.bimSpaceId, clinicalFunction: a.clinicalFunction, mrtDisplayName: a.mrtDisplayName }))
+
+    // Equipment: project each visible instance's envelope footprint.
+    const equipment: import('./bim2dPlanProjection').PlanEquipmentInput[] = equipmentInstances.map((e) => {
+        const env = buildEquipmentEnvelope(e.placement)
+        return {
+            id: e.id,
+            parentBimSpaceId: e.parentBimSpaceId,
+            storeyId: e.storeyId,
+            displayLabel: e.displayLabel,
+            lifecycleState: e.lifecycleState,
+            hidden: e.hidden,
+            footprint: env.footprint.map((p) => ({ x: p.x, y: p.y })),
+        }
+    })
+
+    // EVI-MA-05A — vestibules: ONE marker each (reserved-volume footprint + front
+    // face + MRT/PTS stub ends). The reserved volume is an AABB; its footprint is
+    // the 4 XY corners. Front face + stub ends come from the pose + persisted ports.
+    const vestibules: import('./bim2dPlanProjection').PlanVestibuleInput[] = vestibuleInstances.map((v) => {
+        const rv = v.reservedVolume
+        const footprint = [
+            { x: rv.minX, y: rv.minY }, { x: rv.maxX, y: rv.minY },
+            { x: rv.maxX, y: rv.maxY }, { x: rv.minX, y: rv.maxY },
+        ]
+        const mrt = v.transportPorts.find((p) => p.transportFamily === 'MRT' && p.fabricated)
+        const pts = v.transportPorts.find((p) => p.transportFamily === 'PTS' && p.fabricated)
+        return {
+            id: v.vestibuleInstanceId,
+            parentBimSpaceId: v.parentBimSpaceId,
+            storeyId: undefined,
+            displayLabel: v.displayLabel,
+            lifecycleState: v.lifecycleState === 'LOCKED' ? 'LOCKED' as const : 'DRAFT' as const,
+            hidden: v.hidden,
+            footprint,
+            frontFace: { x: v.frontFacePlane.pointX, y: v.frontFacePlane.pointY },
+            frontNormal: { x: v.frontFacePlane.normalX, y: v.frontFacePlane.normalY },
+            mrtStubEnd: mrt ? { x: mrt.position.x, y: mrt.position.y } : undefined,
+            ptsStubEnd: pts ? { x: pts.position.x, y: pts.position.y } : undefined,
+        }
+    })
+
+    return projectBim2dPlan({
+        rooms,
+        assignments,
+        candidates: opts?.candidates,
+        equipment,
+        vestibules,
+        walker: opts?.walker,
+        storeyId,
+        selectedBimSpaceId,
+    })
+}
+
+export function getShowEquipment(): boolean { return showEquipment }
+export function setShowEquipment(show: boolean): void {
+    if (showEquipment === show) return
+    showEquipment = show
+    notifyProgram()
+}
+
+export function getSelectedEquipmentId(): string | undefined { return selectedEquipmentId }
+export function selectEquipment(id: string | undefined): void {
+    if (selectedEquipmentId === id) return
+    selectedEquipmentId = id
+    // EVI-MA-05A — one active selection at a time: selecting equipment clears any
+    // selected vestibule so the two floating controls never both show.
+    if (id) selectedVestibuleId = undefined
+    notifyProgram()
+}
+
+/** The per-instance containment status last computed (for the decorator cue). */
+export function getEquipmentContainmentStatus(id: string): 'PASS' | 'FAIL' | 'NOT_EVALUATED' {
+    return equipmentContainmentCache.get(id) ?? 'NOT_EVALUATED'
+}
+
+/**
+ * Place a canonical equipment model in a parent BIM room. Derives a parent-
+ * derived, floor-aware envelope seed from the room's OWN authoritative geometry
+ * (extracted read-only, on demand). Never fabricates equipment not in the
+ * canonical catalog. No Bentley write.
+ */
+export async function placeEquipmentInParent(input: {
+    canonicalEquipmentId: string
+    parentBimSpaceId: string
+}): Promise<{ ok: boolean; reason?: string; equipmentInstanceId?: string; duplicateInRoom?: boolean; displayLabel?: string; conflictLabel?: string; conflictEquipmentId?: string }> {
+    if (!programState.iModelId) return { ok: false, reason: 'NO_IMODEL' }
+    // EVI-MA-02 §9 — detect (but never block/merge) an identical canonical model
+    // already in the SAME parent room, so the UI can surface a non-blocking note.
+    const duplicateInRoom = equipmentInstances.some(
+        (e) => e.parentBimSpaceId === input.parentBimSpaceId && e.canonicalEquipmentId === input.canonicalEquipmentId,
+    )
+    const m = await import('./equipmentInstance')
+    await ensureAuthoritativeRoomFootprint(input.parentBimSpaceId)
+    const parent = authoritativeFootprints.get(input.parentBimSpaceId)
+    // Prefer the room's exact footprint; fall back to a bounded default (still the
+    // parent room, never another room / world origin) when geometry is pending.
+    const footprint = parent?.ok && parent.outerLoop && parent.outerLoop.length >= 3
+        ? parent.outerLoop
+        : [{ x: -2, y: -2 }, { x: 2, y: -2 }, { x: 2, y: 2 }, { x: -2, y: 2 }]
+    const zLow = parent?.volume?.zLow ?? parent?.floorZ ?? 0
+    const zHigh = parent?.volume?.zHigh ?? (zLow + 3)
+    const pv = getClinicalPlanningVolume(input.parentBimSpaceId)
+    equipmentSeq += 1
+    const created = m.createEquipmentInstance({
+        iModelId: programState.iModelId,
+        canonicalEquipmentId: input.canonicalEquipmentId,
+        parentBimSpaceId: input.parentBimSpaceId,
+        parentClinicalPlanningVolumeId: pv?.id,
+        storeyId: resolveRoomStoreyIdCached(input.parentBimSpaceId),
+        footprint,
+        zLow,
+        zHigh,
+        seq: equipmentSeq,
+    })
+    if (!created.ok) return { ok: false, reason: created.reason }
+    // EVI-MA-02A §12A — HARD spatial-exclusivity check. Test the proposed
+    // equipment's occupied 3D volume against every existing equipment instance
+    // (locked included). If it intersects, REJECT: create nothing, leave no
+    // transient instance, and report the conflicting model. The first placed
+    // instance reserves its volume until deleted or moved.
+    const collision = m.findEquipmentCollision({ proposed: created.instance.placement, existing: equipmentInstances })
+    if (collision.collides) {
+        const cat = await import('./canonicalEquipmentCatalog')
+        const cm = collision.conflictCanonicalId ? cat.canonicalEquipmentById(collision.conflictCanonicalId) : undefined
+        const conflictModel = cm ? `${cm.manufacturer} ${cm.model}` : (collision.conflictLabel ?? collision.conflictId)
+        return { ok: false, reason: 'EQUIPMENT_COLLISION', conflictLabel: conflictModel, conflictEquipmentId: collision.conflictId }
+    }
+    equipmentInstances = [...equipmentInstances, created.instance]
+    // §9 — the NEW instance becomes selected (never silently leaves the prior
+    // one selected), and its context menu / card converge on it.
+    selectedEquipmentId = created.instance.id
+    persistEquipment()
+    notifyProgram()
+    // EVI-MA-02A root-cause fix: ensure the direct-manipulation tool is armed so
+    // the newly placed equipment is immediately left-click selectable and
+    // right-click deletable in the live 3D viewport — WITHOUT requiring a legacy
+    // AssetInstance to exist. Idempotent; no-op if a placement/move owns the vp.
+    void ensureDirectManipulationReady().catch(() => false)
+    // Compute containment now that the instance exists (records last-known-valid).
+    void getEquipmentValidation(created.instance.id)
+    return { ok: true, equipmentInstanceId: created.instance.id, duplicateInRoom, displayLabel: created.instance.displayLabel }
+}
+
+/**
+ * Update a DRAFT instance's placement (rejected if LOCKED). No Bentley write.
+ *
+ * EVI-MA-02A §12D — a pose edit that would make this instance's volume overlap
+ * ANOTHER equipment instance is REJECTED; the existing valid arrangement remains
+ * authoritative (the instance keeps its current placement). Returns a result so
+ * callers/UI can report the rejection instead of silently allowing overlap.
+ */
+export function updateEquipmentPlacement(id: string, placement: EquipmentPlacement): { ok: boolean; reason?: string; conflictEquipmentId?: string } {
+    const e = equipmentInstances.find((x) => x.id === id)
+    if (!e) return { ok: false, reason: 'NO_INSTANCE' }
+    if (e.lifecycleState === 'LOCKED') return { ok: false, reason: 'LOCKED' }
+    // Collision against every OTHER instance (locked included); self excluded.
+    const collision = findEquipmentCollision({ proposed: placement, existing: equipmentInstances, excludeId: id })
+    if (collision.collides) {
+        return { ok: false, reason: 'EQUIPMENT_COLLISION', conflictEquipmentId: collision.conflictId }
+    }
+    e.placement = placement
+    equipmentInstances = [...equipmentInstances]
+    persistEquipment()
+    notifyProgram()
+    void getEquipmentValidation(id)
+    return { ok: true }
+}
+
+/** Translate a DRAFT instance in world XY (rejected on equipment collision). */
+export async function translateEquipmentInstance(id: string, dx: number, dy: number): Promise<{ ok: boolean; reason?: string; conflictEquipmentId?: string }> {
+    const e = equipmentInstances.find((x) => x.id === id)
+    if (!e) return { ok: false, reason: 'NO_INSTANCE' }
+    if (e.lifecycleState === 'LOCKED') return { ok: false, reason: 'LOCKED' }
+    const m = await import('./equipmentInstance')
+    return updateEquipmentPlacement(id, m.translateEquipment(e.placement, dx, dy))
+}
+
+/** Rotate a DRAFT instance about vertical (radians) (rejected on collision). */
+export async function rotateEquipmentInstance(id: string, dyaw: number): Promise<{ ok: boolean; reason?: string; conflictEquipmentId?: string }> {
+    const e = equipmentInstances.find((x) => x.id === id)
+    if (!e) return { ok: false, reason: 'NO_INSTANCE' }
+    if (e.lifecycleState === 'LOCKED') return { ok: false, reason: 'LOCKED' }
+    const m = await import('./equipmentInstance')
+    return updateEquipmentPlacement(id, m.rotateEquipment(e.placement, dyaw))
+}
+
+/** Live containment of an instance against its parent room mesh. */
+export async function getEquipmentContainment(id: string): Promise<{ status: 'PASS' | 'FAIL' | 'NOT_EVALUATED'; failedSamples: number; totalSamples: number; parentMeshAvailable: boolean; reason?: string }> {
+    const e = equipmentInstances.find((x) => x.id === id)
+    if (!e) return { status: 'NOT_EVALUATED', failedSamples: 0, totalSamples: 0, parentMeshAvailable: false, reason: 'NO_INSTANCE' }
+    await ensureAuthoritativeRoomFootprint(e.parentBimSpaceId)
+    const m = await import('./equipmentInstance')
+    const parent = authoritativeFootprints.get(e.parentBimSpaceId)
+    const parentMesh = parent?.ok && parent.mesh && parent.mesh.triangles.length >= 3 ? parent.mesh : undefined
+    const c = m.evaluateEquipmentContainment({ placement: e.placement, parentMesh })
+    equipmentContainmentCache.set(id, c.status)
+    // Record LAST-KNOWN-VALID on PASS only (never overwrite with an invalid edit).
+    if (c.status === 'PASS') {
+        const snap = { ...e.placement }
+        if (JSON.stringify(e.lastKnownValidPlacement) !== JSON.stringify(snap)) {
+            e.lastKnownValidPlacement = snap
+            equipmentInstances = [...equipmentInstances]
+            persistEquipment()
+        }
+    }
+    return { status: c.status, failedSamples: c.failedSamples, totalSamples: c.totalSamples, parentMeshAvailable: !!parentMesh, reason: c.reason }
+}
+
+/** The product-facing VALIDATION view model for an equipment instance. */
+export async function getEquipmentValidation(id: string): Promise<import('./equipmentValidation').EquipmentValidationState | undefined> {
+    const e = equipmentInstances.find((x) => x.id === id)
+    if (!e) return undefined
+    const val = await import('./equipmentValidation')
+    const contain = await getEquipmentContainment(id)
+    const quality = getClinicalProgramRoomGeometryQuality(e.parentBimSpaceId)?.quality
+    const authorityQuality: import('./equipmentValidation').EquipmentAuthorityQuality =
+        quality === 'EXACT_ROOM_BOUNDARY' ? 'EXACT_SPACE_GEOMETRY'
+            : quality === 'BIM_RANGE_APPROXIMATION' ? 'RANGE_ONLY_APPROXIMATION'
+                : 'NOT_AVAILABLE'
+    return val.resolveEquipmentValidation({
+        instance: e,
+        containmentStatus: contain.status,
+        authorityQuality,
+        totalSamples: contain.totalSamples,
+        failedSamples: contain.failedSamples,
+        parentMeshAvailable: contain.parentMeshAvailable,
+    })
+}
+
+/** Restrained equipment-validation summary across ALL instances. */
+export async function getEquipmentValidationSummary(): Promise<import('./equipmentValidation').EquipmentValidationSummary> {
+    const val = await import('./equipmentValidation')
+    const states: import('./equipmentValidation').EquipmentValidationState[] = []
+    for (const e of equipmentInstances) {
+        const s = await getEquipmentValidation(e.id)
+        if (s) states.push(s)
+    }
+    return val.summarizeEquipmentValidation({ states, instances: equipmentInstances })
+}
+
+/**
+ * RESTORE VALID POSITION for a DRAFT instance: restore this SAME instance's most
+ * recent last-known-valid placement; else derive a fresh parent-derived seed from
+ * this room's OWN geometry. No Bentley write. Rejected if LOCKED.
+ */
+export async function restoreEquipmentValidPosition(id: string): Promise<{ ok: boolean; reason?: string; source?: 'LAST_KNOWN_VALID' | 'PARENT_DERIVED' }> {
+    const e = equipmentInstances.find((x) => x.id === id)
+    if (!e) return { ok: false, reason: 'NO_INSTANCE' }
+    if (e.lifecycleState === 'LOCKED') return { ok: false, reason: 'LOCKED' }
+    const m = await import('./equipmentInstance')
+    if (e.lastKnownValidPlacement) {
+        const r = updateEquipmentPlacement(id, { ...e.lastKnownValidPlacement })
+        return r.ok ? { ok: true, source: 'LAST_KNOWN_VALID' } : { ok: false, reason: r.reason }
+    }
+    await ensureAuthoritativeRoomFootprint(e.parentBimSpaceId)
+    const parent = authoritativeFootprints.get(e.parentBimSpaceId)
+    const footprint = parent?.ok && parent.outerLoop && parent.outerLoop.length >= 3
+        ? parent.outerLoop
+        : [{ x: -2, y: -2 }, { x: 2, y: -2 }, { x: 2, y: 2 }, { x: -2, y: 2 }]
+    const seed = m.restoreEquipmentPlacement({ instance: e, footprint, zLow: parent?.volume?.zLow ?? parent?.floorZ ?? 0, zHigh: parent?.volume?.zHigh ?? 3 })
+    if (!seed) return { ok: false, reason: 'NO_SEED' }
+    const r = updateEquipmentPlacement(id, seed)
+    return r.ok ? { ok: true, source: 'PARENT_DERIVED' } : { ok: false, reason: r.reason }
+}
+
+/** RESET TO PARENT-DERIVED for a DRAFT instance. No Bentley write. Rejected if LOCKED. */
+export async function resetEquipmentToParentDerived(id: string): Promise<{ ok: boolean; reason?: string }> {
+    const e = equipmentInstances.find((x) => x.id === id)
+    if (!e) return { ok: false, reason: 'NO_INSTANCE' }
+    if (e.lifecycleState === 'LOCKED') return { ok: false, reason: 'LOCKED' }
+    const m = await import('./equipmentInstance')
+    await ensureAuthoritativeRoomFootprint(e.parentBimSpaceId)
+    const parent = authoritativeFootprints.get(e.parentBimSpaceId)
+    const footprint = parent?.ok && parent.outerLoop && parent.outerLoop.length >= 3
+        ? parent.outerLoop
+        : [{ x: -2, y: -2 }, { x: 2, y: -2 }, { x: 2, y: 2 }, { x: -2, y: 2 }]
+    const seed = m.resetEquipmentToParentDerived({ instance: e, footprint, zLow: parent?.volume?.zLow ?? parent?.floorZ ?? 0, zHigh: parent?.volume?.zHigh ?? 3 })
+    if (!seed) return { ok: false, reason: 'NO_SEED' }
+    return updateEquipmentPlacement(id, seed)
+}
+
+/** Lock an equipment instance (only when containment PASS + valid). No Bentley write. */
+export async function lockEquipment(id: string): Promise<{ ok: boolean; reason?: string }> {
+    const e = equipmentInstances.find((x) => x.id === id)
+    if (!e) return { ok: false, reason: 'NO_INSTANCE' }
+    await ensureAuthoritativeRoomFootprint(e.parentBimSpaceId)
+    const m = await import('./equipmentInstance')
+    const parent = authoritativeFootprints.get(e.parentBimSpaceId)
+    const parentMesh = parent?.ok && parent.mesh && parent.mesh.triangles.length >= 3 ? parent.mesh : undefined
+    const gate = m.canLockEquipment(e, parentMesh)
+    if (!gate.ok) return gate
+    e.lifecycleState = 'LOCKED'
+    equipmentInstances = [...equipmentInstances]
+    persistEquipment()
+    notifyProgram()
+    return { ok: true }
+}
+
+/** Unlock an equipment instance for editing (planning-object freeze only). */
+export function unlockEquipment(id: string): void {
+    const e = equipmentInstances.find((x) => x.id === id)
+    if (!e || e.lifecycleState !== 'LOCKED') return
+    e.lifecycleState = 'DRAFT'
+    equipmentInstances = [...equipmentInstances]
+    persistEquipment()
+    notifyProgram()
+}
+
+/** Per-instance visibility (view-only; never mutates placement or lifecycle). */
+export function setEquipmentVisibility(id: string, visible: boolean): void {
+    const e = equipmentInstances.find((x) => x.id === id)
+    if (!e) return
+    const hidden = !visible
+    if ((e.hidden ?? false) === hidden) return
+    e.hidden = hidden
+    equipmentInstances = [...equipmentInstances]
+    persistEquipment()
+    notifyProgram()
+}
+
+/**
+ * EVI-MA-02C — explicit, non-silent result for equipment deletion. Every Delete
+ * entry point (card, 3D right-click menu, keyboard) inspects this.
+ */
+export type DeleteEquipmentResult =
+    | { ok: true; deletedId: string; canonicalModelId: string }
+    | { ok: false; reason: 'NOT_FOUND' | 'LOCKED' | 'PERSISTENCE_FAILED' | 'INVALID_STATE'; message: string }
+
+/**
+ * Delete an equipment instance STRICTLY BY equipmentInstanceId (never by model /
+ * family / room / label / array position). LOCKED is rejected (unlock first).
+ * On success: remove exactly one instance, drop its containment reservation,
+ * clear the selection + context menu if they referenced it, persist the NEW
+ * collection, and notify subscribers so every derived representation (3D
+ * geometry, envelope, label, 2D marker, card, collision reservation) disappears.
+ *
+ * EVI-MA-02C root cause NOTE: the live Delete previously never mutated the store
+ * because the context-menu handler gated `deleteEquipment` behind a blocking
+ * `window.confirm(...)` that returns false in the embedded viewer host (Hide had
+ * no such gate, so Hide worked and Delete did not). The gate is removed; this
+ * function is the single authoritative mutation and always returns a result.
+ */
+export function deleteEquipment(id: string): DeleteEquipmentResult {
+    const e = equipmentInstances.find((x) => x.id === id)
+    if (!e) return { ok: false, reason: 'NOT_FOUND', message: `No equipment instance with id ${id}.` }
+    if (e.lifecycleState === 'LOCKED') return { ok: false, reason: 'LOCKED', message: 'Unlock equipment before deleting.' }
+    const canonicalModelId = e.canonicalEquipmentId
+    const before = equipmentInstances.length
+    equipmentInstances = equipmentInstances.filter((x) => x.id !== id)
+    if (equipmentInstances.length !== before - 1) {
+        // Should be impossible (find succeeded), but never silently "succeed".
+        return { ok: false, reason: 'INVALID_STATE', message: 'Equipment collection did not decrement by exactly one.' }
+    }
+    equipmentContainmentCache.delete(id)
+    // Clear derived selection/menu references to the now-deleted instance.
+    if (selectedEquipmentId === id) selectedEquipmentId = undefined
+    if (equipmentContextMenu?.equipmentInstanceId === id) closeEquipmentContextMenu()
+    // Persist the NEW authoritative collection and redraw all derived views.
+    persistEquipment()
+    notifyProgram()
+    return { ok: true, deletedId: id, canonicalModelId }
+}
+
+/** The capacity/production/cost crosswalk readout for an instance's canonical model. */
+export async function getEquipmentCrosswalk(id: string): Promise<import('./equipmentValidation').EquipmentCrosswalkReadout | undefined> {
+    const e = equipmentInstances.find((x) => x.id === id)
+    if (!e) return undefined
+    const val = await import('./equipmentValidation')
+    return val.buildEquipmentCrosswalkReadout(e.canonicalEquipmentId)
+}
+
+/**
+ * TRANSPORT-ENDPOINT SPATIAL AUTHORITY accessor. Returns the canonical MRT
+ * facility spatial class + cost-authority reference for a bindable MRT facility
+ * class (vestibule / endpoint). By reference only — never a fabricated cost.
+ */
+export async function getMrtFacilitySpatialAuthority(cls: import('./canonicalEquipmentCatalog').CanonicalMrtFacilityClass): Promise<import('./canonicalEquipmentCatalog').CanonicalMrtFacilityModel | undefined> {
+    const cat = await import('./canonicalEquipmentCatalog')
+    return cat.canonicalMrtFacility(cls)
+}
+
+/**
+ * DIAGNOSE SELECTED EQUIPMENT — generic bounded text report for the selected (or
+ * a given) equipment instance. Never dumps raw geometry; never mutates anything.
+ */
+export async function diagnoseSelectedEquipment(id?: string): Promise<string> {
+    const targetId = id ?? selectedEquipmentId
+    if (!targetId) return 'NO_SELECTED_EQUIPMENT: place or select an equipment instance first.'
+    const e = equipmentInstances.find((x) => x.id === targetId)
+    if (!e) return `NO_SUCH_EQUIPMENT: ${targetId}`
+    const val = await import('./equipmentValidation')
+    const validation = await getEquipmentValidation(e.id)
+    const contain = await getEquipmentContainment(e.id)
+    if (!validation) return `NO_VALIDATION: ${targetId}`
+    const d = val.buildSelectedEquipmentDiagnostic({
+        instance: e, validation, totalSamples: contain.totalSamples, failedSamples: contain.failedSamples,
+    })
+    const out = val.formatSelectedEquipmentDiagnostic(d)
+    if (import.meta.env.DEV) console.info('[equipment-diag]\n%s', out)
+    return out
+}
+
+/**
+ * EVI-MA-01 — structured VISUAL/RENDER diagnostic for one equipment instance
+ * (pose, resolved visual family, envelope + visual world bounds, primitive
+ * count, renderable). Makes a future visual failure diagnosable in one call.
+ * View-only; never mutates. Returns undefined for an unknown id.
+ */
+export async function getEquipmentVisualDiagnostic(
+    id?: string,
+): Promise<import('./equipmentGeometry').EquipmentVisualDiagnostic | undefined> {
+    const targetId = id ?? selectedEquipmentId
+    if (!targetId) return undefined
+    const e = equipmentInstances.find((x) => x.id === targetId)
+    if (!e) return undefined
+    const geo = await import('./equipmentGeometry')
+    const p = e.placement
+    const diag = geo.buildEquipmentVisualDiagnostic({
+        equipmentInstanceId: e.id,
+        canonicalModelId: e.canonicalEquipmentId,
+        canonicalClass: e.canonicalClass,
+        assetFamily: e.assetFamily,
+        parentRoomId: e.parentBimSpaceId,
+        pose: {
+            center: [p.centerX, p.centerY, p.zBase],
+            width: p.width,
+            depth: p.depth,
+            height: p.height,
+            yawRadians: p.yaw,
+        },
+    })
+    if (import.meta.env.DEV) console.info('[equipment-visual-diag] %o', diag)
+    return diag
+}
+
+/** Bounded Build 1B equipment overlay summary (for the report/audit). */
+export async function summarizeEquipmentBinding(): Promise<{
+    iModelId: string
+    equipmentCount: number
+    byClass: Record<string, number>
+    lockedCount: number
+    placeholderEnvelopeCount: number
+    boundRoomCount: number
+}> {
+    const byClass: Record<string, number> = {}
+    let locked = 0, placeholder = 0
+    const rooms = new Set<string>()
+    for (const e of equipmentInstances) {
+        byClass[e.canonicalClass] = (byClass[e.canonicalClass] ?? 0) + 1
+        if (e.lifecycleState === 'LOCKED') locked += 1
+        if (e.placement.envelopeProvenance === 'GENERIC_ENGINEERING_PLACEHOLDER') placeholder += 1
+        rooms.add(e.parentBimSpaceId)
+    }
+    return {
+        iModelId: programState.iModelId,
+        equipmentCount: equipmentInstances.length,
+        byClass,
+        lockedCount: locked,
+        placeholderEnvelopeCount: placeholder,
+        boundRoomCount: rooms.size,
+    }
+}
+
+// ===========================================================================
+// Build 1B spatial-foundation correction — CLINICAL ROOM CANDIDATE DISCOVERY
+// + RE-PARENTING (Problem A). Consumes the pure engines (clinicalRoomCandidate,
+// clinicalRoomReparent); wires the lazy authoritative-footprint extraction for
+// the shortlist. Never mutates Bentley identity/label/range/mesh.
+// ===========================================================================
+
+/**
+ * Build the footprint facts map (bimSpaceId -> exact outer loop + Z) from the
+ * overlay's authoritative-footprint cache for the given rooms. Only rooms that
+ * have ALREADY been extracted (ok) contribute; this NEVER triggers extraction.
+ */
+function collectCandidateFootprintFacts(
+    bimSpaceIds: readonly string[],
+): import('./clinicalRoomCandidate').CandidateFootprintFacts {
+    const out: Record<string, { outerLoop: { x: number; y: number }[]; floorZ?: number; zLow?: number; zHigh?: number }> = {}
+    for (const id of bimSpaceIds) {
+        const fp = authoritativeFootprints.get(id)
+        if (fp?.ok && fp.outerLoop && fp.outerLoop.length >= 3) {
+            out[id] = {
+                outerLoop: fp.outerLoop,
+                floorZ: fp.floorZ,
+                zLow: fp.volume?.zLow ?? fp.floorZ,
+                zHigh: fp.volume?.zHigh,
+            }
+        }
+    }
+    return out
+}
+
+/**
+ * Find ranked, explainable clinical-room CANDIDATES for a chosen function. This
+ * is the SHORTLIST stage of the staged evaluation:
+ *   1. discover rooms (already cached BIM semantics),
+ *   2. rank with the pure engine using CURRENTLY-KNOWN geometry,
+ *   3. LAZILY extract the exact mesh for the top-N flagged shortlist,
+ *   4. re-rank with the improved geometry so the final list is high-confidence.
+ * Deterministic per input; camera-independent. Never mutates Bentley.
+ */
+export async function findClinicalRoomCandidates(input: {
+    clinicalFunction: ClinicalFunction
+    storeyId?: string
+    limit?: number
+    recommendedOnly?: boolean
+    /** How many top shortlisted rooms to lazily extract exact geometry for. */
+    exactExtractionBudget?: number
+}): Promise<{
+    candidates: import('./clinicalRoomCandidate').RankedRoomCandidate[]
+    summary: import('./clinicalRoomCandidate').CandidateRankingSummary
+    vocabulary: import('./clinicalRoomCandidate').DiscoveredSemanticVocabulary
+}> {
+    const engine = await import('./clinicalRoomCandidate')
+    const discovered = getDiscoveredRoomVolumes()
+
+    // The current parent for this function (so it can be marked in the list).
+    const currentAssignment = programState.assignments.find(
+        (a) => a.clinicalFunction === input.clinicalFunction,
+    )
+    const currentParentBimSpaceId = currentAssignment?.bimSpaceId
+
+    // Pass 1 — rank with currently-known geometry (cheap; no extraction).
+    const pass1 = engine.rankClinicalRoomCandidates({
+        clinicalFunction: input.clinicalFunction,
+        rooms: discovered,
+        footprints: collectCandidateFootprintFacts(discovered.map((r) => r.bimSpaceId)),
+        currentParentBimSpaceId,
+        storeyId: input.storeyId,
+        recommendedOnly: input.recommendedOnly,
+        limit: input.limit,
+    })
+
+    // Pass 2 — lazily extract exact geometry for the top recommended shortlist
+    // that still needs it, then re-rank. Bounded by exactExtractionBudget.
+    const budget = Math.max(0, input.exactExtractionBudget ?? 6)
+    const toExtract = pass1
+        .filter((c) => c.recommended && c.needsExactGeometry)
+        .slice(0, budget)
+        .map((c) => c.bimSpaceId)
+    if (toExtract.length > 0) {
+        await Promise.all(toExtract.map((id) => ensureAuthoritativeRoomFootprint(id).catch(() => undefined)))
+    }
+
+    const candidates = engine.rankClinicalRoomCandidates({
+        clinicalFunction: input.clinicalFunction,
+        rooms: discovered,
+        footprints: collectCandidateFootprintFacts(discovered.map((r) => r.bimSpaceId)),
+        currentParentBimSpaceId,
+        storeyId: input.storeyId,
+        recommendedOnly: input.recommendedOnly,
+        limit: input.limit,
+    })
+    const summary = engine.summarizeCandidateRanking({ clinicalFunction: input.clinicalFunction, candidates })
+
+    // Vocabulary is computed over ALL discovered rooms (honest disclosure).
+    const classifications = discovered.map((r) =>
+        engine.classifyBimSpaceSemantics({ originalBimLabel: r.originalBimLabel, sourceClass: r.sourceClass }),
+    )
+    const vocabulary = engine.summarizeDiscoveredVocabulary(classifications)
+
+    return { candidates, summary, vocabulary }
+}
+
+/**
+ * Score a SINGLE candidate room for a function (used by direct-3D selection where
+ * the user clicks a room in the viewport). Lazily extracts that room's exact mesh
+ * first so the returned candidate is high-confidence. Returns undefined when the
+ * bimSpaceId is not a known discovered room (honest NO_ROOM_RESOLVED upstream).
+ */
+export async function scoreClinicalRoomCandidate(input: {
+    bimSpaceId: string
+    clinicalFunction: ClinicalFunction
+}): Promise<import('./clinicalRoomCandidate').RankedRoomCandidate | undefined> {
+    const engine = await import('./clinicalRoomCandidate')
+    const discovered = getDiscoveredRoomVolumes()
+    const room = discovered.find((r) => r.bimSpaceId === input.bimSpaceId)
+    if (!room) return undefined
+    await ensureAuthoritativeRoomFootprint(input.bimSpaceId).catch(() => undefined)
+    const currentAssignment = programState.assignments.find((a) => a.clinicalFunction === input.clinicalFunction)
+    return engine.scoreRoomCandidate({
+        room,
+        clinicalFunction: input.clinicalFunction,
+        footprint: collectCandidateFootprintFacts([input.bimSpaceId])[input.bimSpaceId],
+        currentParentBimSpaceId: currentAssignment?.bimSpaceId,
+    })
+}
+
+/**
+ * Assess the compatibility of re-parenting a function onto a candidate room WITHOUT
+ * applying it (drives the UI warning + override prompt). Pure result.
+ */
+export async function assessClinicalReparent(input: {
+    bimSpaceId: string
+    clinicalFunction: ClinicalFunction
+}): Promise<import('./clinicalRoomReparent').ReparentCompatibility | undefined> {
+    const candidate = await scoreClinicalRoomCandidate(input)
+    if (!candidate) return undefined
+    const reparent = await import('./clinicalRoomReparent')
+    return reparent.assessReparentCompatibility(candidate)
+}
+
+/**
+ * RE-PARENT a clinical function onto a NEW BIM room the user chose from the
+ * candidate shortlist (Problem A pt2). Applies the pure re-parent plan:
+ *   - move the assignment onto the new parent (single active assignment kept),
+ *   - REMOVE the old parent's DRAFT planning volume (no orphan),
+ *   - REGENERATE the new volume from the NEW parent's OWN authoritative footprint
+ *     (never reuse the old passage-space coords),
+ *   - re-verify containment against the new parent mesh.
+ * A LOCKED old volume is rejected (unlock first). Never mutates Bentley identity.
+ */
+export async function reparentClinicalFunction(input: {
+    clinicalFunction: ClinicalFunction
+    newParentBimSpaceId: string
+    overrideAccepted?: boolean
+}): Promise<
+    | { ok: true; newParentBimSpaceId: string; regenerated: boolean; containment: 'PASS' | 'FAIL' | 'NOT_EVALUATED' }
+    | { ok: false; reason: string; blockCode: string; compatibility?: import('./clinicalRoomReparent').ReparentCompatibility }
+> {
+    const reparent = await import('./clinicalRoomReparent')
+
+    const candidate = await scoreClinicalRoomCandidate({ bimSpaceId: input.newParentBimSpaceId, clinicalFunction: input.clinicalFunction })
+    if (!candidate) return { ok: false, reason: 'NO_ROOM_RESOLVED', blockCode: 'NO_TARGET' }
+
+    const currentAssignment = programState.assignments.find((a) => a.clinicalFunction === input.clinicalFunction)
+    const oldParentBimSpaceId = currentAssignment?.bimSpaceId
+    const oldVolume = oldParentBimSpaceId ? planningVolumes.find((v) => v.parentBimSpaceId === oldParentBimSpaceId) : undefined
+
+    const targetRoom = getDiscoveredRoomVolumes().find((r) => r.bimSpaceId === input.newParentBimSpaceId)
+    const targetStoreyId = targetRoom?.storeyId ?? resolveRoomStoreyIdCached(input.newParentBimSpaceId)
+
+    const planResult = reparent.planReparent({
+        clinicalFunction: input.clinicalFunction,
+        mrtDisplayName: currentAssignment?.mrtDisplayName ?? '',
+        oldParent: oldParentBimSpaceId ? { parentBimSpaceId: oldParentBimSpaceId, lifecycleState: oldVolume?.lifecycleState ?? 'DRAFT' } : undefined,
+        target: {
+            bimSpaceId: input.newParentBimSpaceId,
+            originalBimLabel: targetRoom?.originalBimLabel ?? candidate.originalBimLabel,
+            storeyId: targetStoreyId,
+        },
+        targetCandidate: candidate,
+        overrideAccepted: input.overrideAccepted,
+    })
+    if (!planResult.ok) {
+        return { ok: false, reason: planResult.reason, blockCode: planResult.blockCode, compatibility: planResult.compatibility }
+    }
+    const plan = planResult.plan
+
+    // 1. Move the assignment onto the new parent (preserve function + display name).
+    const assignResult = pureAssignClinicalFunction({
+        bimSpace: { bimSpaceId: plan.newParent.bimSpaceId, originalBimLabel: plan.newParent.originalBimLabel, bimStoreyId: plan.newParent.storeyId },
+        clinicalFunction: plan.clinicalFunction,
+        requestedDisplayName: plan.mrtDisplayName || undefined,
+        existingAssignments: programState.assignments,
+    })
+    if (!assignResult.ok) return { ok: false, reason: assignResult.reason, blockCode: 'ASSIGN_FAILED' }
+
+    // 2. Remove the OLD parent override (no duplicate assignment) + its orphan volume.
+    let nextAssignments = assignResult.assignments
+    if (plan.oldParentBimSpaceId && plan.oldParentBimSpaceId !== plan.newParent.bimSpaceId) {
+        nextAssignments = pureResetAssignment(plan.oldParentBimSpaceId, nextAssignments)
+        // Re-apply the new assignment (reset above operates on the pre-assign list order).
+        if (!nextAssignments.some((a) => a.bimSpaceId === plan.newParent.bimSpaceId)) {
+            nextAssignments = [...nextAssignments, assignResult.assignment]
+        }
+        if (plan.removeOldVolume) {
+            planningVolumes = planningVolumes.filter((v) => v.parentBimSpaceId !== plan.oldParentBimSpaceId)
+        }
+    }
+    programState.assignments = nextAssignments
+    persistProgram()
+
+    // 3. Extract the NEW parent geometry + REGENERATE the volume from it.
+    await ensureAuthoritativeRoomFootprint(plan.newParent.bimSpaceId).catch(() => undefined)
+    const seed = await suggestPlanningVolumeSeedForParent(plan.newParent.bimSpaceId)
+    await defineClinicalVolume({
+        parentBimSpaceId: plan.newParent.bimSpaceId,
+        clinicalFunction: plan.clinicalFunction,
+        displayName: plan.mrtDisplayName || plan.newParent.originalBimLabel,
+        storeyId: targetStoreyId,
+        params: seed,
+    })
+    persistPlanningVolumes()
+
+    // 4. Re-verify containment against the NEW parent mesh.
+    const containment = await getClinicalVolumeContainment(plan.newParent.bimSpaceId)
+
+    // B1B-MA-01 recovery UX: select the NEW parent so the normal Clinical Program
+    // editor (validation warning + Restore Valid Position / Reset to Parent-Derived
+    // / edit) is immediately reachable if containment is not PASS. No dead end.
+    programState.selectedSpaceId = plan.newParent.bimSpaceId
+
+    notifyProgram()
+    return { ok: true, newParentBimSpaceId: plan.newParent.bimSpaceId, regenerated: true, containment: containment.status }
+}
+
+/**
+ * FIT-TO-ROOM candidate 3D preview (Problem A pt3). Lazily extracts the room's
+ * authoritative footprint, derives a world range + interior anchor from it, and
+ * frames the camera on that room (VIEW-ONLY — orbit/zoom/fit remain usable).
+ * Falls back to the BIM range when no exact footprint is available. Returns false
+ * when no geometry is resolvable. Never mutates Bentley.
+ */
+export async function fitViewToClinicalRoom(bimSpaceId: string): Promise<boolean> {
+    if (!bimSpaceId) return false
+    await ensureAuthoritativeRoomFootprint(bimSpaceId).catch(() => undefined)
+    const fp = authoritativeFootprints.get(bimSpaceId)
+    let low: { x: number; y: number; z: number } | undefined
+    let high: { x: number; y: number; z: number } | undefined
+    let anchor: { x: number; y: number; z: number } | undefined
+
+    if (fp?.ok && fp.outerLoop && fp.outerLoop.length >= 3) {
+        let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity
+        for (const p of fp.outerLoop) {
+            if (p.x < minX) minX = p.x; if (p.x > maxX) maxX = p.x
+            if (p.y < minY) minY = p.y; if (p.y > maxY) maxY = p.y
+        }
+        const zLow = fp.volume?.zLow ?? fp.floorZ
+        const zHigh = fp.volume?.zHigh ?? fp.floorZ + 3
+        low = { x: minX, y: minY, z: zLow }
+        high = { x: maxX, y: maxY, z: zHigh }
+        anchor = fp.interiorAnchor
+    } else {
+        // Range fallback (honest approximation).
+        const room = cachedModelSemantics.rooms.find((r) => r.roomId === bimSpaceId)
+        const r = room?.range
+        if (r) {
+            low = { x: r.low.x, y: r.low.y, z: r.low.z }
+            high = { x: r.high.x, y: r.high.y, z: r.high.z }
+            anchor = { x: (r.low.x + r.high.x) / 2, y: (r.low.y + r.high.y) / 2, z: (r.low.z + r.high.z) / 2 }
+        }
+    }
+    if (!low || !high || !anchor) return false
+    const wc = await import('./walkthroughController')
+    return wc.fitViewToRoom({ low, high, anchor })
+}
+
+/**
+ * EVI-MA-01 — FIT TO EQUIPMENT. Frame the Bentley viewport on the authoritative
+ * world bounds of one app-owned equipment instance (recognizable visual parts
+ * ∪ containment envelope), at its OWN pose. Selects the instance and leaves it
+ * selected. VIEW-ONLY: never mutates the equipment pose, parent, clinical
+ * assignment, containment, or the iModel. Returns a status so the UI can
+ * honestly surface a failure instead of pretending.
+ */
+export async function fitViewToEquipment(id: string): Promise<{ ok: boolean; reason?: string }> {
+    if (!id) return { ok: false, reason: 'NO_ID' }
+    const e = equipmentInstances.find((x) => x.id === id)
+    if (!e) return { ok: false, reason: 'NO_INSTANCE' }
+    // Ensure it is the selected equipment (highlight + card focus) before fit.
+    selectEquipment(id)
+    const geo = await import('./equipmentGeometry')
+    const p = e.placement
+    const pose = {
+        center: [p.centerX, p.centerY, p.zBase] as [number, number, number],
+        width: p.width,
+        depth: p.depth,
+        height: p.height,
+        yawRadians: p.yaw,
+    }
+    const family = geo.resolveVisualFamilyForCanonical({ canonicalClass: e.canonicalClass, assetFamily: e.assetFamily })
+    const bounds = geo.computeEquipmentWorldBounds({ pose, family })
+    if (!bounds || !geo.isNonDegenerateBounds(bounds)) {
+        return { ok: false, reason: 'VISUAL_NOT_AVAILABLE' }
+    }
+    const low = { x: bounds.low[0], y: bounds.low[1], z: bounds.low[2] }
+    const high = { x: bounds.high[0], y: bounds.high[1], z: bounds.high[2] }
+    const anchor = { x: (low.x + high.x) / 2, y: (low.y + high.y) / 2, z: (low.z + high.z) / 2 }
+    const wc = await import('./walkthroughController')
+    const ok = wc.fitViewToRoom({ low, high, anchor })
+    return ok ? { ok: true } : { ok: false, reason: 'CAMERA_UNAVAILABLE' }
+}
+
+// ===========================================================================
+// EVI-MA-05A — LIVE CLINICAL LOGISTICS VESTIBULE lifecycle
+//
+// Wires the EVI-MA-05 ClinicalLogisticsVestibuleInstance domain into the live
+// viewer, mirroring the equipment lifecycle above: an iModel-scoped in-memory
+// store, safe persistence, a create action driven from the selected cyclotron,
+// selection, Hide/Show, Lock/Unlock, Delete, Fit, collision and duplicate guards.
+// There is ONE vestibule domain model (no VestibuleV2). Ports terminate at short
+// UNCONNECTED stubs — NO transport routing/animation (that is Build 2).
+// ===========================================================================
+
+import type {
+    ClinicalLogisticsVestibuleInstance,
+    ServiceClass as VestibuleServiceClass,
+} from './clinicalLogisticsVestibule'
+
+let vestibuleInstances: ClinicalLogisticsVestibuleInstance[] = []
+let vestibuleHydrated = false
+let vestibuleSeq = 0
+let selectedVestibuleId: string | undefined
+
+/** Load vestibule instances for the active iModel (scoped; cleared on switch). */
+function loadVestibulesForIModel(iModelId: string): void {
+    vestibuleHydrated = false
+    selectedVestibuleId = undefined
+    void import('./clinicalLogisticsVestibule').then((m) => {
+        if (programState.iModelId !== iModelId) return
+        vestibuleInstances = iModelId ? m.loadVestibuleInstances(iModelId) : []
+        vestibuleSeq = vestibuleInstances.length
+        vestibuleHydrated = true
+        notifyProgram()
+        if (vestibuleInstances.length > 0) void ensureDirectManipulationReady().catch(() => false)
+    })
+}
+
+function persistVestibules(): void {
+    if (!programState.iModelId || !vestibuleHydrated) return
+    void import('./clinicalLogisticsVestibule').then((m) => m.saveVestibuleInstances(programState.iModelId, vestibuleInstances))
+}
+
+/** Snapshot of all vestibule instances (read-only). */
+export function getVestibuleInstances(): readonly ClinicalLogisticsVestibuleInstance[] {
+    return vestibuleInstances
+}
+
+/** The vestibule instance for an id (or undefined). */
+export function getVestibuleInstance(id: string): ClinicalLogisticsVestibuleInstance | undefined {
+    return vestibuleInstances.find((v) => v.vestibuleInstanceId === id)
+}
+
+export function getSelectedVestibuleId(): string | undefined { return selectedVestibuleId }
+
+/** Select a vestibule (clears equipment selection so the two never fight). */
+export function selectVestibule(id: string | undefined): void {
+    if (selectedVestibuleId === id) return
+    selectedVestibuleId = id
+    if (id) selectedEquipmentId = undefined // one active selection at a time
+    notifyProgram()
+}
+
+/** The occupied AABBs of all equipment envelopes (for vestibule collision). */
+function equipmentOccupiedAabbs(): { id: string; aabb: import('./clinicalLogisticsVestibule').Aabb }[] {
+    return equipmentInstances.map((e) => {
+        const env = buildEquipmentEnvelope(e.placement)
+        let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity
+        for (const p of env.footprint) {
+            if (p.x < minX) minX = p.x; if (p.x > maxX) maxX = p.x
+            if (p.y < minY) minY = p.y; if (p.y > maxY) maxY = p.y
+        }
+        return {
+            id: e.id,
+            aabb: { minX, minY, minZ: e.placement.zBase, maxX, maxY, maxZ: e.placement.zBase + e.placement.height },
+        }
+    })
+}
+
+/**
+ * EVI-MA-05A result surface for a live create. Distinguishes the honest
+ * outcomes the spec requires: success, an existing vestibule (duplicate guard),
+ * no defensible wall, a room-side collision, or a missing prerequisite.
+ */
+export type CreateVestibuleLiveResult =
+    | { ok: true; vestibuleInstanceId: string }
+    | { ok: false; reason: 'VESTIBULE_ALREADY_EXISTS'; existingVestibuleId: string }
+    | { ok: false; reason: 'NO_SELECTED_CYCLOTRON' | 'NOT_A_CYCLOTRON' | 'NO_PARENT_ROOM' | 'NO_DEFENSIBLE_WALL' | 'ROOM_TOO_SHORT' | 'VESTIBULE_COLLISION' | 'POSE_SEED_FAILED'; conflictId?: string }
+
+/**
+ * CREATE RADIOPHARMACY VESTIBULE for the given (or currently selected)
+ * cyclotron. Places ONE wall-integrated ClinicalLogisticsVestibuleInstance in
+ * the SAME parent BIM room as the cyclotron, collision-checked against existing
+ * equipment + vestibules, duplicate-guarded (one active radiopharmacy vestibule
+ * per production context). On success: persist, select, and the caller Fits.
+ * Never modifies the Bentley wall (PROPOSED_WALL_PENETRATION).
+ */
+export async function createRadiopharmacyVestibuleForCyclotron(cyclotronId?: string): Promise<CreateVestibuleLiveResult> {
+    if (!programState.iModelId) return { ok: false, reason: 'NO_PARENT_ROOM' }
+    const eqId = cyclotronId ?? selectedEquipmentId
+    if (!eqId) return { ok: false, reason: 'NO_SELECTED_CYCLOTRON' }
+    const cyclo = equipmentInstances.find((e) => e.id === eqId)
+    if (!cyclo) return { ok: false, reason: 'NO_SELECTED_CYCLOTRON' }
+    if (cyclo.canonicalClass !== 'CYCLOTRON') return { ok: false, reason: 'NOT_A_CYCLOTRON' }
+    const parentRoomId = cyclo.parentBimSpaceId
+    if (!parentRoomId) return { ok: false, reason: 'NO_PARENT_ROOM' }
+
+    // Duplicate guard: one active RADIOPHARMACY vestibule per production context
+    // (same parent room). Repeated create selects + returns the existing one.
+    const existing = vestibuleInstances.find(
+        (v) => v.serviceClass === 'RADIOPHARMACY' && v.parentBimSpaceId === parentRoomId,
+    )
+    if (existing) {
+        // Duplicate guard — select the existing instance so the caller can Fit.
+        selectVestibule(existing.vestibuleInstanceId)
+        return { ok: false, reason: 'VESTIBULE_ALREADY_EXISTS', existingVestibuleId: existing.vestibuleInstanceId }
+    }
+
+    const m = await import('./clinicalLogisticsVestibule')
+    await ensureAuthoritativeRoomFootprint(parentRoomId)
+    const parent = authoritativeFootprints.get(parentRoomId)
+    const footprint = parent?.ok && parent.outerLoop && parent.outerLoop.length >= 3
+        ? parent.outerLoop
+        : [{ x: -2, y: -2 }, { x: 2, y: -2 }, { x: 2, y: 2 }, { x: -2, y: 2 }]
+    const zLow = parent?.volume?.zLow ?? parent?.floorZ ?? cyclo.placement.zBase
+    const zHigh = parent?.volume?.zHigh ?? (zLow + 3)
+
+    // Try each defensible wall (longest first) until one places without a
+    // room-side collision. Never seed at the centroid; never optimize for
+    // shortest cyclotron distance.
+    const walls = m.enumerateWallCandidates(footprint).filter((w) => w.wallLength >= m.MIN_VESTIBULE_WALL_WIDTH_M)
+    if (walls.length === 0) return { ok: false, reason: 'NO_DEFENSIBLE_WALL' }
+    const occupied = [
+        ...equipmentOccupiedAabbs(),
+        ...vestibuleInstances.map((v) => ({ id: v.vestibuleInstanceId, aabb: m.reservedVolumeAsAabb(v.reservedVolume) })),
+    ]
+    vestibuleSeq += 1
+    let created: ClinicalLogisticsVestibuleInstance | undefined
+    let lastConflict: string | undefined
+    for (const wall of walls) {
+        const res = m.createVestibuleInstance({
+            iModelId: programState.iModelId,
+            serviceClass: 'RADIOPHARMACY',
+            parentBimSpaceId: parentRoomId,
+            sourceClinicalContextId: cyclo.id,
+            footprint,
+            zLow,
+            zHigh,
+            seq: vestibuleSeq,
+            wallSide: wall.wallSide,
+        })
+        if (!res.ok) {
+            if (res.reason === 'ROOM_TOO_SHORT') return { ok: false, reason: 'ROOM_TOO_SHORT' }
+            continue
+        }
+        const conflict = m.findVestibuleCollision(res.instance.reservedVolume, occupied)
+        if (conflict) { lastConflict = conflict; continue }
+        created = res.instance
+        break
+    }
+    if (!created) {
+        return lastConflict
+            ? { ok: false, reason: 'VESTIBULE_COLLISION', conflictId: lastConflict }
+            : { ok: false, reason: 'NO_DEFENSIBLE_WALL' }
+    }
+
+    vestibuleInstances = [...vestibuleInstances, created]
+    selectVestibule(created.vestibuleInstanceId)
+    persistVestibules()
+    notifyProgram()
+    void ensureDirectManipulationReady().catch(() => false)
+    return { ok: true, vestibuleInstanceId: created.vestibuleInstanceId }
+}
+
+/** Per-instance vestibule visibility (view-only; keeps pose, ports, reservation). */
+export function setVestibuleVisibility(id: string, visible: boolean): void {
+    const v = vestibuleInstances.find((x) => x.vestibuleInstanceId === id)
+    if (!v) return
+    const hidden = !visible
+    if ((v.hidden ?? false) === hidden) return
+    v.hidden = hidden
+    vestibuleInstances = [...vestibuleInstances]
+    persistVestibules()
+    notifyProgram()
+}
+
+/** Lock a vestibule (freezes pose edits; stays visible/selectable). No BIM write. */
+export function lockVestibule(id: string): void {
+    const v = vestibuleInstances.find((x) => x.vestibuleInstanceId === id)
+    if (!v || v.lifecycleState === 'LOCKED') return
+    v.lifecycleState = 'LOCKED'
+    vestibuleInstances = [...vestibuleInstances]
+    persistVestibules()
+    notifyProgram()
+}
+
+/** Unlock a vestibule for editing. */
+export function unlockVestibule(id: string): void {
+    const v = vestibuleInstances.find((x) => x.vestibuleInstanceId === id)
+    if (!v || v.lifecycleState !== 'LOCKED') return
+    v.lifecycleState = 'DRAFT'
+    vestibuleInstances = [...vestibuleInstances]
+    persistVestibules()
+    notifyProgram()
+}
+
+export type DeleteVestibuleResult =
+    | { ok: true; deletedId: string }
+    | { ok: false; reason: 'NOT_FOUND' | 'LOCKED' | 'INVALID_STATE'; message: string }
+
+/**
+ * Delete the ONE authoritative ClinicalLogisticsVestibuleInstance by id. Removes
+ * the instance and every derived representation (3D visual, rear manifold, wall
+ * sleeve, MRT + PTS stubs, both connection ports, 2D marker, selected control,
+ * reserved collision space). The cyclotron and the BIM wall remain. Persists.
+ */
+export function deleteVestibule(id: string): DeleteVestibuleResult {
+    const v = vestibuleInstances.find((x) => x.vestibuleInstanceId === id)
+    if (!v) return { ok: false, reason: 'NOT_FOUND', message: `No vestibule with id ${id}.` }
+    if (v.lifecycleState === 'LOCKED') return { ok: false, reason: 'LOCKED', message: 'Unlock vestibule before deleting.' }
+    const before = vestibuleInstances.length
+    vestibuleInstances = vestibuleInstances.filter((x) => x.vestibuleInstanceId !== id)
+    if (vestibuleInstances.length !== before - 1) {
+        return { ok: false, reason: 'INVALID_STATE', message: 'Vestibule collection did not decrement by exactly one.' }
+    }
+    if (selectedVestibuleId === id) selectedVestibuleId = undefined
+    if (vestibuleContextMenu?.vestibuleInstanceId === id) closeVestibuleContextMenu()
+    persistVestibules()
+    notifyProgram()
+    return { ok: true, deletedId: id }
+}
+
+/**
+ * FIT TO VESTIBULE — frame the full assembly (front face + wall sleeve + rear
+ * manifold + MRT transition/stub + PTS stub) using authoritative world bounds.
+ * View-only: selects the vestibule, never mutates pose. Mirrors fitViewToEquipment.
+ */
+export async function fitViewToVestibule(id: string): Promise<{ ok: boolean; reason?: string }> {
+    if (!id) return { ok: false, reason: 'NO_ID' }
+    const v = vestibuleInstances.find((x) => x.vestibuleInstanceId === id)
+    if (!v) return { ok: false, reason: 'NO_INSTANCE' }
+    selectVestibule(id)
+    const geo = await import('./equipmentGeometry')
+    const m = await import('./clinicalLogisticsVestibule')
+    const pose = {
+        center: [v.pose.centerX, v.pose.centerY, v.pose.zBase] as [number, number, number],
+        width: v.pose.width, depth: v.pose.depth, height: v.pose.height, yawRadians: v.pose.yaw,
+    }
+    const ports = m.vestibulePortRenderOptions(v.serviceClass)
+    const bounds = geo.computeEquipmentWorldBounds({ pose, family: v.visualFamily, vestibulePorts: ports })
+    if (!bounds || !geo.isNonDegenerateBounds(bounds)) return { ok: false, reason: 'VISUAL_NOT_AVAILABLE' }
+    const low = { x: bounds.low[0], y: bounds.low[1], z: bounds.low[2] }
+    const high = { x: bounds.high[0], y: bounds.high[1], z: bounds.high[2] }
+    const anchor = { x: (low.x + high.x) / 2, y: (low.y + high.y) / 2, z: (low.z + high.z) / 2 }
+    const wc = await import('./walkthroughController')
+    const ok = wc.fitViewToRoom({ low, high, anchor })
+    return ok ? { ok: true } : { ok: false, reason: 'CAMERA_UNAVAILABLE' }
+}
+
+/** Whether a service class is currently supported for live placement. */
+export function vestibuleServiceClassSupportsLivePlacement(sc: VestibuleServiceClass): boolean {
+    // EVI-MA-05A live placement is demonstrated for RADIOPHARMACY; the other
+    // classes keep their EVI-MA-05 policy foundation (no live placement required).
+    return sc === 'RADIOPHARMACY'
+}
+
+// ===========================================================================
+// EVI-MA-06 — UNIFIED application-object interaction layer
+//
+// ONE picker + ONE delete dispatcher + ONE selection notion shared by left-click
+// selection, left-drag, right-click context menu, and the Delete key. Delegates
+// to the EXISTING lifecycle stores (equipment / vestibule / asset) — it never
+// rewrites them. Renderer ownership is not lifecycle authority.
+// ===========================================================================
+
+import type {
+    AppObjectCandidate,
+    AppObjectPickTarget,
+    AppObjectRef,
+    AppObjectType,
+    AppPickRay,
+} from './appObjectPicking'
+import { resolveAppObjectPickTarget } from './appObjectPicking'
+
+/**
+ * Build the live application-object pick candidates from the authoritative
+ * stores. EQUIPMENT (scanner + cyclotron) contributes an ORIENTED occupied box
+ * (yaw-respecting); a VESTIBULE contributes its FULL occupied AABB (room-side +
+ * behind-wall) so any visible component resolves the one vestibule. Planning
+ * volumes and native BIM are intentionally NOT candidates. Pure snapshot.
+ */
+export function buildAppObjectCandidates(): AppObjectCandidate[] {
+    const out: AppObjectCandidate[] = []
+    for (const e of equipmentInstances) {
+        const p = e.placement
+        out.push({
+            objectType: 'EQUIPMENT_INSTANCE',
+            instanceId: e.id,
+            parentBimSpaceId: e.parentBimSpaceId,
+            volume: {
+                kind: 'OBB',
+                centerX: p.centerX, centerY: p.centerY, centerZ: p.zBase + p.height / 2,
+                halfX: p.width / 2, halfY: p.depth / 2, halfZ: p.height / 2,
+                yaw: p.yaw,
+            },
+            hidden: e.hidden ?? false,
+            locked: e.lifecycleState === 'LOCKED',
+            draggableWhenUnlocked: true,
+            deletableWhenUnlocked: true,
+        })
+    }
+    for (const v of vestibuleInstances) {
+        // Full occupied volume (room-side + behind-wall) as an AABB so a ray on
+        // ANY component (fascia..PTS tube) resolves the one vestibuleInstanceId.
+        const hw = v.pose.width / 2, hd = v.pose.depth / 2
+        const c = Math.cos(v.pose.yaw), s = Math.sin(v.pose.yaw)
+        const corners = [
+            { x: -hw, y: -hd }, { x: hw, y: -hd }, { x: hw, y: hd }, { x: -hw, y: hd },
+        ].map((q) => ({ x: v.pose.centerX + q.x * c - q.y * s, y: v.pose.centerY + q.x * s + q.y * c }))
+        let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity
+        for (const q of corners) { minX = Math.min(minX, q.x); maxX = Math.max(maxX, q.x); minY = Math.min(minY, q.y); maxY = Math.max(maxY, q.y) }
+        out.push({
+            objectType: 'CLINICAL_LOGISTICS_VESTIBULE',
+            instanceId: v.vestibuleInstanceId,
+            parentBimSpaceId: v.parentBimSpaceId,
+            volume: { kind: 'AABB', minX, minY, minZ: v.pose.zBase, maxX, maxY, maxZ: v.pose.zBase + v.pose.height },
+            hidden: v.hidden ?? false,
+            locked: v.lifecycleState === 'LOCKED',
+            draggableWhenUnlocked: true,
+            deletableWhenUnlocked: true,
+        })
+    }
+    return out
+}
+
+/** The currently selected application object as a unified ref (equipment or vestibule). */
+export function getSelectedAppObjectRef(): AppObjectRef | undefined {
+    if (selectedVestibuleId) return { objectType: 'CLINICAL_LOGISTICS_VESTIBULE', instanceId: selectedVestibuleId }
+    if (selectedEquipmentId) return { objectType: 'EQUIPMENT_INSTANCE', instanceId: selectedEquipmentId }
+    return undefined
+}
+
+/**
+ * Resolve the ONE application-object pick target under a world ray, using the
+ * live candidate snapshot + the current unified selection for selected-object
+ * preference. This is the single resolution left-click / right-click / drag all
+ * begin from. Pure w.r.t. the store snapshot.
+ */
+export function resolveAppObjectAtRay(ray: AppPickRay): AppObjectPickTarget | undefined {
+    return resolveAppObjectPickTarget(ray, buildAppObjectCandidates(), getSelectedAppObjectRef())
+}
+
+/** Select the exact application object (routes to the family selection authority). */
+export function selectAppObject(ref: AppObjectRef | undefined): void {
+    if (!ref) { selectEquipment(undefined); selectVestibule(undefined); return }
+    if (ref.objectType === 'CLINICAL_LOGISTICS_VESTIBULE') selectVestibule(ref.instanceId)
+    else selectEquipment(ref.instanceId)
+}
+
+/**
+ * EVI-MA-07 — the screen-space anchor for the LOCAL action popover, set at the
+ * moment of selection (click/right-click point). Persists with the selection; it
+ * is NOT recomputed on hover/motion (the menu belongs to the captured object).
+ */
+let selectedAppObjectAnchor: { x: number; y: number } | undefined
+export function setSelectedAppObjectAnchor(anchor: { x: number; y: number } | undefined): void {
+    selectedAppObjectAnchor = anchor
+    notifyProgram()
+}
+export function getSelectedAppObjectAnchor(): { x: number; y: number } | undefined { return selectedAppObjectAnchor }
+
+/**
+ * EVI-MA-07 — select an app object AND capture its local-menu anchor in one
+ * authoritative step (the tool calls this on left/right click). Clearing the
+ * selection (undefined) also clears the anchor.
+ */
+export function selectAppObjectWithAnchor(ref: AppObjectRef | undefined, anchor?: { x: number; y: number }): void {
+    selectAppObject(ref)
+    setSelectedAppObjectAnchor(ref ? anchor : undefined)
+}
+
+/** Unified application-object delete result. */
+export type DeleteAppObjectResult =
+    | { ok: true; objectType: AppObjectType; deletedId: string }
+    | { ok: false; objectType: AppObjectType; reason: string; message: string }
+
+/**
+ * ONE authoritative application-object delete dispatcher. It ONLY routes to the
+ * existing lifecycle delete for the target's family — no duplicated delete logic,
+ * no window.confirm. EQUIPMENT_INSTANCE → deleteEquipment; CLINICAL_LOGISTICS_
+ * VESTIBULE → deleteVestibule. (ASSET_INSTANCE routing is reserved for the
+ * legacy fixture path, which owns its own delete surface.)
+ */
+export function deleteAppObject(target: { objectType: AppObjectType; instanceId: string }): DeleteAppObjectResult {
+    if (target.objectType === 'EQUIPMENT_INSTANCE') {
+        const r = deleteEquipment(target.instanceId)
+        return r.ok
+            ? { ok: true, objectType: 'EQUIPMENT_INSTANCE', deletedId: r.deletedId }
+            : { ok: false, objectType: 'EQUIPMENT_INSTANCE', reason: r.reason, message: r.message }
+    }
+    if (target.objectType === 'CLINICAL_LOGISTICS_VESTIBULE') {
+        const r = deleteVestibule(target.instanceId)
+        return r.ok
+            ? { ok: true, objectType: 'CLINICAL_LOGISTICS_VESTIBULE', deletedId: r.deletedId }
+            : { ok: false, objectType: 'CLINICAL_LOGISTICS_VESTIBULE', reason: r.reason, message: r.message }
+    }
+    return { ok: false, objectType: target.objectType, reason: 'UNSUPPORTED', message: `Delete not routed for ${target.objectType}.` }
+}
+
+/**
+ * EVI-MA-06 — delete the CURRENTLY SELECTED application object (Delete key path).
+ * Focus-safety (not inside an input/textarea/select/contenteditable) is enforced
+ * by the caller; this only acts on the unified selection and refuses when locked.
+ */
+export function deleteSelectedAppObject(): DeleteAppObjectResult | undefined {
+    const ref = getSelectedAppObjectRef()
+    if (!ref) return undefined
+    return deleteAppObject(ref)
+}
+
+// ---------------------------------------------------------------------------
+// EVI-MA-06 — unified drag commit authorities (pure w.r.t. store; persist inside)
+// ---------------------------------------------------------------------------
+
+/**
+ * The floor Z of an equipment instance's parent room, if the authoritative
+ * footprint is cached; else the instance's current base Z. Used as the drag
+ * plane elevation so freestanding equipment never floats vertically.
+ */
+function equipmentFloorZ(e: EquipmentAssetInstance): number {
+    const fp = authoritativeFootprints.get(e.parentBimSpaceId)
+    return fp?.volume?.zLow ?? fp?.floorZ ?? e.placement.zBase
+}
+
+/**
+ * Move freestanding EQUIPMENT to a floor-plane world point (X/Y from the point,
+ * Z pinned to the parent-room floor, yaw/extents unchanged). Delegates to the
+ * authoritative `updateEquipmentPlacement` which enforces collision + persists;
+ * on rejection the instance keeps its current (last-valid) placement. Returns a
+ * result so the drag handler can show valid/invalid feedback + restore.
+ */
+export function moveEquipmentToFloorPoint(id: string, worldX: number, worldY: number): { ok: boolean; reason?: string; conflictEquipmentId?: string } {
+    const e = equipmentInstances.find((x) => x.id === id)
+    if (!e) return { ok: false, reason: 'NO_INSTANCE' }
+    if (e.lifecycleState === 'LOCKED') return { ok: false, reason: 'LOCKED' }
+    const candidate: EquipmentPlacement = {
+        ...e.placement,
+        centerX: worldX,
+        centerY: worldY,
+        zBase: equipmentFloorZ(e),
+    }
+    return updateEquipmentPlacement(id, candidate)
+}
+
+/**
+ * Slide a wall-integrated VESTIBULE along its attached wall to the wall-tangent
+ * position nearest a world point (front stays flush, rear stays behind wall),
+ * clamped to the usable wall span; collision-checked against equipment + other
+ * vestibules (room-side access zone only). Persists on success. Pure delegation
+ * to the vestibule wall-slide math + existing collision engine.
+ */
+export async function slideVestibuleToWallPoint(id: string, worldX: number, worldY: number): Promise<{ ok: boolean; reason?: string; conflictId?: string }> {
+    const v = vestibuleInstances.find((x) => x.vestibuleInstanceId === id)
+    if (!v) return { ok: false, reason: 'NO_INSTANCE' }
+    if (v.lifecycleState === 'LOCKED') return { ok: false, reason: 'LOCKED' }
+    const frame = v.wallReference.frame
+    if (!frame) return { ok: false, reason: 'NO_WALL_FRAME' }
+    const m = await import('./clinicalLogisticsVestibule')
+    const nextPose = m.slideVestibuleAlongWall({ pose: v.pose, frame, wallLength: v.wallReference.wallLength, targetX: worldX, targetY: worldY })
+    const reserved = m.reservedVolumeFromPose(nextPose)
+    // Collision: room-side access zone vs equipment + OTHER vestibules.
+    const occupied = [
+        ...equipmentInstances.map((e) => {
+            const env = buildEquipmentEnvelope(e.placement)
+            let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity
+            for (const p of env.footprint) { minX = Math.min(minX, p.x); maxX = Math.max(maxX, p.x); minY = Math.min(minY, p.y); maxY = Math.max(maxY, p.y) }
+            return { id: e.id, aabb: { minX, minY, minZ: e.placement.zBase, maxX, maxY, maxZ: e.placement.zBase + e.placement.height } }
+        }),
+        ...vestibuleInstances.filter((o) => o.vestibuleInstanceId !== id).map((o) => ({ id: o.vestibuleInstanceId, aabb: m.reservedVolumeAsAabb(o.reservedVolume) })),
+    ]
+    const conflict = m.findVestibuleCollision(reserved, occupied)
+    if (conflict) return { ok: false, reason: 'VESTIBULE_COLLISION', conflictId: conflict }
+    v.pose = nextPose
+    v.frontFacePlane = m.frontFacePlaneFromPose(nextPose)
+    v.reservedVolume = reserved
+    // Ports follow the pose (rear stays behind the wall).
+    v.transportPorts = m.buildTransportPortsForInstance({ vestibuleInstanceId: v.vestibuleInstanceId, serviceClass: v.serviceClass, pose: nextPose })
+    vestibuleInstances = [...vestibuleInstances]
+    persistVestibules()
+    notifyProgram()
+    return { ok: true }
+}
+
+// ===========================================================================
+// EVI-MA-07 — authoritative selection notify + Undo/Redo + captured actions
+// ===========================================================================
+
+import { AppEditHistory, type AppEditCommand } from './appEditHistory'
+
+const appEditHistory = new AppEditHistory()
+const appHistoryListeners = new Set<() => void>()
+export function subscribeAppHistory(listener: () => void): () => void {
+    appHistoryListeners.add(listener)
+    return () => { appHistoryListeners.delete(listener) }
+}
+function notifyAppHistory(): void { for (const l of appHistoryListeners) l() }
+export function getAppHistoryCounts(): { undo: number; redo: number } { return appEditHistory.counts() }
+export function canUndoAppEdit(): boolean { return appEditHistory.canUndo() }
+export function canRedoAppEdit(): boolean { return appEditHistory.canRedo() }
+
+/** Deep-clone an app-owned snapshot (JSON round-trip; never contains BIM/mesh). */
+function cloneSnapshot<T>(v: T): T { return JSON.parse(JSON.stringify(v)) as T }
+
+/** Re-insert a previously-deleted EQUIPMENT instance with its EXACT identity. */
+function restoreEquipmentSnapshot(snap: EquipmentAssetInstance): void {
+    if (equipmentInstances.some((e) => e.id === snap.id)) return
+    equipmentInstances = [...equipmentInstances, cloneSnapshot(snap)]
+    persistEquipment()
+    notifyProgram()
+    void getEquipmentValidation(snap.id)
+}
+
+/** Re-insert a previously-deleted VESTIBULE instance with its EXACT identity. */
+function restoreVestibuleSnapshot(snap: ClinicalLogisticsVestibuleInstance): void {
+    if (vestibuleInstances.some((v) => v.vestibuleInstanceId === snap.vestibuleInstanceId)) return
+    vestibuleInstances = [...vestibuleInstances, cloneSnapshot(snap)]
+    persistVestibules()
+    notifyProgram()
+}
+
+/** Set an equipment instance's exact placement (undo/redo of MOVE/ROTATE). */
+function setEquipmentPlacementExact(id: string, placement: EquipmentPlacement): void {
+    const e = equipmentInstances.find((x) => x.id === id)
+    if (!e) return
+    e.placement = cloneSnapshot(placement)
+    equipmentInstances = [...equipmentInstances]
+    persistEquipment()
+    notifyProgram()
+}
+
+/** Set a vestibule instance's exact pose + derived fields (undo/redo of MOVE). */
+async function setVestibulePoseExact(id: string, pose: import('./clinicalLogisticsVestibule').VestibulePose): Promise<void> {
+    const v = vestibuleInstances.find((x) => x.vestibuleInstanceId === id)
+    if (!v) return
+    const m = await import('./clinicalLogisticsVestibule')
+    v.pose = cloneSnapshot(pose)
+    v.frontFacePlane = m.frontFacePlaneFromPose(v.pose)
+    v.reservedVolume = m.reservedVolumeFromPose(v.pose)
+    v.transportPorts = m.buildTransportPortsForInstance({ vestibuleInstanceId: v.vestibuleInstanceId, serviceClass: v.serviceClass, pose: v.pose })
+    vestibuleInstances = [...vestibuleInstances]
+    persistVestibules()
+    notifyProgram()
+}
+
+/** Set exact hidden state (undo/redo of HIDE/SHOW). */
+function setHiddenExact(objectType: AppObjectType, id: string, hidden: boolean): void {
+    if (objectType === 'EQUIPMENT_INSTANCE') setEquipmentVisibility(id, !hidden)
+    else if (objectType === 'CLINICAL_LOGISTICS_VESTIBULE') setVestibuleVisibility(id, !hidden)
+}
+
+/** Set exact lock state (undo/redo of LOCK/UNLOCK). */
+function setLockedExact(objectType: AppObjectType, id: string, locked: boolean): void {
+    if (objectType === 'EQUIPMENT_INSTANCE') {
+        const e = equipmentInstances.find((x) => x.id === id)
+        if (!e) return
+        e.lifecycleState = locked ? 'LOCKED' : 'DRAFT'
+        equipmentInstances = [...equipmentInstances]
+        persistEquipment(); notifyProgram()
+    } else if (objectType === 'CLINICAL_LOGISTICS_VESTIBULE') {
+        if (locked) lockVestibule(id); else unlockVestibule(id)
+    }
+}
+
+/**
+ * Apply one recorded command in a direction. UNDO applies `beforeState`; REDO
+ * applies `afterState`. Only app-owned state is touched — never Bentley/BIM.
+ */
+function applyAppEditCommand(cmd: AppEditCommand, direction: 'UNDO' | 'REDO'): void {
+    const ot = cmd.objectType as AppObjectType
+    switch (cmd.type) {
+        case 'DELETE':
+            if (direction === 'UNDO') {
+                // Restore the exact deleted instance (same id, pose, ports, ...).
+                if (ot === 'EQUIPMENT_INSTANCE') restoreEquipmentSnapshot(cmd.beforeState as EquipmentAssetInstance)
+                else if (ot === 'CLINICAL_LOGISTICS_VESTIBULE') restoreVestibuleSnapshot(cmd.beforeState as ClinicalLogisticsVestibuleInstance)
+            } else {
+                // Redo the delete.
+                if (ot === 'EQUIPMENT_INSTANCE') deleteEquipment(cmd.instanceId)
+                else if (ot === 'CLINICAL_LOGISTICS_VESTIBULE') deleteVestibule(cmd.instanceId)
+            }
+            return
+        case 'HIDE':
+        case 'SHOW': {
+            const hidden = direction === 'UNDO' ? (cmd.beforeState as { hidden: boolean }).hidden : (cmd.afterState as { hidden: boolean }).hidden
+            setHiddenExact(ot, cmd.instanceId, hidden)
+            return
+        }
+        case 'LOCK':
+        case 'UNLOCK': {
+            const locked = direction === 'UNDO' ? (cmd.beforeState as { locked: boolean }).locked : (cmd.afterState as { locked: boolean }).locked
+            setLockedExact(ot, cmd.instanceId, locked)
+            return
+        }
+        case 'MOVE':
+        case 'ROTATE': {
+            const state = direction === 'UNDO' ? cmd.beforeState : cmd.afterState
+            if (ot === 'EQUIPMENT_INSTANCE') setEquipmentPlacementExact(cmd.instanceId, state as EquipmentPlacement)
+            else if (ot === 'CLINICAL_LOGISTICS_VESTIBULE') void setVestibulePoseExact(cmd.instanceId, state as import('./clinicalLogisticsVestibule').VestibulePose)
+            return
+        }
+    }
+}
+
+/** Record a reversible app-owned edit (clears redo). Snapshots are deep-cloned. */
+export function recordAppEdit(cmd: Omit<AppEditCommand, 'timestamp'>): void {
+    appEditHistory.record({ ...cmd, beforeState: cloneSnapshot(cmd.beforeState), afterState: cloneSnapshot(cmd.afterState), timestamp: Date.now() })
+    notifyAppHistory()
+}
+
+/** Undo the most recent app-owned edit. Returns the reversed command (or none). */
+export function undoLastAppEdit(): AppEditCommand | undefined {
+    const cmd = appEditHistory.popUndo()
+    if (!cmd) return undefined
+    applyAppEditCommand(cmd, 'UNDO')
+    notifyAppHistory()
+    return cmd
+}
+
+/** Redo the most recently undone app-owned edit. */
+export function redoLastAppEdit(): AppEditCommand | undefined {
+    const cmd = appEditHistory.popRedo()
+    if (!cmd) return undefined
+    applyAppEditCommand(cmd, 'REDO')
+    notifyAppHistory()
+    return cmd
+}
+
+// ---------------------------------------------------------------------------
+// EVI-MA-07 — captured-target actions (the local menu calls THESE; they never
+// re-raycast, and they record Undo). objectType+instanceId are the CAPTURED
+// SelectedAppObject; nothing here derives a target from the cursor/hover.
+// ---------------------------------------------------------------------------
+
+/** Delete a captured target (records Undo with the full pre-delete snapshot). */
+export function deleteCapturedAppObject(target: { objectType: AppObjectType; instanceId: string }): DeleteAppObjectResult {
+    if (target.objectType === 'EQUIPMENT_INSTANCE') {
+        const e = equipmentInstances.find((x) => x.id === target.instanceId)
+        if (!e) return { ok: false, objectType: target.objectType, reason: 'NOT_FOUND', message: 'No such equipment.' }
+        const snap = cloneSnapshot(e)
+        const label = e.displayLabel
+        const r = deleteEquipment(target.instanceId)
+        if (r.ok) recordAppEdit({ type: 'DELETE', objectType: 'EQUIPMENT_INSTANCE', instanceId: target.instanceId, beforeState: snap, afterState: null, label: `${label} deleted` })
+        return r.ok ? { ok: true, objectType: 'EQUIPMENT_INSTANCE', deletedId: r.deletedId } : { ok: false, objectType: 'EQUIPMENT_INSTANCE', reason: r.reason, message: r.message }
+    }
+    if (target.objectType === 'CLINICAL_LOGISTICS_VESTIBULE') {
+        const v = vestibuleInstances.find((x) => x.vestibuleInstanceId === target.instanceId)
+        if (!v) return { ok: false, objectType: target.objectType, reason: 'NOT_FOUND', message: 'No such vestibule.' }
+        const snap = cloneSnapshot(v)
+        const label = v.displayLabel
+        const r = deleteVestibule(target.instanceId)
+        if (r.ok) recordAppEdit({ type: 'DELETE', objectType: 'CLINICAL_LOGISTICS_VESTIBULE', instanceId: target.instanceId, beforeState: snap, afterState: null, label: `${label} deleted` })
+        return r.ok ? { ok: true, objectType: 'CLINICAL_LOGISTICS_VESTIBULE', deletedId: r.deletedId } : { ok: false, objectType: 'CLINICAL_LOGISTICS_VESTIBULE', reason: r.reason, message: r.message }
+    }
+    return { ok: false, objectType: target.objectType, reason: 'UNSUPPORTED', message: `Delete not routed for ${target.objectType}.` }
+}
+
+/** Toggle-visibility a captured target (records Undo). */
+export function setCapturedAppObjectVisibility(target: { objectType: AppObjectType; instanceId: string }, visible: boolean): void {
+    const beforeHidden = isCapturedHidden(target)
+    if (target.objectType === 'EQUIPMENT_INSTANCE') setEquipmentVisibility(target.instanceId, visible)
+    else if (target.objectType === 'CLINICAL_LOGISTICS_VESTIBULE') setVestibuleVisibility(target.instanceId, visible)
+    const afterHidden = !visible
+    if (beforeHidden !== afterHidden) {
+        recordAppEdit({ type: afterHidden ? 'HIDE' : 'SHOW', objectType: target.objectType, instanceId: target.instanceId, beforeState: { hidden: beforeHidden }, afterState: { hidden: afterHidden } })
+    }
+}
+
+/** Lock/unlock a captured target (records Undo). */
+export async function setCapturedAppObjectLock(target: { objectType: AppObjectType; instanceId: string }, locked: boolean): Promise<void> {
+    const beforeLocked = isCapturedLocked(target)
+    if (target.objectType === 'EQUIPMENT_INSTANCE') {
+        if (locked) await lockEquipment(target.instanceId); else unlockEquipment(target.instanceId)
+    } else if (target.objectType === 'CLINICAL_LOGISTICS_VESTIBULE') {
+        if (locked) lockVestibule(target.instanceId); else unlockVestibule(target.instanceId)
+    }
+    const afterLocked = isCapturedLocked(target)
+    if (beforeLocked !== afterLocked) {
+        recordAppEdit({ type: afterLocked ? 'LOCK' : 'UNLOCK', objectType: target.objectType, instanceId: target.instanceId, beforeState: { locked: beforeLocked }, afterState: { locked: afterLocked } })
+    }
+}
+
+/** Fit to a captured target (view-only; no Undo). */
+export async function fitCapturedAppObject(target: { objectType: AppObjectType; instanceId: string }): Promise<{ ok: boolean; reason?: string }> {
+    if (target.objectType === 'EQUIPMENT_INSTANCE') return fitViewToEquipment(target.instanceId)
+    if (target.objectType === 'CLINICAL_LOGISTICS_VESTIBULE') return fitViewToVestibule(target.instanceId)
+    return { ok: false, reason: 'UNSUPPORTED' }
+}
+
+function isCapturedHidden(target: { objectType: AppObjectType; instanceId: string }): boolean {
+    if (target.objectType === 'EQUIPMENT_INSTANCE') return equipmentInstances.find((x) => x.id === target.instanceId)?.hidden ?? false
+    if (target.objectType === 'CLINICAL_LOGISTICS_VESTIBULE') return vestibuleInstances.find((x) => x.vestibuleInstanceId === target.instanceId)?.hidden ?? false
+    return false
+}
+function isCapturedLocked(target: { objectType: AppObjectType; instanceId: string }): boolean {
+    if (target.objectType === 'EQUIPMENT_INSTANCE') return equipmentInstances.find((x) => x.id === target.instanceId)?.lifecycleState === 'LOCKED'
+    if (target.objectType === 'CLINICAL_LOGISTICS_VESTIBULE') return vestibuleInstances.find((x) => x.vestibuleInstanceId === target.instanceId)?.lifecycleState === 'LOCKED'
+    return false
+}
+
+/**
+ * A view-model of the CAPTURED selected object for the local action popover:
+ * exact title, hidden/locked flags, and the objectType/instanceId. Derived from
+ * the ONE authoritative selection; NEVER from the cursor/hover.
+ */
+export interface SelectedAppObjectView {
+    objectType: AppObjectType
+    instanceId: string
+    title: string
+    hidden: boolean
+    locked: boolean
+    fitLabel: string
+}
+/**
+ * EVI-MA-07 §19 — the existing RADIOPHARMACY vestibule for a cyclotron's room, if
+ * any. Lets the cyclotron control offer "Select existing" instead of a duplicate
+ * "Create" CTA (one production context must not create duplicates).
+ */
+export function getRadiopharmacyVestibuleForRoom(parentBimSpaceId: string): string | undefined {
+    return vestibuleInstances.find((v) => v.serviceClass === 'RADIOPHARMACY' && v.parentBimSpaceId === parentBimSpaceId)?.vestibuleInstanceId
+}
+
+export function getSelectedAppObjectView(): SelectedAppObjectView | undefined {
+    const ref = getSelectedAppObjectRef()
+    if (!ref) return undefined
+    if (ref.objectType === 'EQUIPMENT_INSTANCE') {
+        const e = equipmentInstances.find((x) => x.id === ref.instanceId)
+        if (!e) return undefined
+        return { objectType: ref.objectType, instanceId: ref.instanceId, title: e.displayLabel, hidden: e.hidden ?? false, locked: e.lifecycleState === 'LOCKED', fitLabel: 'Fit to Equipment' }
+    }
+    const v = vestibuleInstances.find((x) => x.vestibuleInstanceId === ref.instanceId)
+    if (!v) return undefined
+    return { objectType: ref.objectType, instanceId: ref.instanceId, title: v.displayLabel, hidden: v.hidden ?? false, locked: v.lifecycleState === 'LOCKED', fitLabel: 'Fit to Vestibule' }
 }

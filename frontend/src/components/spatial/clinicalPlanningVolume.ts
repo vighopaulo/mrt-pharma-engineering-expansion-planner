@@ -298,27 +298,119 @@ export function seedPrismParamsFromParent(input: {
     footprint: readonly Vec2[]
     zLow: number
     zHigh: number
+    /** Optional interior holes (voids) the seed must also avoid. */
+    holes?: readonly (readonly Vec2[])[]
+    /**
+     * Optional guaranteed-interior anchor (world XY). When supplied it centers the
+     * seed at a point PROVEN inside the polygon (e.g. resolveRoomInteriorAnchor),
+     * which is essential for rotated / irregular / L-shaped rooms where the AABB
+     * center or vertex mean can lie outside the actual room.
+     */
+    interiorAnchor?: { x: number; y: number }
 }): PrismParams {
     const ring = input.footprint
     const n = ring.length || 1
-    const cx = ring.reduce((s, p) => s + p.x, 0) / n
-    const cy = ring.reduce((s, p) => s + p.y, 0) / n
+    // Center: a guaranteed-interior anchor when provided; else the AABB center
+    // (more robust than the vertex mean for concave polygons); else vertex mean.
     let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity
     for (const p of ring) { if (p.x < minX) minX = p.x; if (p.x > maxX) maxX = p.x; if (p.y < minY) minY = p.y; if (p.y > maxY) maxY = p.y }
+    const aabbCx = (minX + maxX) / 2, aabbCy = (minY + maxY) / 2
+    const vertMeanX = ring.reduce((s, p) => s + p.x, 0) / n
+    const vertMeanY = ring.reduce((s, p) => s + p.y, 0) / n
+    let cx = input.interiorAnchor && Number.isFinite(input.interiorAnchor.x) ? input.interiorAnchor.x
+        : Number.isFinite(aabbCx) ? aabbCx : vertMeanX
+    let cy = input.interiorAnchor && Number.isFinite(input.interiorAnchor.y) ? input.interiorAnchor.y
+        : Number.isFinite(aabbCy) ? aabbCy : vertMeanY
+    if (!Number.isFinite(cx)) cx = 0
+    if (!Number.isFinite(cy)) cy = 0
+
     const extentX = Number.isFinite(maxX - minX) ? maxX - minX : 4
     const extentY = Number.isFinite(maxY - minY) ? maxY - minY : 4
-    // Start at ~50% of the parent's XY extent (bounded), well inside the room.
-    const width = Math.max(MIN_VOLUME_DIM * 4, extentX * 0.5)
-    const depth = Math.max(MIN_VOLUME_DIM * 4, extentY * 0.5)
-    const zLow = Number.isFinite(input.zLow) ? input.zLow : 0
-    const zHighRaw = Number.isFinite(input.zHigh) ? input.zHigh : zLow + 3
-    // Cap height at a sensible ceiling; keep strictly > zLow.
-    const zHigh = Math.max(zLow + MIN_VOLUME_DIM * 4, Math.min(zHighRaw, zLow + 3))
-    return {
-        centerX: Number.isFinite(cx) ? cx : 0,
-        centerY: Number.isFinite(cy) ? cy : 0,
-        zLow, zHigh, width, depth, yaw: 0,
+
+    // B1B-MA-01 fix: derive a GUARANTEED-CONTAINED axis-aligned box. Starting from
+    // ~50% of the parent XY extent, SHRINK the half-extents until every sampled
+    // corner + edge midpoint (with a small inset) lies inside the outer polygon
+    // and outside any hole. A plain 50%-of-AABB box on the vertex mean protruded
+    // outside real rotated/irregular rooms (2D18 TECH. OFFICE) → the parent-derived
+    // volume failed containment against its OWN parent. When a footprint polygon is
+    // available we now converge to a contained box; when it is not (< 3 pts) we
+    // fall back to the bounded default sizing (caller treats that as approximate).
+    const usablePolygon = ring.length >= 3
+    let halfW = Math.max(MIN_VOLUME_DIM * 2, extentX * 0.25)
+    let halfD = Math.max(MIN_VOLUME_DIM * 2, extentY * 0.25)
+    if (usablePolygon) {
+        const inset = Math.max(0.15, WALL_CLEARANCE_INSET)
+        // Shrink up to a bounded number of halving steps until contained.
+        for (let attempt = 0; attempt < 12; attempt++) {
+            if (boxContainedInPolygon({ cx, cy, halfW, halfD, inset }, ring, input.holes)) break
+            halfW *= 0.7
+            halfD *= 0.7
+            if (halfW < MIN_VOLUME_DIM || halfD < MIN_VOLUME_DIM) { halfW = MIN_VOLUME_DIM; halfD = MIN_VOLUME_DIM; break }
+        }
     }
+    const width = Math.max(MIN_VOLUME_DIM * 2, halfW * 2)
+    const depth = Math.max(MIN_VOLUME_DIM * 2, halfD * 2)
+
+    // Z: preserve the established Build 1A seed contract — the seed SITS ON the
+    // parent floor (zLow == room zLow) and does NOT inset Z. The containment ray
+    // is horizontal (+X), so a sample coplanar with the parent floor/ceiling is
+    // not a false boundary crossing (in-plane triangles have ~0 determinant and
+    // are skipped); the horizontal ray still resolves inside/outside via the side
+    // walls. Insetting Z here would push equipment off the floor (equipment zBase
+    // is derived from this seed's zLow) and break floor-aware placement.
+    const rawLow = Number.isFinite(input.zLow) ? input.zLow : 0
+    const rawHigh = Number.isFinite(input.zHigh) ? input.zHigh : rawLow + 3
+    const zLow = rawLow
+    // Keep a sensible clinical height, capped by the room height, strictly > zLow.
+    const zHigh = Math.max(zLow + MIN_VOLUME_DIM * 4, Math.min(rawHigh, zLow + 3))
+    return { centerX: cx, centerY: cy, zLow, zHigh, width, depth, yaw: 0 }
+}
+
+/** Small default inset (m) keeping the seed clear of the room walls. */
+export const WALL_CLEARANCE_INSET = 0.25
+
+/**
+ * Whether an axis-aligned box (center + half-extents, shrunk by `inset`) is fully
+ * inside the outer polygon and clear of every hole. Samples the 4 corners + 4
+ * edge midpoints + center — the same class of samples the containment validator
+ * uses in XY — so a box that passes here is contained in plan. Pure.
+ */
+function boxContainedInPolygon(
+    box: { cx: number; cy: number; halfW: number; halfD: number; inset: number },
+    outer: readonly Vec2[],
+    holes?: readonly (readonly Vec2[])[],
+): boolean {
+    // Test the ACTUAL box footprint the caller will build, PLUS the wall-clearance
+    // inset — i.e. require the box corners to sit at least `inset` inside the
+    // polygon. (Previously this SHRANK the tested box by `inset` while the caller
+    // built the full-size box, so the built corners could protrude past what was
+    // verified — the residual cause of the 2D18 rotated-room containment FAIL.)
+    const hw = box.halfW + Math.max(0, box.inset)
+    const hd = box.halfD + Math.max(0, box.inset)
+    const samples: Vec2[] = [
+        { x: box.cx, y: box.cy },
+        { x: box.cx - hw, y: box.cy - hd }, { x: box.cx + hw, y: box.cy - hd },
+        { x: box.cx + hw, y: box.cy + hd }, { x: box.cx - hw, y: box.cy + hd },
+        { x: box.cx, y: box.cy - hd }, { x: box.cx + hw, y: box.cy },
+        { x: box.cx, y: box.cy + hd }, { x: box.cx - hw, y: box.cy },
+    ]
+    for (const s of samples) {
+        if (!pointInPolygon2d(s, outer)) return false
+        if (holes && holes.some((h) => pointInPolygon2d(s, h))) return false
+    }
+    return true
+}
+
+/** Ray-cast even-odd point-in-polygon (world XY). Pure; local to this module. */
+function pointInPolygon2d(p: Vec2, loop: readonly Vec2[]): boolean {
+    let inside = false
+    for (let i = 0, j = loop.length - 1; i < loop.length; j = i++) {
+        const a = loop[i], b = loop[j]
+        const intersects = (a.y > p.y) !== (b.y > p.y) &&
+            p.x < ((b.x - a.x) * (p.y - a.y)) / ((b.y - a.y) || 1e-12) + a.x
+        if (intersects) inside = !inside
+    }
+    return inside
 }
 
 // ---------------------------------------------------------------------------

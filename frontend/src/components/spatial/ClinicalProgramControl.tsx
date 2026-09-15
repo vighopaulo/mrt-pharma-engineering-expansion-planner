@@ -14,8 +14,18 @@
  * drives only the application-owned program store in spatialAssetOverlay. All
  * assignment logic is the pure clinicalProgram seam. Persistence is iModel-scoped.
  */
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { CLINICAL_FUNCTIONS, type ClinicalFunction, type ClinicalProgramAssignment } from './clinicalProgram'
+import type { CameraMode } from './cameraNav'
+import {
+    CANONICAL_CYCLOTRON_MODELS,
+    CANONICAL_GENERATOR_MODELS,
+    CANONICAL_SCANNER_MODELS,
+    CANONICAL_MRT_FACILITY_MODELS,
+    type CanonicalEquipmentModel,
+} from './canonicalEquipmentCatalog'
+import type { EquipmentAssetInstance } from './equipmentInstance'
+import type { EquipmentValidationState, EquipmentCrosswalkReadout } from './equipmentValidation'
 
 const FUNCTION_LABEL: Record<ClinicalFunction, string> = {
     UNASSIGNED_EXISTING: 'Unassigned (existing)',
@@ -38,6 +48,20 @@ const FUNCTION_LABEL: Record<ClinicalFunction, string> = {
     MECHANICAL_ELECTRICAL: 'Mechanical / Electrical',
     CLINICAL_CORRIDOR: 'Clinical Corridor',
     GENERAL_SUPPORT: 'General Support',
+}
+
+// Build 1B candidate acceptance tier -> product label + badge class.
+const TIER_LABEL: Record<import('./clinicalRoomCandidate').CandidateTier, string> = {
+    RECOMMENDED: 'Recommended',
+    SUITABLE: 'Suitable',
+    NEEDS_REVIEW: 'Needs review',
+    REJECTED: 'Rejected',
+}
+const TIER_BADGE_CLASS: Record<import('./clinicalRoomCandidate').CandidateTier, string> = {
+    RECOMMENDED: 'ok',
+    SUITABLE: 'suitable',
+    NEEDS_REVIEW: 'warn',
+    REJECTED: 'reject',
 }
 
 interface RoomOption { bimSpaceId: string; originalBimLabel: string; storeyLabel?: string }
@@ -65,9 +89,42 @@ export function ClinicalProgramControl(props?: { iModelId?: string; devMode?: bo
     // Build 1A.4: product-facing containment validation view model + summary.
     const [validation, setValidation] = useState<import('./bimRoomVolumeRegistry').PlanningVolumeValidationState | null>(null)
     const [validationSummary, setValidationSummary] = useState<import('./bimRoomVolumeRegistry').PlanningValidationSummary | null>(null)
+    // Build 1B: canonical equipment binding state.
+    const [equipment, setEquipment] = useState<readonly EquipmentAssetInstance[]>([])
+    const [equipmentValidations, setEquipmentValidations] = useState<Record<string, EquipmentValidationState>>({})
+    const [equipmentCrosswalks, setEquipmentCrosswalks] = useState<Record<string, EquipmentCrosswalkReadout>>({})
+    const [pendingEquipmentId, setPendingEquipmentId] = useState<string>('')
+    const [showEquipment, setShowEquipment] = useState(true)
+    const [selectedEquipmentId, setSelectedEquipmentId] = useState<string | undefined>(undefined)
     // Build 1A.1: honest room-discovery lifecycle (never a false READY-zero).
     const [discoveryStatus, setDiscoveryStatus] = useState<'NOT_BOUND' | 'LOADING' | 'READY' | 'ERROR'>('NOT_BOUND')
     const [selectorLabel, setSelectorLabel] = useState<string>('Open the model to discover rooms')
+    // B1B-MA-03B: the authoritative selected room resolved from the IMMUTABLE base
+    // discovery (independent of the storey filter), so a deliberately-selected room
+    // stays fully usable (detail/assignment/volume/equipment) even when the active
+    // storey chip would filter it out of the dropdown option list. `outsideFilter`
+    // drives a non-destructive "outside current storey filter" hint + a rendered
+    // option for the selected room — it NEVER clears the selection.
+    const [selectedRoomFallback, setSelectedRoomFallback] = useState<RoomOption | undefined>(undefined)
+    const [selectedRoomOutsideFilter, setSelectedRoomOutsideFilter] = useState(false)
+    // B1B-MA-03A: the active viewport camera mode + a PRESENTATION-ONLY collapse of
+    // the Clinical Program panel. Entering Walkthrough auto-collapses the panel so
+    // it no longer obstructs the 3D scene, leaving a compact reopen chip; returning
+    // to Planning auto-expands it. Collapse NEVER resets the selected room, storey
+    // filter, assignments, planning volumes, equipment, candidates or summary —
+    // panel VISIBILITY is strictly separate from FEATURE STATE. The user can also
+    // reopen it while still in Walkthrough (inspect the model, return to context).
+    const [cameraMode, setCameraMode] = useState<CameraMode>('PLANNING')
+    const [panelCollapsed, setPanelCollapsed] = useState(false)
+    const prevCameraModeRef = useRef<CameraMode>('PLANNING')
+    // Build 1B spatial correction: clinical-room CANDIDATE DISCOVERY + re-parenting.
+    const [candidateFunction, setCandidateFunction] = useState<ClinicalFunction>('UPTAKE_ROOM')
+    const [candidates, setCandidates] = useState<readonly import('./clinicalRoomCandidate').RankedRoomCandidate[]>([])
+    const [candidateSummary, setCandidateSummary] = useState<import('./clinicalRoomCandidate').CandidateRankingSummary | null>(null)
+    const [candidateVocab, setCandidateVocab] = useState<import('./clinicalRoomCandidate').DiscoveredSemanticVocabulary | null>(null)
+    const [candidateBusy, setCandidateBusy] = useState(false)
+    const [selectedCandidateId, setSelectedCandidateId] = useState<string | undefined>(undefined)
+    const [reparentOverride, setReparentOverride] = useState(false)
 
     // Build 1A.3: derive the STOREY-FILTERED selector options + honest count/label
     // from the immutable base discovery via the overlay's pure filter. Called on
@@ -93,11 +150,38 @@ export function ClinicalProgramControl(props?: { iModelId?: string; devMode?: bo
             const sync = () => {
                 if (cancelled) return
                 const snap = o.getClinicalProgramSnapshot()
+                // Build 1B: reflect equipment state + recompute per-instance
+                // validation/crosswalk using THIS (same-module) overlay handle, so
+                // the async validation path never depends on a second dynamic import.
+                // Wrapped defensively so an overlay/mock that predates the equipment
+                // surface (e.g. Build 1A UI test mocks, where accessing an undefined
+                // mock export throws) never breaks the clinical-program sync.
+                try {
+                    const eqList = o.getEquipmentInstances()
+                    setEquipment(eqList)
+                    setShowEquipment(o.getShowEquipment())
+                    setSelectedEquipmentId(o.getSelectedEquipmentId())
+                    void (async () => {
+                        const vals: Record<string, EquipmentValidationState> = {}
+                        const xws: Record<string, EquipmentCrosswalkReadout> = {}
+                        for (const e of eqList) {
+                            const v = await o.getEquipmentValidation(e.id)
+                            if (v) vals[e.id] = v
+                            const x = await o.getEquipmentCrosswalk(e.id)
+                            if (x) xws[e.id] = x
+                        }
+                        if (!cancelled) { setEquipmentValidations(vals); setEquipmentCrosswalks(xws) }
+                    })().catch(() => { /* equipment surface unavailable */ })
+                } catch { /* overlay/mock without the equipment surface */ }
                 setEnabled(snap.enabled)
                 setActiveStoreyId(snap.activeStoreyId)
                 setSelectedSpaceId(snap.selectedSpaceId)
                 setAssignments(snap.assignments)
                 setShowRoomVolume(snap.showRoomVolume)
+                // B1B-MA-03A: surface the active camera mode so the panel-collapse
+                // transition effect can auto-collapse on Walkthrough entry. This is a
+                // presentation signal only — it does not touch selection/feature state.
+                setCameraMode(snap.cameraMode)
                 // Build 1A.2: re-read the selected room's geometry quality on EVERY
                 // program notification, so async exact-mesh extraction completion
                 // (which calls notifyProgram) reactively updates the Spatial geometry
@@ -110,10 +194,31 @@ export function ClinicalProgramControl(props?: { iModelId?: string; devMode?: bo
                 // the selector recomputes immediately from the immutable base
                 // discovery — fixing the First=Second=153 stale-count/options defect.
                 applyRoomOptions(o)
-                // Out-of-filter selected-room policy: if the selected room is not in
-                // the active storey's options, clear the UI selection ONLY (never
-                // deletes the assignment or planning volume — domain state persists).
-                if (o.isSelectedRoomOutsideActiveStorey()) o.setClinicalProgramSelectedSpace(undefined)
+                // B1B-MA-03B: the authoritative selected room is ONE stable BIM id
+                // (programState.selectedSpaceId). The storey chip is a FILTER on the
+                // dropdown OPTIONS only — it is NOT a selection authority. A selection
+                // made deliberately (dropdown / 2D plan / candidate accept / direct BIM)
+                // must PERSIST across every program notification: hover samples, walker
+                // camera samples, candidate refresh, footprint extraction, storey-chip
+                // changes and Walkthrough entry all call notifyProgram(). The previous
+                // out-of-filter auto-clear here silently overwrote a valid selection
+                // (e.g. Radiopharmacy 2C17 on Second Floor being cleared the instant it
+                // was selected, or when hovering a corridor). It is removed. The
+                // selected room is still resolved authoritatively (see selectedRoom)
+                // and rendered in the dropdown even when outside the active filter; an
+                // "outside current storey filter" hint is shown instead of clearing.
+                setSelectedRoomOutsideFilter(!!snap.selectedSpaceId && o.isSelectedRoomOutsideActiveStorey())
+                setSelectedRoomFallback(
+                    // Defensive: getDiscoveredRoomById is the authoritative base-discovery
+                    // lookup; older overlay mocks may predate it — fall back to undefined
+                    // (the in-filter option resolution still covers the common case).
+                    snap.selectedSpaceId && typeof o.getDiscoveredRoomById === 'function'
+                        ? (() => {
+                            const rec = o.getDiscoveredRoomById(snap.selectedSpaceId)
+                            return rec ? { bimSpaceId: rec.bimSpaceId, originalBimLabel: rec.originalBimLabel || 'Unnamed space', storeyLabel: rec.storeyId } : undefined
+                        })()
+                        : undefined,
+                )
             }
             unsub = o.subscribeClinicalProgram(sync)
             sync()
@@ -192,7 +297,58 @@ export function ClinicalProgramControl(props?: { iModelId?: string; devMode?: bo
         })
     }, [])
 
-    const selectedRoom = useMemo(() => rooms.find((r) => r.bimSpaceId === selectedSpaceId), [rooms, selectedSpaceId])
+    // B1B-MA-03A: auto-collapse the panel on the PLANNING/BIRDS_EYE -> WALKTHROUGH
+    // TRANSITION only (not on every notification while already in walkthrough, so a
+    // user who reopens the panel mid-walkthrough is not fought). Returning to
+    // PLANNING auto-expands it. This is a presentation transition: it flips
+    // EVI-MA-02A root-cause fix: arm the bounded direct-manipulation tool whenever
+    // CLINICAL EQUIPMENT exists — independent of the legacy Asset Library (which
+    // only armed the tool when a legacy AssetInstance was placed, so cyclotron-only
+    // scenes had NO tool installed and right-click never reached the equipment
+    // handlers). Idempotent + IDLE-gated; re-arms after the interaction returns to
+    // IDLE (e.g. after a placement/move completes).
+    useEffect(() => {
+        if (equipment.length === 0) return
+        void import('./spatialAssetOverlay').then((o) => o.ensureDirectManipulationReady()).catch(() => false)
+    }, [equipment.length])
+
+    // panelCollapsed and nothing else — the authoritative selection, storey filter,
+    // assignments, volumes, equipment, candidates and summary are all untouched.
+    useEffect(() => {
+        const prev = prevCameraModeRef.current
+        if (prev !== 'WALKTHROUGH' && cameraMode === 'WALKTHROUGH') setPanelCollapsed(true)
+        else if (prev === 'WALKTHROUGH' && cameraMode !== 'WALKTHROUGH') setPanelCollapsed(false)
+        prevCameraModeRef.current = cameraMode
+    }, [cameraMode])
+
+    // B1B-MA-03A: while in WALKTHROUGH, a pointer-down OUTSIDE the panel collapses
+    // it (so the planning UI gets out of the way for model inspection). This mirrors
+    // the CameraModeControl walkthrough-card pattern: a WINDOW listener that tests
+    // the event target's ancestry — there is NO full-screen invisible blocker, so
+    // 3D-scene pointer input is never intercepted. Collapsing is presentation only;
+    // it NEVER clears the selection or any other feature state. Not armed in Planning
+    // (the panel is the primary programming surface there).
+    useEffect(() => {
+        if (cameraMode !== 'WALKTHROUGH') return
+        if (panelCollapsed) return
+        const onOutsidePointerDown = (e: PointerEvent) => {
+            const target = e.target as HTMLElement | null
+            if (target && !target.closest('.clinical-program')) setPanelCollapsed(true)
+        }
+        window.addEventListener('pointerdown', onOutsidePointerDown)
+        return () => window.removeEventListener('pointerdown', onOutsidePointerDown)
+    }, [cameraMode, panelCollapsed])
+
+    // B1B-MA-03B: resolve the selected room authoritatively. Prefer the in-filter
+    // option, but fall back to the base-discovery record when the active storey
+    // chip filters the selected room out of the dropdown list. This keeps the
+    // room detail / assignment / volume / equipment UI intact for the persistent
+    // selection instead of collapsing to "no room" the way the old auto-clear did.
+    const selectedRoom = useMemo(
+        () => rooms.find((r) => r.bimSpaceId === selectedSpaceId)
+            ?? (selectedRoomFallback && selectedRoomFallback.bimSpaceId === selectedSpaceId ? selectedRoomFallback : undefined),
+        [rooms, selectedSpaceId, selectedRoomFallback],
+    )
     const currentAssignment = useMemo(
         () => assignments.find((a) => a.bimSpaceId === selectedSpaceId && a.clinicalFunction !== 'UNASSIGNED_EXISTING'),
         [assignments, selectedSpaceId],
@@ -222,6 +378,69 @@ export function ClinicalProgramControl(props?: { iModelId?: string; devMode?: bo
             setNote('Reset to existing — BIM identity unchanged.')
         })
     }, [selectedSpaceId])
+
+    // --- Build 1B: clinical-room CANDIDATE DISCOVERY + re-parenting --------
+    // Find ranked, explainable candidate rooms for the chosen function. The
+    // engine is pure; the overlay wires lazy exact-mesh extraction for the
+    // shortlist. Never guesses/hardcodes room ids — it ranks discovered rooms.
+    const findCandidates = useCallback(() => {
+        setCandidateBusy(true)
+        setSelectedCandidateId(undefined)
+        setReparentOverride(false)
+        void import('./spatialAssetOverlay').then(async (o) => {
+            try {
+                const r = await o.findClinicalRoomCandidates({ clinicalFunction: candidateFunction, storeyId: activeStoreyId, limit: 25 })
+                setCandidates(r.candidates)
+                setCandidateSummary(r.summary)
+                setCandidateVocab(r.vocabulary)
+                setNote(r.candidates.length === 0
+                    ? 'No candidate rooms found for this function on the current storey.'
+                    : `${r.summary.recommendedCount} recommended candidate room(s) for ${FUNCTION_LABEL[candidateFunction]}.`)
+            } finally { setCandidateBusy(false) }
+        }).catch(() => setCandidateBusy(false))
+    }, [candidateFunction, activeStoreyId])
+
+    // Select a candidate: highlight it as the program's selected space + fit the
+    // 3D view to that room (candidate preview). VIEW-ONLY camera move.
+    const previewCandidate = useCallback((bimSpaceId: string) => {
+        setSelectedCandidateId(bimSpaceId)
+        setReparentOverride(false)
+        void import('./spatialAssetOverlay').then(async (o) => {
+            o.setClinicalProgramSelectedSpace(bimSpaceId)
+            await o.fitViewToClinicalRoom(bimSpaceId).catch(() => false)
+        })
+    }, [])
+
+    // USE THIS ROOM — re-parent the chosen function onto the selected candidate.
+    const useCandidateRoom = useCallback((bimSpaceId: string) => {
+        void import('./spatialAssetOverlay').then(async (o) => {
+            const r = await o.reparentClinicalFunction({ clinicalFunction: candidateFunction, newParentBimSpaceId: bimSpaceId, overrideAccepted: reparentOverride })
+            if (!r.ok) {
+                if (r.blockCode === 'OVERRIDE_REQUIRED') {
+                    setNote(`${r.reason} — tick "override" to proceed anyway.`)
+                } else {
+                    setNote(`Cannot re-parent: ${r.reason}`)
+                }
+                return
+            }
+            setNote(`Re-parented ${FUNCTION_LABEL[candidateFunction]} onto the selected room. New volume regenerated from its geometry (containment: ${r.containment}).`)
+            setCandidates([])
+            setCandidateSummary(null)
+            setSelectedCandidateId(undefined)
+            setReparentOverride(false)
+        })
+    }, [candidateFunction, reparentOverride])
+
+    // Build 1B Problem C: ENTER WALKTHROUGH HERE — targeted safe spawn for a
+    // specific room (collision-active; honest failure, never a silent fallback).
+    const enterWalkthroughHere = useCallback((bimSpaceId: string) => {
+        void import('./spatialAssetOverlay').then(async (o) => {
+            const r = await o.enterWalkthroughAtClinicalRoom({ bimSpaceId })
+            setNote(r.ok
+                ? `Entered walkthrough at this room (spawn: ${r.provenance}).`
+                : `Cannot enter walkthrough here: ${r.reason}`)
+        })
+    }, [])
 
     // --- Clinical planning VOLUME handlers ---------------------------------
     const refreshVolume = useCallback((spaceId: string | undefined) => {
@@ -314,6 +533,115 @@ export function ClinicalProgramControl(props?: { iModelId?: string; devMode?: bo
         })
     }, [selectedRoom, refreshVolume])
 
+    // --- Build 1B equipment handlers --------------------------------------
+    const placeEquipment = useCallback(() => {
+        if (!selectedRoom || !pendingEquipmentId) return
+        void import('./spatialAssetOverlay').then(async (o) => {
+            const r = await o.placeEquipmentInParent({ canonicalEquipmentId: pendingEquipmentId, parentBimSpaceId: selectedRoom.bimSpaceId })
+            if (!r.ok) {
+                // EVI-MA-02A §12A — spatial exclusivity: an overlapping placement
+                // is rejected outright (nothing created), naming the conflict.
+                if (r.reason === 'EQUIPMENT_COLLISION') {
+                    setNote(`Cannot place equipment here. Its volume intersects ${r.conflictLabel ?? 'existing equipment'}. Move or delete the existing equipment first.`)
+                } else {
+                    setNote(`Could not place equipment: ${r.reason}`)
+                }
+                return
+            }
+            // §9 — surface the NEW instance identity (now selected). If an
+            // identical canonical model already exists in this room, add a
+            // NON-BLOCKING note (the duplicate is neither merged nor rejected).
+            const dupNote = r.duplicateInRoom ? ` Note: another ${r.displayLabel ?? pendingEquipmentId} already exists in this room.` : ''
+            setNote(`Placed ${r.displayLabel ?? pendingEquipmentId} in ${selectedRoom.originalBimLabel} (now selected).${dupNote}`)
+        })
+    }, [selectedRoom, pendingEquipmentId])
+
+    const editEquipmentPlacement = useCallback((id: string, patch: Partial<{ centerX: number; centerY: number; yawDeg: number; width: number; depth: number; height: number }>) => {
+        void import('./spatialAssetOverlay').then((o) => {
+            const e = o.getEquipmentInstance(id)
+            if (!e) return
+            const p = e.placement
+            const next = {
+                ...p,
+                centerX: patch.centerX ?? p.centerX,
+                centerY: patch.centerY ?? p.centerY,
+                width: patch.width ?? p.width,
+                depth: patch.depth ?? p.depth,
+                height: patch.height ?? p.height,
+                yaw: patch.yawDeg !== undefined ? (patch.yawDeg * Math.PI) / 180 : p.yaw,
+            }
+            const r = o.updateEquipmentPlacement(id, next)
+            if (!r.ok) {
+                // EVI-MA-02A §12D — a pose edit that would overlap another
+                // equipment instance is rejected; the last valid pose is kept.
+                if (r.reason === 'EQUIPMENT_COLLISION') {
+                    const conflict = r.conflictEquipmentId ? o.getEquipmentInstance(r.conflictEquipmentId) : undefined
+                    setNote(`Move rejected: equipment volume would intersect ${conflict?.displayLabel ?? 'existing equipment'}. Position kept.`)
+                } else if (r.reason === 'LOCKED') {
+                    setNote('Move rejected: equipment is locked. Unlock first.')
+                }
+            }
+        })
+    }, [])
+
+    const selectEquipmentRow = useCallback((id: string) => {
+        void import('./spatialAssetOverlay').then((o) => o.selectEquipment(id === selectedEquipmentId ? undefined : id))
+    }, [selectedEquipmentId])
+
+    // EVI-MA-01 — Fit to Equipment: select the instance and frame the Bentley
+    // viewport on its recognizable geometry / envelope. View-only (no re-parent,
+    // no pose change). Surfaces an honest failure instead of pretending.
+    const fitToEquipmentRow = useCallback((id: string) => {
+        void import('./spatialAssetOverlay').then(async (o) => {
+            const r = await o.fitViewToEquipment(id)
+            setNote(r.ok
+                ? 'Framed the equipment in the 3D view.'
+                : r.reason === 'VISUAL_NOT_AVAILABLE'
+                    ? 'VISUAL_NOT_AVAILABLE: no recognizable geometry resolved for this equipment.'
+                    : `Could not fit to equipment: ${r.reason}`)
+        })
+    }, [])
+
+    const lockEquipmentRow = useCallback((id: string) => {
+        void import('./spatialAssetOverlay').then(async (o) => {
+            const r = await o.lockEquipment(id)
+            setNote(r.ok ? 'Equipment LOCKED.' : `Cannot lock: ${r.reason}`)
+        })
+    }, [])
+
+    const unlockEquipmentRow = useCallback((id: string) => {
+        void import('./spatialAssetOverlay').then((o) => o.unlockEquipment(id))
+    }, [])
+
+    const restoreEquipmentRow = useCallback((id: string) => {
+        void import('./spatialAssetOverlay').then(async (o) => {
+            const r = await o.restoreEquipmentValidPosition(id)
+            setNote(r.ok ? (r.source === 'LAST_KNOWN_VALID' ? 'Restored last valid equipment position.' : 'No prior valid position — restored a parent-derived placement.') : `Cannot restore: ${r.reason}`)
+        })
+    }, [])
+
+    const resetEquipmentRow = useCallback((id: string) => {
+        void import('./spatialAssetOverlay').then(async (o) => {
+            const r = await o.resetEquipmentToParentDerived(id)
+            setNote(r.ok ? 'Equipment reset to a fresh parent-derived placement.' : `Cannot reset: ${r.reason}`)
+        })
+    }, [])
+
+    const toggleEquipmentVisibility = useCallback((id: string, hidden: boolean) => {
+        void import('./spatialAssetOverlay').then((o) => o.setEquipmentVisibility(id, hidden))
+    }, [])
+
+    const deleteEquipmentRow = useCallback((id: string) => {
+        void import('./spatialAssetOverlay').then((o) => {
+            const r = o.deleteEquipment(id)
+            setNote(r.ok ? 'Equipment deleted (BIM room unchanged).' : `Cannot delete: ${r.reason}`)
+        })
+    }, [])
+
+    const toggleShowEquipment = useCallback(() => {
+        void import('./spatialAssetOverlay').then((o) => o.setShowEquipment(!showEquipment))
+    }, [showEquipment])
+
     const summary = useMemo(() => {
         const active = assignments.filter((a) => a.clinicalFunction !== 'UNASSIGNED_EXISTING')
         const byFn = new Map<ClinicalFunction, number>()
@@ -321,8 +649,7 @@ export function ClinicalProgramControl(props?: { iModelId?: string; devMode?: bo
         return { assignedCount: active.length, byFn: [...byFn.entries()] }
     }, [assignments])
 
-    // Build 2A three-room proof: Uptake + Injection + PET/CT (Radiopharmacy is
-    // deferred to Build 2B — the full PET department is NOT complete here).
+    // Build 2A three-room proof: Uptake + Injection + PET/CT.
     const completeness = useMemo(() => {
         const required: ClinicalFunction[] = ['UPTAKE_ROOM', 'INJECTION_ROOM', 'PET_CT_SCANNER_ROOM']
         const present = new Set(assignments.map((a) => a.clinicalFunction))
@@ -330,177 +657,444 @@ export function ClinicalProgramControl(props?: { iModelId?: string; devMode?: bo
         return { missing, threeRoomProofComplete: missing.length === 0 }
     }, [assignments])
 
+    // Build 1B: complete basic PET clinical program (adds Radiopharmacy). The
+    // required-vs-present summary is informational; it never auto-adds a room.
+    const petDepartment = useMemo(() => {
+        const required: ClinicalFunction[] = ['RADIOPHARMACY', 'INJECTION_ROOM', 'UPTAKE_ROOM', 'PET_CT_SCANNER_ROOM']
+        const present = new Set(assignments.map((a) => a.clinicalFunction))
+        const missing = required.filter((f) => !present.has(f))
+        return { required, missing, complete: missing.length === 0 }
+    }, [assignments])
+
     return (
-        <div className="clinical-program" aria-label="MRT Pharma clinical program">
-            <div className="clinical-program-head">
-                <span className="clinical-program-caption">CLINICAL PROGRAM</span>
+        <div className={panelCollapsed ? 'clinical-program collapsed' : 'clinical-program'} aria-label="MRT Pharma clinical program">
+            {/* B1B-MA-03A: when collapsed, the panel shows ONLY a compact reopen
+                chip. All feature state (selection, storey filter, assignments,
+                volumes, equipment, candidates, summary) is preserved — reopening
+                restores the exact same room context. */}
+            {enabled && panelCollapsed ? (
                 <button
                     type="button"
-                    className={enabled ? 'clinical-program-toggle active' : 'clinical-program-toggle'}
-                    aria-pressed={enabled}
-                    onClick={toggleEnabled}
-                >{enabled ? 'On' : 'Off'}</button>
-            </div>
-
-            {enabled && (
+                    className="clinical-program-reopen"
+                    data-testid="clinical-program-reopen"
+                    aria-expanded={false}
+                    title="Show the Clinical Program panel"
+                    onClick={() => setPanelCollapsed(false)}
+                >CLINICAL PROGRAM ▸{selectedRoom ? ` · ${(currentAssignment?.mrtDisplayName ?? selectedRoom.originalBimLabel)}` : ''}</button>
+            ) : (
                 <>
-                    <div className="clinical-program-hint">Bird&rsquo;s-eye / Cutaway is the primary programming view. Assignments are planning overlays — the Bentley BIM is never renamed.</div>
-
-                    {storeys.length > 0 && (
-                        <div className="clinical-program-storeys">
-                            <span className="clinical-program-sub">Storey filter</span>
-                            <button type="button" className={!activeStoreyId ? 'clinical-program-chip active' : 'clinical-program-chip'} onClick={() => chooseStorey(undefined)}>All</button>
-                            {storeys.map((s) => (
-                                <button key={s.id} type="button" className={s.id === activeStoreyId ? 'clinical-program-chip active' : 'clinical-program-chip'} onClick={() => chooseStorey(s.id)}>{s.label}</button>
-                            ))}
-                        </div>
-                    )}
-
-                    <div className="clinical-program-row">
-                        <span className="clinical-program-sub">Room (BIM space)</span>
-                        <select
-                            className="clinical-program-select"
-                            value={selectedSpaceId ?? ''}
-                            onChange={(e) => selectSpace(e.target.value || undefined)}
-                        >
-                            <option value="">{loading && discoveryStatus !== 'READY' ? 'Loading rooms…' : selectorLabel}</option>
-                            {rooms.map((r) => {
-                                const a = assignments.find((x) => x.bimSpaceId === r.bimSpaceId && x.clinicalFunction !== 'UNASSIGNED_EXISTING')
-                                const label = a ? `${a.mrtDisplayName} — ${r.originalBimLabel}` : r.originalBimLabel
-                                return <option key={r.bimSpaceId} value={r.bimSpaceId}>{label}</option>
-                            })}
-                        </select>
+                    <div className="clinical-program-head">
+                        <span className="clinical-program-caption">CLINICAL PROGRAM</span>
+                        <button
+                            type="button"
+                            className={enabled ? 'clinical-program-toggle active' : 'clinical-program-toggle'}
+                            aria-pressed={enabled}
+                            onClick={toggleEnabled}
+                        >{enabled ? 'On' : 'Off'}</button>
+                        {enabled && (
+                            <button
+                                type="button"
+                                className="clinical-program-collapse"
+                                data-testid="clinical-program-collapse"
+                                aria-label="Collapse Clinical Program panel"
+                                title="Collapse panel (selection is kept)"
+                                onClick={() => setPanelCollapsed(true)}
+                            >×</button>
+                        )}
                     </div>
 
-                    {selectedRoom && (
-                        <div className="clinical-program-editor">
-                            <div className="clinical-program-field"><span>Original BIM room</span><strong>{selectedRoom.originalBimLabel}</strong></div>
-                            <div className="clinical-program-field"><span>Storey</span><strong>{storeys.find((s) => s.id === (activeStoreyId))?.label ?? '—'}</strong></div>
-                            <div className="clinical-program-field"><span>Current function</span><strong>{currentAssignment ? FUNCTION_LABEL[currentAssignment.clinicalFunction] : 'Unassigned (existing)'}</strong></div>
-                            {geometryQuality && <div className="clinical-program-field"><span>Spatial geometry</span><strong>{geometryQuality}</strong></div>}
+                    {enabled && (
+                        <>
+                            <div className="clinical-program-hint">Bird&rsquo;s-eye / Cutaway is the primary programming view. Assignments are planning overlays — the Bentley BIM is never renamed.</div>
 
-                            <label className="clinical-program-sub" htmlFor="cp-fn">Assign clinical function</label>
-                            <select id="cp-fn" className="clinical-program-select" value={pendingFunction} onChange={(e) => setPendingFunction(e.target.value as ClinicalFunction)}>
-                                {CLINICAL_FUNCTIONS.map((f) => <option key={f} value={f}>{FUNCTION_LABEL[f]}</option>)}
-                            </select>
-
-                            {pendingFunction !== 'UNASSIGNED_EXISTING' && (
-                                <>
-                                    <label className="clinical-program-sub" htmlFor="cp-name">MRT Pharma name</label>
-                                    <input id="cp-name" className="clinical-program-input" value={pendingName} placeholder="auto (e.g. Uptake 01)" onChange={(e) => setPendingName(e.target.value)} />
-                                </>
+                            {storeys.length > 0 && (
+                                <div className="clinical-program-storeys">
+                                    <span className="clinical-program-sub">Storey filter</span>
+                                    <button type="button" className={!activeStoreyId ? 'clinical-program-chip active' : 'clinical-program-chip'} onClick={() => chooseStorey(undefined)}>All</button>
+                                    {storeys.map((s) => (
+                                        <button key={s.id} type="button" className={s.id === activeStoreyId ? 'clinical-program-chip active' : 'clinical-program-chip'} onClick={() => chooseStorey(s.id)}>{s.label}</button>
+                                    ))}
+                                </div>
                             )}
 
-                            <div className="clinical-program-actions">
-                                <button type="button" className="clinical-program-btn primary" onClick={doAssign}>{pendingFunction === 'UNASSIGNED_EXISTING' ? 'Set Unassigned' : 'Assign / Update'}</button>
-                                <button type="button" className="clinical-program-btn" onClick={doReset} disabled={!currentAssignment}>Reset to Existing</button>
+                            <div className="clinical-program-row">
+                                <span className="clinical-program-sub">Room (BIM space)</span>
+                                <select
+                                    className="clinical-program-select"
+                                    value={selectedSpaceId ?? ''}
+                                    onChange={(e) => selectSpace(e.target.value || undefined)}
+                                >
+                                    <option value="">{loading && discoveryStatus !== 'READY' ? 'Loading rooms…' : selectorLabel}</option>
+                                    {rooms.map((r) => {
+                                        const a = assignments.find((x) => x.bimSpaceId === r.bimSpaceId && x.clinicalFunction !== 'UNASSIGNED_EXISTING')
+                                        const label = a ? `${a.mrtDisplayName} — ${r.originalBimLabel}` : r.originalBimLabel
+                                        return <option key={r.bimSpaceId} value={r.bimSpaceId}>{label}</option>
+                                    })}
+                                    {/* B1B-MA-03B: keep the authoritative selected room selectable
+                                even when the active storey chip filters it out of the list,
+                                so the <select> reflects the real selection instead of
+                                falling back to the blank placeholder. */}
+                                    {selectedRoomOutsideFilter && selectedRoom && !rooms.some((r) => r.bimSpaceId === selectedRoom.bimSpaceId) && (() => {
+                                        const a = assignments.find((x) => x.bimSpaceId === selectedRoom.bimSpaceId && x.clinicalFunction !== 'UNASSIGNED_EXISTING')
+                                        const base = a ? `${a.mrtDisplayName} — ${selectedRoom.originalBimLabel}` : selectedRoom.originalBimLabel
+                                        return <option key={selectedRoom.bimSpaceId} value={selectedRoom.bimSpaceId}>{`${base} (outside current storey filter)`}</option>
+                                    })()}
+                                </select>
+                                {selectedRoomOutsideFilter && (
+                                    <div className="clinical-program-hint" data-testid="selected-room-outside-filter-hint">
+                                        Selected room is outside the current storey filter. It stays selected — switch the storey chip to see it in the list.
+                                    </div>
+                                )}
                             </div>
 
-                            {currentAssignment && (
-                                <div className="clinical-program-volume">
-                                    <span className="clinical-program-sub">Clinical volume (true 3D)</span>
-                                    {!vol ? (
-                                        <button type="button" className="clinical-program-btn primary" onClick={defineVolume}>Define Volume</button>
-                                    ) : (
+                            {/* ===== Build 1B — CLINICAL ROOM CANDIDATE DISCOVERY =====
+                        Placed AFTER the room selector so the BIM-room combobox stays
+                        the FIRST combobox (preserves existing equipment/1A.4 UI tests
+                        that address comboboxes by index). */}
+                            <div className="clinical-program-candidates" aria-label="Clinical room candidate discovery">
+                                <span className="clinical-program-sub">Find candidate rooms</span>
+                                <div className="clinical-program-hint">Pick a clinical function, then find defensible enclosed rooms ranked by semantic + geometric fit. Corridors, stairs, shafts and service space are flagged; unknown rooms are allowed. Geometric containment is judged separately from clinical suitability.</div>
+                                <div className="clinical-program-row">
+                                    <select className="clinical-program-select" value={candidateFunction} onChange={(e) => setCandidateFunction(e.target.value as ClinicalFunction)} aria-label="Candidate function">
+                                        {(['UPTAKE_ROOM', 'INJECTION_ROOM', 'PET_CT_SCANNER_ROOM', 'RADIOPHARMACY'] as ClinicalFunction[]).map((f) => (
+                                            <option key={f} value={f}>{FUNCTION_LABEL[f]}</option>
+                                        ))}
+                                    </select>
+                                    <button type="button" className="clinical-program-btn primary" onClick={findCandidates} disabled={candidateBusy || discoveryStatus !== 'READY'}>{candidateBusy ? 'Finding…' : 'Find Candidate Rooms'}</button>
+                                </div>
+
+                                {candidateSummary && (
+                                    <div className="clinical-program-summary-line muted">
+                                        {candidateSummary.totalConsidered} considered · {candidateSummary.tierCounts.RECOMMENDED} recommended · {candidateSummary.tierCounts.SUITABLE} suitable · {candidateSummary.tierCounts.NEEDS_REVIEW} needs review · {candidateSummary.tierCounts.REJECTED} rejected
+                                    </div>
+                                )}
+                                {candidateVocab && (
+                                    <div className="clinical-program-summary-line muted">
+                                        Discovered room kinds: {Object.entries(candidateVocab.kindCounts).filter(([, n]) => n > 0).map(([k, n]) => `${k}=${n}`).join(' · ')}
+                                    </div>
+                                )}
+
+                                {candidates.length > 0 && (
+                                    <div
+                                        className="clinical-program-candidate-list"
+                                        role="listbox"
+                                        aria-label="Candidate rooms (scrollable)"
+                                        data-testid="candidate-results-region"
+                                    >
+                                        {candidates.map((c) => {
+                                            const tierClass = TIER_BADGE_CLASS[c.tier]
+                                            const tierLabel = TIER_LABEL[c.tier]
+                                            const storeyLabel = storeys.find((s) => s.id === c.storeyId)?.label ?? c.storeyId ?? '—'
+                                            const areaText = c.eligibility.metrics.floorAreaM2 !== undefined
+                                                ? `${c.eligibility.metrics.floorAreaM2.toFixed(1)} m²`
+                                                : 'area pending'
+                                            const authority = c.eligibility.geometryQuality === 'EXACT_SPACE_GEOMETRY' ? 'exact geometry' : 'approx. geometry'
+                                            const isSelected = selectedCandidateId === c.bimSpaceId
+                                            const needsOverride = c.semantic.rejectedByDefault || !c.eligibility.eligible
+                                            return (
+                                                <div
+                                                    key={c.bimSpaceId}
+                                                    role="option"
+                                                    aria-selected={isSelected}
+                                                    className={`clinical-program-candidate compact${isSelected ? ' selected' : ''}`}
+                                                    data-testid="candidate-card"
+                                                    data-tier={c.tier}
+                                                >
+                                                    <div className="clinical-program-candidate-head">
+                                                        <button type="button" className="clinical-program-candidate-title" onClick={() => setSelectedCandidateId(isSelected ? undefined : c.bimSpaceId)} title="Show / hide the ranking reasons for this room">
+                                                            {c.mrtDisplayName ? `${c.mrtDisplayName} — ` : ''}{c.originalBimLabel || 'Unnamed space'}
+                                                        </button>
+                                                        <span className={`clinical-program-candidate-badge ${tierClass}`} data-testid="candidate-tier-badge">{tierLabel}</span>
+                                                    </div>
+                                                    <div className="clinical-program-candidate-meta muted">
+                                                        <span>Storey {storeyLabel}</span>
+                                                        <span>Suitability {(c.clinicalSuitabilityScore * 100).toFixed(0)}%</span>
+                                                        <span>Fit {(c.geometricFitScore * 100).toFixed(0)}%</span>
+                                                        <span>{areaText}</span>
+                                                        <span>{authority}</span>
+                                                        {c.isCurrentParent && <span>current parent</span>}
+                                                    </div>
+                                                    {isSelected && (
+                                                        <ul className="clinical-program-candidate-reasons">
+                                                            {c.reasons.map((reason, i) => <li key={i}>{reason}</li>)}
+                                                        </ul>
+                                                    )}
+                                                    {isSelected && needsOverride && (
+                                                        <label className="clinical-program-candidate-override">
+                                                            <input type="checkbox" checked={reparentOverride} onChange={(e) => setReparentOverride(e.target.checked)} />
+                                                            <span>Override compatibility warning (this space is genuinely an enclosed room)</span>
+                                                        </label>
+                                                    )}
+                                                    {/* Actions are ALWAYS reachable at the bottom of each compact card
+                                                (the list itself scrolls). Fit to Room + Enter Walkthrough Here
+                                                are INSPECTION-ONLY (never re-parent); only Use This Room re-parents. */}
+                                                    <div className="clinical-program-actions">
+                                                        <button type="button" className="clinical-program-btn" onClick={() => previewCandidate(c.bimSpaceId)} title="Inspection only — highlights + fits the 3D view to this exact room. Does NOT re-parent.">Fit to Room</button>
+                                                        <button type="button" className="clinical-program-btn" onClick={() => enterWalkthroughHere(c.bimSpaceId)} title="Inspection only — enters walkthrough at a safe point inside this room. Does NOT re-parent.">Enter Walkthrough Here</button>
+                                                        <button type="button" className="clinical-program-btn primary" onClick={() => useCandidateRoom(c.bimSpaceId)} disabled={needsOverride && !(isSelected && reparentOverride)} title="Confirms the re-parent onto this room.">Use This Room</button>
+                                                    </div>
+                                                </div>
+                                            )
+                                        })}
+                                    </div>
+                                )}
+                            </div>
+
+                            {selectedRoom && (
+                                <div className="clinical-program-editor">
+                                    <div className="clinical-program-field"><span>Original BIM room</span><strong>{selectedRoom.originalBimLabel}</strong></div>
+                                    <div className="clinical-program-field"><span>Storey</span><strong>{storeys.find((s) => s.id === (activeStoreyId))?.label ?? '—'}</strong></div>
+                                    <div className="clinical-program-field"><span>Current function</span><strong>{currentAssignment ? FUNCTION_LABEL[currentAssignment.clinicalFunction] : 'Unassigned (existing)'}</strong></div>
+                                    {geometryQuality && <div className="clinical-program-field"><span>Spatial geometry</span><strong>{geometryQuality}</strong></div>}
+
+                                    <div className="clinical-program-actions">
+                                        <button type="button" className="clinical-program-btn" onClick={() => enterWalkthroughHere(selectedRoom.bimSpaceId)} title="Enter walkthrough at a safe point inside this room (room-geometry-derived spawn)">Enter Walkthrough Here</button>
+                                    </div>
+
+                                    <label className="clinical-program-sub" htmlFor="cp-fn">Assign clinical function</label>
+                                    <select id="cp-fn" className="clinical-program-select" value={pendingFunction} onChange={(e) => setPendingFunction(e.target.value as ClinicalFunction)}>
+                                        {CLINICAL_FUNCTIONS.map((f) => <option key={f} value={f}>{FUNCTION_LABEL[f]}</option>)}
+                                    </select>
+
+                                    {pendingFunction !== 'UNASSIGNED_EXISTING' && (
                                         <>
-                                            <div className="clinical-program-grid">
-                                                {([['centerX', 'X'], ['centerY', 'Y'], ['width', 'Width'], ['depth', 'Depth'], ['zLow', 'Z Low'], ['zHigh', 'Z High'], ['yawDeg', 'Yaw°']] as const).map(([k, lbl]) => (
-                                                    <label key={k} className="clinical-program-num">
-                                                        <span>{lbl}</span>
-                                                        <input
-                                                            type="number"
-                                                            step="0.1"
-                                                            className="clinical-program-input"
-                                                            value={volDraft[k]}
-                                                            disabled={vol.lifecycleState === 'LOCKED'}
-                                                            onChange={(e) => applyVolumeEdit({ ...volDraft, [k]: Number(e.target.value) })}
-                                                        />
-                                                    </label>
-                                                ))}
-                                            </div>
-                                            {/* Build 1A.4: product-facing validation. Warning identifies the
+                                            <label className="clinical-program-sub" htmlFor="cp-name">MRT Pharma name</label>
+                                            <input id="cp-name" className="clinical-program-input" value={pendingName} placeholder="auto (e.g. Uptake 01)" onChange={(e) => setPendingName(e.target.value)} />
+                                        </>
+                                    )}
+
+                                    <div className="clinical-program-actions">
+                                        <button type="button" className="clinical-program-btn primary" onClick={doAssign}>{pendingFunction === 'UNASSIGNED_EXISTING' ? 'Set Unassigned' : 'Assign / Update'}</button>
+                                        <button type="button" className="clinical-program-btn" onClick={doReset} disabled={!currentAssignment}>Reset to Existing</button>
+                                    </div>
+
+                                    {currentAssignment && (
+                                        <div className="clinical-program-volume">
+                                            <span className="clinical-program-sub">Clinical volume (true 3D)</span>
+                                            {!vol ? (
+                                                <button type="button" className="clinical-program-btn primary" onClick={defineVolume}>Define Volume</button>
+                                            ) : (
+                                                <>
+                                                    <div className="clinical-program-grid">
+                                                        {([['centerX', 'X'], ['centerY', 'Y'], ['width', 'Width'], ['depth', 'Depth'], ['zLow', 'Z Low'], ['zHigh', 'Z High'], ['yawDeg', 'Yaw°']] as const).map(([k, lbl]) => (
+                                                            <label key={k} className="clinical-program-num">
+                                                                <span>{lbl}</span>
+                                                                <input
+                                                                    type="number"
+                                                                    step="0.1"
+                                                                    className="clinical-program-input"
+                                                                    value={volDraft[k]}
+                                                                    disabled={vol.lifecycleState === 'LOCKED'}
+                                                                    onChange={(e) => applyVolumeEdit({ ...volDraft, [k]: Number(e.target.value) })}
+                                                                />
+                                                            </label>
+                                                        ))}
+                                                    </div>
+                                                    {/* Build 1A.4: product-facing validation. Warning identifies the
                                                 room; technical sample detail is secondary. NOT_EVALUATED is
                                                 shown honestly (never inside/outside). */}
-                                            {validation?.containmentStatus === 'PASS' && (
-                                                <div className="clinical-program-summary-line ok">Fully inside its parent BIM room.{validation.approximateParent ? ' (parent is a range approximation)' : ''}</div>
+                                                    {validation?.containmentStatus === 'PASS' && (
+                                                        <div className="clinical-program-summary-line ok">Fully inside its parent BIM room.{validation.approximateParent ? ' (parent is a range approximation)' : ''}</div>
+                                                    )}
+                                                    {validation?.warningCode === 'OUTSIDE_PARENT' && (
+                                                        <div className="clinical-program-warning" role="alert">
+                                                            <strong>⚠ {validation.warningMessage}</strong>
+                                                            <div className="clinical-program-summary-line muted">{validation.technicalDetail}</div>
+                                                        </div>
+                                                    )}
+                                                    {(validation?.warningCode === 'NOT_EVALUATED' || validation?.warningCode === 'PARENT_GEOMETRY_UNAVAILABLE') && (
+                                                        <div className="clinical-program-summary-line muted">{validation.warningMessage}</div>
+                                                    )}
+                                                    <div className="clinical-program-actions">
+                                                        {vol.lifecycleState === 'DRAFT'
+                                                            ? <button type="button" className="clinical-program-btn primary" onClick={lockVolume} disabled={!validation?.isLockAllowed} title={validation && !validation.isLockAllowed ? validation.lockDisabledReason : 'Lock this planning volume'}>Lock Volume</button>
+                                                            : <button type="button" className="clinical-program-btn" onClick={unlockVolume}>Unlock for Editing</button>}
+                                                        <button type="button" className={vol.hidden ? 'clinical-program-btn' : 'clinical-program-btn primary'} onClick={toggleThisVolume}>{vol.hidden ? 'Show Volume' : 'Hide Volume'}</button>
+                                                    </div>
+                                                    {vol.lifecycleState === 'DRAFT' && !validation?.isLockAllowed && (
+                                                        <div className="clinical-program-summary-line muted">Lock unavailable: {validation?.lockDisabledReason}</div>
+                                                    )}
+                                                    <div className="clinical-program-actions">
+                                                        {validation?.restoreAvailable && (
+                                                            <button type="button" className="clinical-program-btn" onClick={restoreValidPosition} disabled={vol.lifecycleState === 'LOCKED'} title="Restore this volume's most recent valid position (or a parent-derived valid volume)">Restore Valid Position</button>
+                                                        )}
+                                                        <button type="button" className="clinical-program-btn" onClick={resetToParentDerived} disabled={vol.lifecycleState === 'LOCKED'} title="Recompute a fresh valid volume from this room's own BIM geometry">Reset to Parent-Derived Volume</button>
+                                                    </div>
+                                                    <div className="clinical-program-actions">
+                                                        <button type="button" className="clinical-program-btn" onClick={deleteVolume} disabled={vol.lifecycleState === 'LOCKED'} title={vol.lifecycleState === 'LOCKED' ? 'Unlock before deleting' : 'Delete this planning volume (assignment kept)'}>Delete Volume</button>
+                                                    </div>
+                                                    <div className="clinical-program-summary-line muted">State: {vol.lifecycleState} · {vol.hidden ? 'hidden' : 'visible'}</div>
+                                                </>
                                             )}
-                                            {validation?.warningCode === 'OUTSIDE_PARENT' && (
-                                                <div className="clinical-program-warning" role="alert">
-                                                    <strong>⚠ {validation.warningMessage}</strong>
-                                                    <div className="clinical-program-summary-line muted">{validation.technicalDetail}</div>
-                                                </div>
-                                            )}
-                                            {(validation?.warningCode === 'NOT_EVALUATED' || validation?.warningCode === 'PARENT_GEOMETRY_UNAVAILABLE') && (
-                                                <div className="clinical-program-summary-line muted">{validation.warningMessage}</div>
-                                            )}
-                                            <div className="clinical-program-actions">
-                                                {vol.lifecycleState === 'DRAFT'
-                                                    ? <button type="button" className="clinical-program-btn primary" onClick={lockVolume} disabled={!validation?.isLockAllowed} title={validation && !validation.isLockAllowed ? validation.lockDisabledReason : 'Lock this planning volume'}>Lock Volume</button>
-                                                    : <button type="button" className="clinical-program-btn" onClick={unlockVolume}>Unlock for Editing</button>}
-                                                <button type="button" className={vol.hidden ? 'clinical-program-btn' : 'clinical-program-btn primary'} onClick={toggleThisVolume}>{vol.hidden ? 'Show Volume' : 'Hide Volume'}</button>
-                                            </div>
-                                            {vol.lifecycleState === 'DRAFT' && !validation?.isLockAllowed && (
-                                                <div className="clinical-program-summary-line muted">Lock unavailable: {validation?.lockDisabledReason}</div>
-                                            )}
-                                            <div className="clinical-program-actions">
-                                                {validation?.restoreAvailable && (
-                                                    <button type="button" className="clinical-program-btn" onClick={restoreValidPosition} disabled={vol.lifecycleState === 'LOCKED'} title="Restore this volume's most recent valid position (or a parent-derived valid volume)">Restore Valid Position</button>
-                                                )}
-                                                <button type="button" className="clinical-program-btn" onClick={resetToParentDerived} disabled={vol.lifecycleState === 'LOCKED'} title="Recompute a fresh valid volume from this room's own BIM geometry">Reset to Parent-Derived Volume</button>
-                                            </div>
-                                            <div className="clinical-program-actions">
-                                                <button type="button" className="clinical-program-btn" onClick={deleteVolume} disabled={vol.lifecycleState === 'LOCKED'} title={vol.lifecycleState === 'LOCKED' ? 'Unlock before deleting' : 'Delete this planning volume (assignment kept)'}>Delete Volume</button>
-                                            </div>
-                                            <div className="clinical-program-summary-line muted">State: {vol.lifecycleState} · {vol.hidden ? 'hidden' : 'visible'}</div>
-                                        </>
+                                        </div>
+                                    )}
+
+                                    {devMode && (
+                                        <div className="clinical-program-dev">
+                                            {containment && <span>containment(raw): {containment}</span>}
+                                            <span>bimSpaceId: {selectedRoom.bimSpaceId}</span>
+                                            {currentAssignment && <span>assignmentId: {currentAssignment.assignmentId}</span>}
+                                            {currentAssignment?.bimStoreyId && <span>bimStoreyId: {currentAssignment.bimStoreyId}</span>}
+                                            <span>provenance: USER_DEFINED_PLANNING_OVERLAY · status: PLANNING_ASSIGNMENT</span>
+                                        </div>
                                     )}
                                 </div>
                             )}
 
-                            {devMode && (
-                                <div className="clinical-program-dev">
-                                    {containment && <span>containment(raw): {containment}</span>}
-                                    <span>bimSpaceId: {selectedRoom.bimSpaceId}</span>
-                                    {currentAssignment && <span>assignmentId: {currentAssignment.assignmentId}</span>}
-                                    {currentAssignment?.bimStoreyId && <span>bimStoreyId: {currentAssignment.bimStoreyId}</span>}
-                                    <span>provenance: USER_DEFINED_PLANNING_OVERLAY · status: PLANNING_ASSIGNMENT</span>
-                                </div>
-                            )}
-                        </div>
-                    )}
-
-                    <div className="clinical-program-summary">
-                        <span className="clinical-program-sub">Program summary</span>
-                        <div className="clinical-program-summary-line">Assigned rooms: <strong>{summary.assignedCount}</strong></div>
-                        {volumeSummary && <div className="clinical-program-summary-line">Planning volumes: <strong>{volumeSummary.planningVolumes}</strong> (draft {volumeSummary.draft} · locked {volumeSummary.locked})</div>}
-                        {validationSummary && validationSummary.planningVolumes > 0 && (
-                            <div className={validationSummary.needsAttention > 0 ? 'clinical-program-summary-line muted' : 'clinical-program-summary-line ok'}>
-                                Valid: <strong>{validationSummary.valid}</strong>
-                                {validationSummary.needsAttention > 0 && <> · Needs attention: <strong>{validationSummary.needsAttention}</strong></>}
-                                {validationSummary.notEvaluated > 0 && <> · Not evaluated: <strong>{validationSummary.notEvaluated}</strong></>}
+                            <div className="clinical-program-summary">
+                                <span className="clinical-program-sub">Program summary</span>
+                                <div className="clinical-program-summary-line">Assigned rooms: <strong>{summary.assignedCount}</strong></div>
+                                {volumeSummary && <div className="clinical-program-summary-line">Planning volumes: <strong>{volumeSummary.planningVolumes}</strong> (draft {volumeSummary.draft} · locked {volumeSummary.locked})</div>}
+                                {validationSummary && validationSummary.planningVolumes > 0 && (
+                                    <div className={validationSummary.needsAttention > 0 ? 'clinical-program-summary-line muted' : 'clinical-program-summary-line ok'}>
+                                        Valid: <strong>{validationSummary.valid}</strong>
+                                        {validationSummary.needsAttention > 0 && <> · Needs attention: <strong>{validationSummary.needsAttention}</strong></>}
+                                        {validationSummary.notEvaluated > 0 && <> · Not evaluated: <strong>{validationSummary.notEvaluated}</strong></>}
+                                    </div>
+                                )}
+                                {summary.byFn.length === 0 && <div className="clinical-program-summary-line muted">No clinical functions assigned yet.</div>}
+                                {summary.byFn.map(([fn, n]) => (
+                                    <div key={fn} className="clinical-program-summary-line">{FUNCTION_LABEL[fn]}: <strong>{n}</strong></div>
+                                ))}
+                                {completeness.missing.length > 0 ? (
+                                    <div className="clinical-program-summary-line muted">Three-room proof missing: {completeness.missing.map((f) => FUNCTION_LABEL[f]).join(', ')}</div>
+                                ) : summary.assignedCount > 0 ? (
+                                    <div className="clinical-program-summary-line ok">Three-room proof complete (Uptake + Injection + PET/CT).</div>
+                                ) : null}
+                                {/* Build 1B: full basic PET clinical program (required vs present). */}
+                                {petDepartment.complete ? (
+                                    <div className="clinical-program-summary-line ok">Basic PET clinical program complete (Radiopharmacy + Injection + Uptake + PET/CT).</div>
+                                ) : (
+                                    <div className="clinical-program-summary-line muted">PET program missing: {petDepartment.missing.map((f) => FUNCTION_LABEL[f]).join(', ')}</div>
+                                )}
                             </div>
-                        )}
-                        {summary.byFn.length === 0 && <div className="clinical-program-summary-line muted">No clinical functions assigned yet.</div>}
-                        {summary.byFn.map(([fn, n]) => (
-                            <div key={fn} className="clinical-program-summary-line">{FUNCTION_LABEL[fn]}: <strong>{n}</strong></div>
-                        ))}
-                        {completeness.missing.length > 0 ? (
-                            <div className="clinical-program-summary-line muted">Three-room proof missing: {completeness.missing.map((f) => FUNCTION_LABEL[f]).join(', ')}</div>
-                        ) : summary.assignedCount > 0 ? (
-                            <div className="clinical-program-summary-line ok">Three-room proof complete (Uptake + Injection + PET/CT). PET department NOT complete — Radiopharmacy deferred.</div>
-                        ) : null}
-                    </div>
 
-                    <div className="clinical-program-row">
-                        <span className="clinical-program-sub">Room volume (view-only)</span>
-                        <button
-                            type="button"
-                            className={showRoomVolume ? 'clinical-program-btn primary' : 'clinical-program-btn'}
-                            onClick={() => void import('./spatialAssetOverlay').then((o) => o.setClinicalProgramShowRoomVolume(!showRoomVolume))}
-                        >{showRoomVolume ? 'Hide Room Volume' : 'Show Room Volume'}</button>
-                    </div>
+                            {/* ============ Build 1B — CANONICAL EQUIPMENT BINDING ============ */}
+                            <div className="equipment-section" aria-label="MRT Pharma equipment binding">
+                                <div className="clinical-program-head">
+                                    <h4>EQUIPMENT (canonical catalog)</h4>
+                                    <button type="button" className={showEquipment ? 'clinical-program-btn primary' : 'clinical-program-btn'} onClick={toggleShowEquipment}>{showEquipment ? 'Visible' : 'Hidden'}</button>
+                                </div>
+                                <div className="clinical-program-hint">Bind canonical catalog equipment to the selected BIM room. Envelopes are calibrated where the catalog has physical dimensions; otherwise a labelled proxy. Identity, capacity, production, and cost stay in the backend catalog (by reference).</div>
 
-                    {note && <div className="clinical-program-note">{note}</div>}
+                                <div className="clinical-program-row">
+                                    <span className="clinical-program-sub">Equipment model</span>
+                                    <select className="clinical-program-select" value={pendingEquipmentId} onChange={(e) => setPendingEquipmentId(e.target.value)}>
+                                        <option value="">Select a canonical model…</option>
+                                        <optgroup label="Cyclotron">
+                                            {CANONICAL_CYCLOTRON_MODELS.map((m: CanonicalEquipmentModel) => <option key={m.catalogModelId} value={m.catalogModelId}>{m.manufacturer} {m.model}{m.envelope.provenance === 'GENERIC_ENGINEERING_PLACEHOLDER' ? ' (proxy env.)' : ''}</option>)}
+                                        </optgroup>
+                                        <optgroup label="Generator">
+                                            {CANONICAL_GENERATOR_MODELS.map((m) => <option key={m.catalogModelId} value={m.catalogModelId}>{m.manufacturer} {m.model} (proxy env.)</option>)}
+                                        </optgroup>
+                                        <optgroup label="Scanner">
+                                            {CANONICAL_SCANNER_MODELS.map((m) => <option key={m.catalogModelId} value={m.catalogModelId}>{m.manufacturer} {m.model} (proxy env.)</option>)}
+                                        </optgroup>
+                                    </select>
+                                </div>
+                                <div className="clinical-program-actions">
+                                    <button type="button" className="clinical-program-btn primary" onClick={placeEquipment} disabled={!selectedRoom || !pendingEquipmentId} title={!selectedRoom ? 'Select a BIM room first' : 'Place in the selected room'}>Place in Selected Room</button>
+                                </div>
+                                <div className="clinical-program-summary-line muted">
+                                    MRT facility classes (by reference): {CANONICAL_MRT_FACILITY_MODELS.map((m) => m.displayName).join(' · ')}
+                                </div>
+
+                                {equipment.length === 0 ? (
+                                    <div className="clinical-program-summary-line muted">No equipment placed yet.</div>
+                                ) : (
+                                    <div className="equipment-list">
+                                        {equipment.map((e) => {
+                                            const v = equipmentValidations[e.id]
+                                            const xw = equipmentCrosswalks[e.id]
+                                            const status = v?.containmentStatus ?? 'NOT_EVALUATED'
+                                            const statusClass = status === 'PASS' ? 'pass' : status === 'FAIL' ? 'fail' : 'not-evaluated'
+                                            const yawDeg = (e.placement.yaw * 180) / Math.PI
+                                            return (
+                                                <div key={e.id} className={selectedEquipmentId === e.id ? 'equipment-row selected' : 'equipment-row'}>
+                                                    <div className="equipment-row-header">
+                                                        <button type="button" className="equipment-row-title" onClick={() => selectEquipmentRow(e.id)} title="Select / deselect">{e.displayLabel}</button>
+                                                        <button type="button" className="clinical-program-btn" onClick={() => fitToEquipmentRow(e.id)} title="Select this equipment and frame the 3D view on its recognizable geometry (view-only; does not move it).">Fit to Equipment</button>
+                                                        <span className={`equipment-status ${statusClass}`}>{status === 'PASS' ? 'Inside room' : status === 'FAIL' ? 'Outside room' : 'Not evaluated'}</span>
+                                                    </div>
+                                                    <div className="clinical-program-summary-line muted">{e.canonicalClass} · room {e.parentBimSpaceId} · {e.lifecycleState} · {e.hidden ? 'Hidden' : 'Visible'}{e.placement.envelopeProvenance === 'GENERIC_ENGINEERING_PLACEHOLDER' ? ' · proxy envelope' : ' · calibrated envelope'}</div>
+
+                                                    {/* Editable placement (disabled when LOCKED). */}
+                                                    <div className="clinical-program-grid">
+                                                        {([['centerX', 'X'], ['centerY', 'Y'], ['yawDeg', 'Yaw°']] as const).map(([k, lbl]) => {
+                                                            const val = k === 'yawDeg' ? Number(yawDeg.toFixed(1)) : Number((e.placement[k] as number).toFixed(2))
+                                                            return (
+                                                                <label key={k} className="clinical-program-num">
+                                                                    <span>{lbl}</span>
+                                                                    <input
+                                                                        type="number"
+                                                                        step="0.1"
+                                                                        className="clinical-program-input"
+                                                                        value={val}
+                                                                        disabled={e.lifecycleState === 'LOCKED'}
+                                                                        onChange={(ev) => editEquipmentPlacement(e.id, { [k]: Number(ev.target.value) })}
+                                                                    />
+                                                                </label>
+                                                            )
+                                                        })}
+                                                    </div>
+
+                                                    {/* Validation warning (identifies equipment + room; not color-only). */}
+                                                    {v?.warningCode === 'OUTSIDE_PARENT' && (
+                                                        <div className="equipment-warning" role="alert">
+                                                            <strong>⚠ {v.warningMessage}</strong>
+                                                            <div className="clinical-program-summary-line muted">{v.technicalDetail}</div>
+                                                        </div>
+                                                    )}
+                                                    {(v?.warningCode === 'NOT_EVALUATED' || v?.warningCode === 'PARENT_GEOMETRY_UNAVAILABLE') && (
+                                                        <div className="clinical-program-summary-line muted">{v.warningMessage}</div>
+                                                    )}
+                                                    {v?.containmentStatus === 'PASS' && (
+                                                        <div className="clinical-program-summary-line ok">Envelope fully inside its parent room.{v.approximateParent ? ' (parent is a range approximation)' : ''}</div>
+                                                    )}
+
+                                                    <div className="equipment-controls">
+                                                        {e.lifecycleState === 'DRAFT'
+                                                            ? <button type="button" className="clinical-program-btn primary" onClick={() => lockEquipmentRow(e.id)} disabled={!v?.isLockAllowed} title={v && !v.isLockAllowed ? v.lockDisabledReason : 'Lock this equipment placement'}>Lock</button>
+                                                            : <button type="button" className="clinical-program-btn" onClick={() => unlockEquipmentRow(e.id)}>Unlock</button>}
+                                                        {v?.restoreAvailable && (
+                                                            <button type="button" className="clinical-program-btn" onClick={() => restoreEquipmentRow(e.id)} disabled={e.lifecycleState === 'LOCKED'} title="Restore this equipment's most recent valid position">Restore Valid Position</button>
+                                                        )}
+                                                        <button type="button" className="clinical-program-btn" onClick={() => resetEquipmentRow(e.id)} disabled={e.lifecycleState === 'LOCKED'} title="Recompute a fresh parent-derived placement">Reset to Parent-Derived</button>
+                                                        <button type="button" className="clinical-program-btn" onClick={() => toggleEquipmentVisibility(e.id, !e.hidden)}>{e.hidden ? 'Show' : 'Hide'}</button>
+                                                        <button type="button" className="clinical-program-btn" onClick={() => deleteEquipmentRow(e.id)} disabled={e.lifecycleState === 'LOCKED'} title={e.lifecycleState === 'LOCKED' ? 'Unlock before deleting' : 'Delete this equipment (BIM room kept)'}>Delete</button>
+                                                    </div>
+
+                                                    {e.lifecycleState === 'DRAFT' && v && !v.isLockAllowed && (
+                                                        <div className="clinical-program-summary-line muted">Lock unavailable: {v.lockDisabledReason}</div>
+                                                    )}
+
+                                                    {/* Crosswalk readout — by reference; the value lives in the backend. */}
+                                                    {xw && (
+                                                        <div className="equipment-crosswalk">
+                                                            {xw.lines.map((line) => (
+                                                                <div key={line.label}>{line.label}: <span className="cal">[{line.calibration}]</span> {line.authorityRef}</div>
+                                                            ))}
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            )
+                                        })}
+                                    </div>
+                                )}
+                            </div>
+
+                            <div className="clinical-program-row">
+                                <span className="clinical-program-sub">Room volume (view-only)</span>
+                                <button
+                                    type="button"
+                                    className={showRoomVolume ? 'clinical-program-btn primary' : 'clinical-program-btn'}
+                                    onClick={() => void import('./spatialAssetOverlay').then((o) => o.setClinicalProgramShowRoomVolume(!showRoomVolume))}
+                                >{showRoomVolume ? 'Hide Room Volume' : 'Show Room Volume'}</button>
+                            </div>
+
+                            {note && <div className="clinical-program-note">{note}</div>}
+                        </>
+                    )}
                 </>
             )}
         </div>
