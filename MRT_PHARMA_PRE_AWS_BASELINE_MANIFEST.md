@@ -15,7 +15,7 @@ baseline is ever re-cut.
 | --- | --- |
 | `baseline_tag` | `mrt-pharma-pre-aws-v1` |
 | `baseline_tag_message` | MRT Pharma pre-AWS engineering authority baseline |
-| `baseline_commit_sha` | `<BASELINE_COMMIT_SHA>` (the commit that this manifest is part of; recorded at tag time — see Post-commit verification in the checkpoint report) |
+| `baseline_commit_sha` | resolved by annotated tag `mrt-pharma-pre-aws-v1` (run `git rev-list -n 1 mrt-pharma-pre-aws-v1`). Baseline body: report/data artifacts committed in `13d9ed54b36631007a174b33cf14e9ba7e182f26`; this manifest introduced in `3ffed266ae9a6e36b1bda18ade79838157d21ea8`. The tag is placed on the final documentation commit that carries this recorded SHA field. |
 | `pre_checkpoint_head` | `1de2c5b0d01e3a69e0c5a744b1d58ae1f3526bd3` |
 | `branch` | `main` |
 | `date` | 2026-09-15 |
